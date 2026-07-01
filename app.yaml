@@ -1,0 +1,39 @@
+# Databricks Apps manifest (see ADR 0001).
+#
+# Databricks Apps builds the SOURCE itself: on deploy it runs `npm install` then
+# `npm run build` (next build) on the synced source, then this `command`. So we
+# sync the repo source (not a prebuilt bundle) and start the built app with
+# `next start` on the injected $DATABRICKS_APP_PORT.
+#
+# The runtime injects the app service principal's DATABRICKS_HOST /
+# DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET automatically (consumed by
+# lib/data/databricks.ts) — do NOT set those here.
+# `npx` is NOT on the runtime PATH (only during build); `node` is. Invoke Next's
+# CLI directly via node. `sh -c` lets $DATABRICKS_APP_PORT expand.
+command:
+  - "sh"
+  - "-c"
+  - "node node_modules/next/dist/bin/next start -H 0.0.0.0 -p $DATABRICKS_APP_PORT"
+
+env:
+  - name: DATA_SOURCE
+    value: databricks
+  - name: SSO_BASE_URL
+    value: https://revan.brisanet.net.br/sso/v1
+  # SQL Warehouse from the bound app resource (Resource key "sql-warehouse"). Its
+  # id is injected here and the app builds the HTTP path from it — this is what
+  # authorizes the app's OAuth token for the warehouse (fixes the 403).
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: DATABRICKS_CITIES_CATALOG
+    value: gdb_brisanet_comunidade_dev
+  - name: DATABRICKS_CITIES_SCHEMA
+    value: projeto_brisa_performance
+  - name: DATABRICKS_SALES_CATALOG
+    value: gdb_brisanet_comunidade_dev
+  - name: DATABRICKS_SALES_SCHEMA
+    value: diego_barros_inteligencia_comercial_e_mercado
+  # Session signing key — from a Databricks secret, never plaintext. Create the
+  # secret AND add an app resource named `jwt-secret` (see README) so this resolves.
+  - name: JWT_SECRET
+    valueFrom: jwt-secret

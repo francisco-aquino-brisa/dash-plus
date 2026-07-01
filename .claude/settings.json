@@ -1,0 +1,61 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__databricks__list_catalogs",
+      "mcp__databricks__list_schemas",
+      "mcp__databricks__list_tables",
+      "mcp__databricks__get_table",
+      "mcp__databricks__list_warehouses",
+      "mcp__databricks__execute_sql",
+      "Bash(node scripts/query-databricks.mjs \"SELECT status_venda, COUNT\\(*\\) n, COUNT\\(DISTINCT orcamento_id\\) orcs FROM gdb_brisanet_comunidade_dev.diego_barros_inteligencia_comercial_e_mercado.df_waves_vendas WHERE data >= add_months\\(date_trunc\\('MM', current_date\\(\\)\\), -1\\) GROUP BY 1 ORDER BY 2 DESC LIMIT 30\" --max 30)",
+      "Bash(node scripts/query-databricks.mjs \"SELECT 'waves' t, CAST\\(MIN\\(data\\) AS STRING\\) min_d, CAST\\(MAX\\(data\\) AS STRING\\) max_d, COUNT\\(*\\) n FROM gdb_brisanet_comunidade_dev.diego_barros_inteligencia_comercial_e_mercado.df_waves_vendas UNION ALL SELECT 'desempenho_hc', CAST\\(MIN\\(data\\) AS STRING\\), CAST\\(MAX\\(data\\) AS STRING\\), COUNT\\(*\\) FROM gdb_brisanet_comunidade_dev.diego_barros_inteligencia_comercial_e_mercado.desempenho_hc UNION ALL SELECT 'vw_hc_zerado', CAST\\(MIN\\(data\\) AS STRING\\), CAST\\(MAX\\(data\\) AS STRING\\), COUNT\\(*\\) FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.vw_hc_zerado_vendedor\" --max 5)",
+      "Bash(node scripts/query-databricks.mjs \"SELECT CAST\\(MIN\\(data\\) AS STRING\\) min_d, CAST\\(MAX\\(data\\) AS STRING\\) max_d FROM gdb_brisanet_comunidade_dev.diego_barros_inteligencia_comercial_e_mercado.df_waves_vendas\" --max 2)",
+      "Bash(node scripts/query-databricks.mjs \"SELECT status_venda, COUNT\\(*\\) n FROM gdb_brisanet_comunidade_dev.diego_barros_inteligencia_comercial_e_mercado.df_waves_vendas GROUP BY 1 ORDER BY 2 DESC LIMIT 20\" --max 20)",
+      "Bash(node scripts/query-databricks.mjs \"SELECT CAST\\(MIN\\(data\\) AS STRING\\) min_d, CAST\\(MAX\\(data\\) AS STRING\\) max_d FROM gdb_brisanet_comunidade_dev.diego_barros_inteligencia_comercial_e_mercado.desempenho_hc\" --max 2)",
+      "Bash(node scripts/query-databricks.mjs \"SELECT CAST\\(MIN\\(data\\) AS STRING\\) min_d, CAST\\(MAX\\(data\\) AS STRING\\) max_d FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.vw_hc_zerado_vendedor\" --max 2)",
+      "Bash(rm -f .databricks-oauth-cache.json.bak .databricks-oauth-cache.json.expired && ls -la .databricks-oauth-cache.json 2>/dev/null && echo \"cache valido mantido; temporarios removidos\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT 1 AS ok\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT permissao, usuario_ativo, COUNT\\(*\\) AS n FROM \\\\`gdb_brisanet_comunidade_dev\\\\`.\\\\`projeto_brisa_performance\\\\`.\\\\`cadastro_usuario\\\\` GROUP BY permissao, usuario_ativo ORDER BY n DESC\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT gestorfuncional, coordenacao, supervisao, nome_consultor, matricula, hash_consultor, CPF, email_colaborador, lideranca FROM \\\\`gdb_brisanet_comunidade_dev\\\\`.\\\\`projeto_brisa_performance\\\\`.\\\\`vw_hc_zerado_vendedor\\\\` LIMIT 5\")",
+      "Bash(node scripts/query-databricks.mjs \"SHOW TABLES IN \\\\`gdb_brisanet_comunidade_dev\\\\`.\\\\`diego_barros_inteligencia_comercial_e_mercado\\\\`\")",
+      "Bash(node scripts/query-databricks.mjs \"DESCRIBE TABLE \\\\`gdb_brisanet_comunidade_dev\\\\`.\\\\`diego_barros_inteligencia_comercial_e_mercado\\\\`.\\\\`organograma_cidades\\\\`\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT * FROM \\\\`gdb_brisanet_comunidade_dev\\\\`.\\\\`diego_barros_inteligencia_comercial_e_mercado\\\\`.\\\\`organograma_cidades\\\\` LIMIT 3\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT COUNT\\(*\\) AS n FROM \\\\`gdb_brisanet_comunidade_dev\\\\`.\\\\`projeto_brisa_performance\\\\`.\\\\`vw_hc_zerado_vendedor\\\\` WHERE data >= '2026-05-01'\")",
+      "Bash(node scripts/query-databricks.mjs \"DESCRIBE TABLE \\\\`gdb_brisanet_comunidade_dev\\\\`.\\\\`projeto_brisa_performance\\\\`.\\\\`vw_producao_hc_zero_venda\\\\`\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT MATRICULA, NOME, cidade_atuacao_jwas, UF, GERENCIA, COORDENACAO, RESPSUPERVISAO, GERENTE_CANAL, GERENTE_ORG, nicho, canal_jwas, situacao_jwas, nivel, TEMPO_EMPRESA, CAST\\(ADMISSAO AS STRING\\) adm, TIPO_CIDADE FROM gdb_brisanet_comunidade_dev.diego_barros_inteligencia_comercial_e_mercado.desempenho_hc WHERE data = \\(SELECT MAX\\(data\\) FROM gdb_brisanet_comunidade_dev.diego_barros_inteligencia_comercial_e_mercado.desempenho_hc\\) AND NOME IS NOT NULL LIMIT 3\" --max 3)",
+      "Bash(node scripts/query-databricks.mjs \"SELECT servico, COUNT\\(*\\) n FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.vw_hc_zerado_vendedor WHERE data >= date_trunc\\('MM', current_date\\(\\)\\) GROUP BY 1 ORDER BY 2 DESC LIMIT 20\" --max 20)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} -> %{redirect_url}\\\\n\" \"http://localhost:3002/vendedor?matricula=25482\")",
+      "Bash(lsof -nP -iTCP:3000 -sTCP:LISTEN)",
+      "Bash(lsof -nP -iTCP:3000)",
+      "Bash(awk '{print $2, $9, $10, $11, $12, $13}')",
+      "Bash(netstat -an -p tcp)",
+      "Bash(lsof -nP -i6TCP:3000)",
+      "Bash(xargs -I{} echo \"dirs 'dashboard' remanescentes em app/: {} \\(esperado 0; o ativo é app/\\(app\\)/dashboard\\)\")",
+      "Bash(echo \"tsc exit code: $?\")",
+      "Bash(xargs -I{} echo \"erros de tipo: {}\")",
+      "Bash(node scripts/stub-sso.mjs)",
+      "Bash(SSO_BASE_URL=http://localhost:4555 npx next dev -p 3000)",
+      "Bash(timeout 25 databricks current-user me)",
+      "Bash(git check-ignore *)",
+      "Bash(git add *)",
+      "Bash(databricks current-user *)",
+      "Bash(grep -vE \"^$|Changelog|npm notice|To update\")"
+    ],
+    "additionalDirectories": [
+      "/Users/franciscopessoa/Documents/dev/brisa/dash"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__databricks__execute_sql",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/databricks-readonly-guard.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}
