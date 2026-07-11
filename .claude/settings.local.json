@@ -56,7 +56,16 @@
       "Bash(curl -s -o /dev/null -w \"/brisanet-mark.png -> HTTP %{http_code}\\\\n\" --max-time 6 http://localhost:3002/brisanet-mark.png)",
       "Bash(cp login-shot.png crop.png)",
       "Bash(sips -c 520 760 --cropOffset 380 1140 crop.png)",
-      "Bash(sips -g pixelWidth -g pixelHeight crop.png)"
+      "Bash(sips -g pixelWidth -g pixelHeight crop.png)",
+      "Bash(perl -pi -e 's/,\\\\s*\\\\{\\\\s*compact:[^}]*\\\\}//g' components/sales/SalesKpiCard.tsx components/dashboard/KpiCard.tsx components/dashboard/Dashboard.tsx components/dashboard/HistoryChart.tsx)",
+      "Bash(lsof -ti:3000)",
+      "Bash(lsof -ti:4555)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
+      "Bash(lsof -iTCP:3000 -iTCP:3001 -iTCP:3002 -sTCP:LISTEN -n -P)",
+      "Bash(awk 'NR==1||/LISTEN/{print $1,$2,$9}')",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(lsof -iTCP:3000 -iTCP:3001 -iTCP:3002 -iTCP:3003 -sTCP:LISTEN -n -P)",
+      "mcp__Claude_Preview__preview_start"
     ]
   }
 }

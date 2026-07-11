@@ -34,7 +34,7 @@ function mockVendedores() {
 
 function mockProfile(mat: number): VendedorProfile | null {
   const idx = mat - 10001;
-  if (idx < 0 || idx >= NOMES.length) return null;
+  if (!Number.isInteger(idx) || idx < 0 || idx >= NOMES.length) return null;
   const s = hashStr(NOMES[idx]);
   const anos = Math.floor(s * 4);
   const meses = Math.floor((s * 100) % 12);
@@ -168,7 +168,7 @@ export function mockVendedorView(filters: VendedorFilters): VendedorView {
     pendenciasAvailable: false,
     watermark: "mock:vendedor",
   };
-  const profile = mockProfile(mat);
+  const profile = Number.isNaN(mat) ? null : mockProfile(mat);
   if (!profile) return empty;
 
   const rng = mulberry32((mat * 1000 + period.mes) >>> 0);

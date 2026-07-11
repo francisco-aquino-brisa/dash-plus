@@ -198,7 +198,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
               {isMock ? MOCK_DATA_LABEL : "Databricks"} · {formatMonth(filters.competencia)}
             </span>
             <span className="rounded-md border border-border bg-secondary/60 px-2 py-1">
-              {coverage.totalCidades} cidades · {formatNumber(coverage.totalBase, { compact: true })} clientes
+              {coverage.totalCidades} cidades · {formatNumber(coverage.totalBase)} clientes
             </span>
           </div>
         </div>
@@ -292,7 +292,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <MiniStat label="Base Clientes" value={formatNumber(g.baseClientes, { compact: true })} />
+                  <MiniStat label="Base Clientes" value={formatNumber(g.baseClientes)} />
                   <MiniStat
                     label="Cidades Ativas"
                     value={String(g.cidadesAtivas)}
@@ -307,7 +307,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                     <MiniStat
                       label="Takeup"
                       value={formatPct(g.takeup, 1)}
-                      hint={`HP ${formatNumber(g.hp || 0, { compact: true })}`}
+                      hint={`HP ${formatNumber(g.hp || 0)}`}
                     />
                   )}
                 </div>
@@ -364,10 +364,10 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                   <h3 className="text-sm font-semibold text-muted-foreground">Vendas {label}</h3>
                   <Icon className="h-4 w-4 text-primary" />
                 </div>
-                <div className="text-3xl font-bold">{formatNumber(k.resultado, { compact: true })}</div>
+                <div className="text-3xl font-bold">{formatNumber(k.resultado)}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  Meta {formatNumber(k.meta, { compact: true })} · Projeção{" "}
-                  {formatNumber(k.projecao, { compact: true })}
+                  Meta {formatNumber(k.meta)} · Projeção{" "}
+                  {formatNumber(k.projecao)}
                 </div>
                 <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
                   <div
@@ -409,8 +409,8 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <MiniStat label="Cidades no escopo" value={String(coverage.totalCidades)} />
-              <MiniStat label={`Base Ativa ${kpis.scope}`} value={formatNumber(coverage.totalBase, { compact: true })} />
-              <MiniStat label="Home Passed" value={formatNumber(coverage.totalHP, { compact: true })} />
+              <MiniStat label={`Base Ativa ${kpis.scope}`} value={formatNumber(coverage.totalBase)} />
+              <MiniStat label="Home Passed" value={formatNumber(coverage.totalHP)} />
               <MiniStat label="Takeup Geral" value={formatPct(coverage.takeup, 1)} good={coverage.takeup >= 25} />
               <MiniStat label="Bloqueados" value={formatNumber(kpis.bloqueados)} />
               <MiniStat
@@ -422,7 +422,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
               {filters.tecnologia !== "5G" && (
                 <MiniStat
                   label="Base 5G (independente)"
-                  value={formatNumber(kpis.base5g, { compact: true })}
+                  value={formatNumber(kpis.base5g)}
                   hint="Não soma à Banda Larga"
                 />
               )}
@@ -463,12 +463,12 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <MiniStat
                       label="Atual"
-                      value={current.isPct ? formatPct(current.resultado) : formatNumber(current.resultado, { compact: true })}
+                      value={current.isPct ? formatPct(current.resultado) : formatNumber(current.resultado)}
                       hint={formatMonth(filters.competencia)}
                     />
                     <MiniStat
                       label="Meta"
-                      value={current.isPct ? formatPct(current.meta) : formatNumber(current.meta, { compact: true })}
+                      value={current.isPct ? formatPct(current.meta) : formatNumber(current.meta)}
                     />
                     <MiniStat
                       label="Atingimento"
@@ -477,7 +477,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                     />
                     <MiniStat
                       label="Média 12m"
-                      value={current.isPct ? formatPct(media) : formatNumber(media, { compact: true })}
+                      value={current.isPct ? formatPct(media) : formatNumber(media)}
                     />
                   </div>
                   <HistoryChart data={series} />

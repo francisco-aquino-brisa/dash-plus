@@ -5,6 +5,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -13,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { Lock } from "lucide-react";
+import { formatChartLabel } from "@/lib/format";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InfoHint } from "@/components/ui/info-hint";
 import { getIndicatorDef } from "@/lib/indicators/definitions";
@@ -90,7 +92,9 @@ export function SelecaoLivre({
                 <XAxis dataKey="mes" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} width={48} />
                 <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                <Line type="monotone" dataKey="valor" stroke="var(--primary)" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="valor" stroke="var(--primary)" strokeWidth={2} dot={false}>
+                  <LabelList dataKey="valor" position="top" offset={8} formatter={(v: number) => formatChartLabel(v)} style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }} />
+                </Line>
               </LineChart>
             ) : (
               <BarChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
@@ -98,7 +102,9 @@ export function SelecaoLivre({
                 <XAxis dataKey="mes" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} width={48} />
                 <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} cursor={{ fill: "var(--secondary)" }} />
-                <Bar dataKey="valor" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="valor" fill="var(--primary)" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="valor" position="top" offset={6} formatter={(v: number) => formatChartLabel(v)} style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }} />
+                </Bar>
               </BarChart>
             )}
           </ResponsiveContainer>

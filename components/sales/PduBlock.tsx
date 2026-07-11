@@ -1,7 +1,8 @@
 "use client";
 
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, LabelList, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { InfoHint } from "@/components/ui/info-hint";
+import { formatChartLabel } from "@/lib/format";
 import { getIndicatorDef } from "@/lib/indicators/definitions";
 import type { PduPoint } from "@/lib/data/sales/types";
 
@@ -23,9 +24,15 @@ export function PduBlock({ pdu }: { pdu: PduPoint[] }) {
             <XAxis dataKey="mes" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} />
             <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
             <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-            <Line type="monotone" dataKey="FTTH" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="FWA" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="5G" stroke="var(--chart-3)" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="FTTH" stroke="var(--chart-1)" strokeWidth={2} dot={false}>
+              <LabelList dataKey="FTTH" position="top" offset={8} formatter={(v: number) => formatChartLabel(v)} style={{ fill: "var(--chart-1)", fontSize: 10, fontWeight: 600 }} />
+            </Line>
+            <Line type="monotone" dataKey="FWA" stroke="var(--chart-2)" strokeWidth={2} dot={false}>
+              <LabelList dataKey="FWA" position="bottom" offset={8} formatter={(v: number) => formatChartLabel(v)} style={{ fill: "var(--chart-2)", fontSize: 10, fontWeight: 600 }} />
+            </Line>
+            <Line type="monotone" dataKey="5G" stroke="var(--chart-3)" strokeWidth={2} dot={false}>
+              <LabelList dataKey="5G" position="top" offset={8} formatter={(v: number) => formatChartLabel(v)} style={{ fill: "var(--chart-3)", fontSize: 10, fontWeight: 600 }} />
+            </Line>
           </LineChart>
         </ResponsiveContainer>
       </div>

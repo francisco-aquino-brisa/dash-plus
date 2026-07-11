@@ -27,7 +27,7 @@ export function KpiCard({ title, icon: Icon, kpi, highlight, onClick }: Props) {
   const tendGood = kpi.inverse ? tendDown : tendUp;
   const TendIcon = tendUp ? ArrowUp : tendDown ? ArrowDown : Minus;
 
-  const fmt = (n: number) => (kpi.isPct ? formatPct(n) : formatNumber(n, { compact: Math.abs(n) > 9999 }));
+  const fmt = (n: number) => (kpi.isPct ? formatPct(n) : formatNumber(n));
   const def = getIndicatorDef(title);
 
   return (

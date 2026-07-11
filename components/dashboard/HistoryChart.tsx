@@ -1,7 +1,7 @@
 "use client";
 
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { formatMonth, formatNumber } from "@/lib/format";
+import { Area, AreaChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { formatChartLabel, formatMonth, formatNumber } from "@/lib/format";
 
 interface Props {
   data: { mes: string; valor: number }[];
@@ -27,11 +27,11 @@ export function HistoryChart({ data, color = "var(--primary)" }: Props) {
             axisLine={false}
           />
           <YAxis
-            tickFormatter={(v) => formatNumber(v, { compact: true })}
+            tickFormatter={(v) => formatNumber(v)}
             tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
             tickLine={false}
             axisLine={false}
-            width={40}
+            width={64}
           />
           <Tooltip
             contentStyle={{
@@ -43,7 +43,15 @@ export function HistoryChart({ data, color = "var(--primary)" }: Props) {
             labelFormatter={(l) => formatMonth(String(l))}
             formatter={(v: number) => [formatNumber(v), "Valor"]}
           />
-          <Area type="monotone" dataKey="valor" stroke={color} strokeWidth={2} fill="url(#histGrad)" />
+          <Area type="monotone" dataKey="valor" stroke={color} strokeWidth={2} fill="url(#histGrad)">
+            <LabelList
+              dataKey="valor"
+              position="top"
+              offset={8}
+              formatter={(v: number) => formatChartLabel(v)}
+              style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }}
+            />
+          </Area>
         </AreaChart>
       </ResponsiveContainer>
     </div>

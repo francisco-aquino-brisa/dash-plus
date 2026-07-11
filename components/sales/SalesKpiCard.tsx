@@ -10,12 +10,12 @@ import type { KpiBlock } from "@/lib/data/sales/types";
 function formatValue(k: KpiBlock): string {
   if (k.unit === "currency") return `R$ ${k.value.toFixed(1).replace(".", ",")}`;
   if (k.unit === "percent") return formatPct(k.value);
-  return formatNumber(k.value, { compact: Math.abs(k.value) > 9999 });
+  return formatNumber(k.value);
 }
 function formatMeta(k: KpiBlock): string {
   if (k.unit === "currency") return `R$ ${k.meta.toFixed(1).replace(".", ",")}`;
   if (k.unit === "percent") return formatPct(k.meta);
-  return formatNumber(k.meta, { compact: Math.abs(k.meta) > 9999 });
+  return formatNumber(k.meta);
 }
 
 export function SalesKpiCard({ kpi }: { kpi: KpiBlock }) {
