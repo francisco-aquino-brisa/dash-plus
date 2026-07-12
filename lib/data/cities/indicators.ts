@@ -230,6 +230,41 @@ const BANDA_LARGA: IndicatorDef[] = [
     polarity: "up",
     available: true,
     compute: { kind: "ratio", num: "reativacoes_bloqueados", den: "bloqueados" },
+    // No meta: show the raw quantities in place of Meta/Projeção.
+    footer: [
+      { label: "Bloqueios", compute: { kind: "sum", field: "bloqueados" }, unit: "qtd" },
+      { label: "Reativação", compute: { kind: "sum", field: "reativacoes_bloqueados" }, unit: "qtd" },
+    ],
+    related: [
+      {
+        id: "pct_reativ_bloq",
+        label: "% de Reativação de Bloqueados",
+        unit: "percent",
+        polarity: "up",
+        compute: { kind: "ratio", num: "reativacoes_bloqueados", den: "bloqueados" },
+      },
+      {
+        id: "bloqueados",
+        label: "Clientes Bloqueados",
+        unit: "qtd",
+        polarity: "down",
+        compute: { kind: "sum", field: "bloqueados" },
+      },
+      {
+        id: "reativacoes_bloqueados",
+        label: "Reativação de Bloqueados",
+        unit: "qtd",
+        polarity: "up",
+        compute: { kind: "sum", field: "reativacoes_bloqueados" },
+      },
+      {
+        id: "reativacoes_total",
+        label: "Reativação Geral",
+        unit: "qtd",
+        polarity: "up",
+        compute: { kind: "sum", field: "reativacoes_total" },
+      },
+    ],
     description: "Reativações de bloqueados ÷ total de bloqueados × 100.",
   },
   {

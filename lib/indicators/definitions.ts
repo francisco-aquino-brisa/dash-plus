@@ -85,12 +85,12 @@ export const INDICATOR_DEFINITIONS: Record<string, IndicatorDef> = {
     formula: "(Bloqueados + Cancelados) ÷ entrantes da safra de ativações de 4 meses atrás. Menor é melhor.",
   },
 
-  // ── PDU (Tela 3) — fórmula oficial do CLAUDE.md / vw_hc_zerado_vendedor ─────
+  // ── PDU (Tela 3) — official formula from CLAUDE.md / vw_hc_zerado_vendedor ──
   PDU: {
     formula: "Produção realizada ÷ HC ativo ÷ MÁX(dias úteis acumulados), por tecnologia (FTTH/FWA/5G).",
   },
 
-  // ── Seleção livre de indicadores (Tela 3) — nomes-base ──────────────────────
+  // ── Free indicator selection (Tela 3) — base names ─────────────────────────
   "Efetivados x Criados": {
     formula: "Vendas efetivadas ÷ vendas criadas no período (taxa de conversão do funil).",
   },

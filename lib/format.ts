@@ -8,7 +8,7 @@ export function formatMonth(iso: string) {
 }
 
 export function formatNumber(n: number, opts?: { signed?: boolean }) {
-  // Regra geral do dashboard: nunca resumir/abreviar números (ex.: 42 mil → 42.000).
+  // Dashboard-wide rule: never abbreviate numbers (e.g. 42 mil → 42.000).
   const sign = opts?.signed && n > 0 ? "+" : "";
 
   return sign + new Intl.NumberFormat("pt-BR").format(Math.round(n));

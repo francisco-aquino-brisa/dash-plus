@@ -292,7 +292,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
           <FilterBar filters={filters} options={options} onChange={navigate} onReset={resetFilters} />
         </div>
 
-        {/* Blocos de indicadores selecionáveis (Banda Larga + 5G) */}
+        {/* Selectable indicator blocks (Banda Larga + 5G) */}
         {showBL &&
           renderBlock(
             "Banda Larga (INTERNET + FWA)",
@@ -572,7 +572,12 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                 );
               };
 
-              const shown = DETAIL_STAT_ORDER.filter((s) => detailStats.includes(s));
+              // Meta/Atingimento only make sense when a meta exists — indicators
+              // without one (e.g. Reativação de Bloqueados) hide them from the modal.
+              const shown = DETAIL_STAT_ORDER.filter(
+                (s) =>
+                  detailStats.includes(s) && !(ind.meta === null && (s === "meta" || s === "atingimento")),
+              );
               const statCols: Record<number, string> = {
                 1: "sm:grid-cols-1",
                 2: "sm:grid-cols-2",
@@ -588,8 +593,8 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                     <DialogDescription>Evolução mensal do indicador no escopo filtrado.</DialogDescription>
                   </DialogHeader>
 
-                  {/* Cards exibidos — chips inline (popover não funciona dentro do
-                      Dialog modal: o Radix aplica pointer-events:none fora dele). */}
+                  {/* Shown stat cards — inline chips (a popover won't work inside the
+                      modal Dialog: Radix sets pointer-events:none outside it). */}
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="mr-1 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
                       Cards
