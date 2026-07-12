@@ -85,7 +85,21 @@
       "Bash(node scripts/query-databricks.mjs \"SELECT DISTINCT id_cidade, servico FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.metas_cidades WHERE servico='5G' AND date_format\\(data,'yyyy-MM-01'\\)='2026-05-01' LIMIT 3\")",
       "Bash(node scripts/query-databricks.mjs \"SELECT DISTINCT servico, colunas, metrica FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.metas_cidades WHERE id_indicador='BA03' LIMIT 4\")",
       "Bash(node scripts/query-databricks.mjs \"SELECT DISTINCT id_indicador, indicador, servico, formato_dado, metrica FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.metas_cidades WHERE lower\\(indicador\\) LIKE '%fech%' OR lower\\(indicador_geral\\) LIKE '%fech%'\")",
-      "Bash(node scripts/query-databricks.mjs \"SELECT id_cidade, cidade, servico, meta, formato_dado FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.metas_cidades WHERE id_indicador='BA03' AND servico='Banda Larga' AND date_format\\(data,'yyyy-MM-01'\\)='2026-05-01' AND meta > 0 ORDER BY meta DESC LIMIT 5\")"
+      "Bash(node scripts/query-databricks.mjs \"SELECT id_cidade, cidade, servico, meta, formato_dado FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.metas_cidades WHERE id_indicador='BA03' AND servico='Banda Larga' AND date_format\\(data,'yyyy-MM-01'\\)='2026-05-01' AND meta > 0 ORDER BY meta DESC LIMIT 5\")",
+      "Bash(grep -rnE \"FQ\\\\\\(|CATALOG|SCHEMA|FROM \\\\`|\\\\.query<\" lib/data/sales/databricks.ts)",
+      "Bash(grep -nE \"FROM \\\\\\\\\\\\$\\\\{|FROM \\\\`|const [A-Z]+ =|\\\\.\\\\`[a-z_]+\\\\`\" lib/data/sales/databricks.ts)",
+      "Bash(grep -rnE \"\\\\`[a-z_]+\\\\`|TABLE =|FROM \" lib/auth/authz.ts)",
+      "Bash(node scripts/query-databricks.mjs \"SELECT * FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.vw_hc_zerado_vendedor LIMIT 1\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT table_schema, table_name, table_type FROM gdb_brisanet_comunidade_dev.information_schema.tables WHERE lower\\(table_name\\) LIKE '%hc%zer%' OR lower\\(table_name\\) LIKE '%zerado_vend%' OR lower\\(table_name\\) LIKE '%hc_zero%' ORDER BY 1,2\")",
+      "Bash(grep -nA14 \"FROM \\\\${VW}\" lib/data/sales/databricks.ts)",
+      "Bash(node scripts/query-databricks.mjs \"SELECT * FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.vw_producao_hc_zero_venda LIMIT 1\")",
+      "Bash(grep -nA12 \"FUNNEL_COLS\" lib/data/_shared.ts)",
+      "Bash(grep -nE \"const [A-Z]+ ?=|FROM \\\\\\\\\\\\$\\\\{|SELECT|\\\\`[a-z_]+\\\\`\" lib/data/vendedor/databricks.ts)",
+      "Bash(node scripts/query-databricks.mjs \"SHOW CATALOGS\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT table_catalog, table_schema, table_name, table_type FROM system.information_schema.tables WHERE table_name = 'vw_hc_zerado_vendedor'\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT table_catalog, table_schema, table_name FROM system.information_schema.columns WHERE column_name='base_ativa' AND table_catalog='gdb_brisanet_comunidade_dev' LIMIT 10\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT table_catalog, table_schema, table_name, column_name FROM system.information_schema.columns WHERE column_name IN \\('total_realizado','dias_uteis_acumulado'\\) LIMIT 25\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT table_catalog, table_schema, table_name FROM system.information_schema.tables WHERE table_name = 'ficha_indicadores'\")"
     ]
   }
 }

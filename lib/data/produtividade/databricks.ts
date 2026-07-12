@@ -119,6 +119,9 @@ async function ranking(f: ProdFilters): Promise<VendedorRow[]> {
 }
 
 async function pduSeries(f: ProdFilters): Promise<PduPoint[]> {
+  // PDU source (vw_hc_zerado_vendedor) is absent from the warehouse — isolate so
+  // it shows as unavailable instead of taking the screen down (not a mock fallback).
+  try {
   const params: unknown[] = [];
   const sql = `
     SELECT date_format(data, 'yyyy-MM') ym, servico,
@@ -143,6 +146,10 @@ async function pduSeries(f: ProdFilters): Promise<PduPoint[]> {
     else if (svc === "5G") point["5G"] = val;
   }
   return Array.from(byMonth.values());
+  } catch (e) {
+    console.warn("[produtividade] PDU indisponível (fonte ausente no Databricks):", (e as Error).message);
+    return [];
+  }
 }
 
 export async function databricksProdView(filters: ProdFilters): Promise<ProdView> {

@@ -83,41 +83,52 @@ async function funnelKpis(f: SalesFilters): Promise<{ bl: KpiBlock[]; g5: KpiBlo
   };
 }
 
-/** Official PDU = total_realizado / HC ativo / dias úteis, by tecnologia, by month. */
+/**
+ * Official PDU = total_realizado / HC ativo / dias úteis, by tecnologia, by month.
+ * The PDU source (vw_hc_zerado_vendedor) is currently absent from the warehouse,
+ * so this is isolated: on any error it returns an empty series (PDU shows as
+ * unavailable) instead of taking the whole screen down. NOT a mock fallback —
+ * the rest of the screen still serves real data. See docs/data-map.md.
+ */
 async function pduSeries(f: SalesFilters): Promise<PduPoint[]> {
-  const params: unknown[] = [];
-  const cl: string[] = [];
-  if (f.gerente) (cl.push("gerente_cidade = ?"), params.push(f.gerente));
-  if (f.canal) (cl.push("canal = ?"), params.push(f.canal));
-  if (f.nicho) (cl.push("nicho = ?"), params.push(f.nicho));
-  if (f.uf) (cl.push("UF = ?"), params.push(f.uf));
-  if (f.cidade) (cl.push("cidade_atuacao = ?"), params.push(f.cidade));
-  if (f.tipo) (cl.push("tipo_cidade = ?"), params.push(f.tipo));
-  const dim = cl.length ? ` AND ${cl.join(" AND ")}` : "";
+  try {
+    const params: unknown[] = [];
+    const cl: string[] = [];
+    if (f.gerente) (cl.push("gerente_cidade = ?"), params.push(f.gerente));
+    if (f.canal) (cl.push("canal = ?"), params.push(f.canal));
+    if (f.nicho) (cl.push("nicho = ?"), params.push(f.nicho));
+    if (f.uf) (cl.push("UF = ?"), params.push(f.uf));
+    if (f.cidade) (cl.push("cidade_atuacao = ?"), params.push(f.cidade));
+    if (f.tipo) (cl.push("tipo_cidade = ?"), params.push(f.tipo));
+    const dim = cl.length ? ` AND ${cl.join(" AND ")}` : "";
 
-  const sql = `
-    SELECT date_format(data, 'yyyy-MM') ym, servico,
-      SUM(total_realizado)
-        / NULLIF(COUNT(DISTINCT CASE WHEN situacao_hc = 'ATIVO' THEN matricula END), 0)
-        / NULLIF(MAX(dias_uteis_acumulado), 0) AS pdu
-    FROM ${VW}
-    WHERE servico IN ('FTTH', 'FWA', '5G')
-      AND data >= add_months(date_trunc('MM', current_date()), -11)${dim}
-    GROUP BY 1, 2 ORDER BY 1
-  `;
-  const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
-  const byMonth = new Map<string, PduPoint>();
-  for (const r of rows) {
-    const ym = String(r.ym);
-    if (!byMonth.has(ym)) byMonth.set(ym, { mes: formatMonth(ym), FTTH: 0, FWA: 0, "5G": 0 });
-    const point = byMonth.get(ym)!;
-    const svc = String(r.servico);
-    const val = +num(r.pdu).toFixed(2);
-    if (svc === "FTTH") point.FTTH = val;
-    else if (svc === "FWA") point.FWA = val;
-    else if (svc === "5G") point["5G"] = val;
+    const sql = `
+      SELECT date_format(data, 'yyyy-MM') ym, servico,
+        SUM(total_realizado)
+          / NULLIF(COUNT(DISTINCT CASE WHEN situacao_hc = 'ATIVO' THEN matricula END), 0)
+          / NULLIF(MAX(dias_uteis_acumulado), 0) AS pdu
+      FROM ${VW}
+      WHERE servico IN ('FTTH', 'FWA', '5G')
+        AND data >= add_months(date_trunc('MM', current_date()), -11)${dim}
+      GROUP BY 1, 2 ORDER BY 1
+    `;
+    const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
+    const byMonth = new Map<string, PduPoint>();
+    for (const r of rows) {
+      const ym = String(r.ym);
+      if (!byMonth.has(ym)) byMonth.set(ym, { mes: formatMonth(ym), FTTH: 0, FWA: 0, "5G": 0 });
+      const point = byMonth.get(ym)!;
+      const svc = String(r.servico);
+      const val = +num(r.pdu).toFixed(2);
+      if (svc === "FTTH") point.FTTH = val;
+      else if (svc === "FWA") point.FWA = val;
+      else if (svc === "5G") point["5G"] = val;
+    }
+    return Array.from(byMonth.values());
+  } catch (e) {
+    console.warn("[sales] PDU indisponível (fonte ausente no Databricks):", (e as Error).message);
+    return [];
   }
-  return Array.from(byMonth.values());
 }
 
 // Channel/niche momentum. The channel attribution (canal_waves) lags by ~1 month

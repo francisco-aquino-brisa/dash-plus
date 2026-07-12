@@ -1,6 +1,7 @@
 // Productivity repository: single entry point the screen uses. Aggregation runs
 // at the source (SQL) per filter-set and is cached by (filters, watermark) —
-// ADR 0002. Real → mock fallback on warehouse error; mock mode → mock.
+// ADR 0002. Databricks is the source of truth; we NEVER silently fall back to
+// mock. Mock is served only in mock mode (DATA_SOURCE=mock).
 
 import { cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";
@@ -13,14 +14,9 @@ function cacheKey(f: ProdFilters): string {
 
 export async function getProdView(filters: ProdFilters): Promise<ProdView> {
   if (isDatabricks()) {
-    try {
-      const { databricksProdWatermark, databricksProdView } = await import("./databricks");
-      const watermark = await databricksProdWatermark();
-      return await cachedByWatermark<ProdView>(cacheKey(filters), watermark, () => databricksProdView(filters));
-    } catch (e) {
-      console.warn("[produtividade] databricks failed, falling back to mock:", (e as Error).message);
-      return mockProdView(filters);
-    }
+    const { databricksProdWatermark, databricksProdView } = await import("./databricks");
+    const watermark = await databricksProdWatermark();
+    return cachedByWatermark<ProdView>(cacheKey(filters), watermark, () => databricksProdView(filters));
   }
   return cachedByWatermark<ProdView>(cacheKey(filters), "mock:produtividade", async () => mockProdView(filters));
 }

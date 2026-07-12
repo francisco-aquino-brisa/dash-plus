@@ -1,9 +1,10 @@
 // Sales repository: single entry point the screen uses. Aggregation happens at
 // the source (SQL) per filter-set and is cached by (filters, watermark) — ADR 0002.
 //
-// DATA_SOURCE=databricks → real aggregation (lib/data/sales/databricks.ts) over
-// the accessible tables (desempenho_hc + vw_hc_zerado_vendedor); blocked KPIs stay
-// `available:false`. Falls back to mock if the warehouse errors. mock mode → mock.
+// Databricks is the default source of truth (real aggregation in SQL). We NEVER
+// silently fall back to mock — a warehouse error surfaces, it does not get masked
+// with fake data. Mock is only served when explicitly in mock mode
+// (DATA_SOURCE=mock), which is meant for new screens without real data yet.
 
 import { cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";
@@ -16,14 +17,9 @@ function cacheKey(f: SalesFilters): string {
 
 export async function getSalesView(filters: SalesFilters): Promise<SalesView> {
   if (isDatabricks()) {
-    try {
-      const { databricksSalesWatermark, databricksSalesView } = await import("./databricks");
-      const watermark = await databricksSalesWatermark();
-      return await cachedByWatermark<SalesView>(cacheKey(filters), watermark, () => databricksSalesView(filters));
-    } catch (e) {
-      console.warn("[sales] databricks failed, falling back to mock:", (e as Error).message);
-      return mockSalesView(filters);
-    }
+    const { databricksSalesWatermark, databricksSalesView } = await import("./databricks");
+    const watermark = await databricksSalesWatermark();
+    return cachedByWatermark<SalesView>(cacheKey(filters), watermark, () => databricksSalesView(filters));
   }
   return cachedByWatermark<SalesView>(cacheKey(filters), "mock:vendas", async () => mockSalesView(filters));
 }

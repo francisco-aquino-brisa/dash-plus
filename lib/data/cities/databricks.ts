@@ -213,10 +213,19 @@ async function fetchMetas(): Promise<CityMetaRecord[]> {
 
 export async function databricksCityDataset(): Promise<CityDataset> {
   const watermark = await databricksWatermark();
+  // Banda Larga is the core source (propagates on failure). 5G and metas are
+  // isolated: if their source is missing/errors, the block degrades to "sem
+  // acesso" (empty) instead of taking the whole screen down. Never mock.
   const [ftthFwa, fiveG, metaRecords] = await Promise.all([
     fetchCitiesFTTHFWA(),
-    fetch5G(),
-    fetchMetas(),
+    fetch5G().catch((e) => {
+      console.warn("[cities] 5G indisponível (fonte ausente no Databricks):", (e as Error).message);
+      return [] as CityIndicatorRecord[];
+    }),
+    fetchMetas().catch((e) => {
+      console.warn("[cities] metas indisponíveis (fonte ausente no Databricks):", (e as Error).message);
+      return [] as CityMetaRecord[];
+    }),
   ]);
   const records = [...ftthFwa, ...fiveG];
   const months = Array.from(new Set(records.map((r) => r.competencia)))

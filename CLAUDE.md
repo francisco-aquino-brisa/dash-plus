@@ -43,18 +43,32 @@ especially important for interactive/hover/collapsed states that don't appear in
 server HTML. If no such tool is available, say so explicitly and ask the user to
 verify visually, rather than implying it was visually confirmed.
 
-## Indicator definitions — docs are the source of truth
+## Indicator definitions — the warehouse is the source of truth
 
-The data team's documents are authoritative for every indicator's formula and
-semantics: the CSVs/docx in `docs/` and the `ficha_indicadores` table
-(`projeto_brisa_performance.ficha_indicadores`, with `tabela`/`colunas`/`metrica`/
-`formula`). **Always follow those over the prototype's approximations** — the
-prototypes are visual references only. Example: PDU uses the official
-`pdu_acumulada_hc_ativo = total_realizado / hc_ativos / MÁX(dias_uteis_acumulado)`
-from `vw_hc_zerado_vendedor`, not a simpler total/day. When a doc and a prototype
-disagree on a number, the doc wins; when in doubt, check `ficha_indicadores`.
+Verify every indicator against Databricks — never against code/comments/memory
+(see the `databricks-first` skill). The indicator catalog lives in the
+**`metas_cidades`** view (`projeto_brisa_performance.metas_cidades`), which carries
+`id_indicador`/`servico`/`meta` plus `tabela`/`colunas`/`metrica`/
+`descricao_indicador`/`formato_dado`/`polaridade`. Follow it (and the data-team
+docs in `docs/`) over the prototype's approximations — prototypes are visual
+references only. When a source and a prototype disagree on a number, verify the
+number in SQL and the source wins.
+
+Caveats confirmed against the warehouse (do not trust older docs that say
+otherwise): **`ficha_indicadores` does not exist** — use `metas_cidades`. The
+**PDU source `vw_hc_zerado_vendedor` does not exist** either, and its
+`total_realizado` column exists nowhere, so the PDU is currently broken. See
+[docs/data-map.md](./docs/data-map.md) for the full verified status.
 
 ## Data flow
 
-The app reads via `DATA_SOURCE=mock|databricks`. Keep mock mode working; the mock
-mirrors the real `indicadores_cidades` schema so the swap stays transparent.
+**Databricks is the default source of truth.** `isDatabricks()` returns true
+unless `DATA_SOURCE=mock` — the mock is opt-in only, used when explicitly
+requested. The mock must mirror the verified real schema so the swap stays
+transparent, but numbers are always validated against Databricks (see the
+`databricks-first` skill).
+
+For the full table-by-table map — which schema each screen reads, the Cities
+cubes (`indicadores_cidades`, `indicadores_cidades_5g`, `metas_cidades`), the
+join keys (`id_cidade`/`id_indicador`/`servico`), aggregation rules, the
+indicator→source map and the known gotchas — see [docs/data-map.md](./docs/data-map.md).

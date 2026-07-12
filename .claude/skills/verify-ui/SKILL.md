@@ -44,6 +44,22 @@ Say so explicitly. Do the CLI checks you can, then **ask the user to verify
 visually** — never imply something was visually confirmed when it wasn't. This
 is a hard rule from CLAUDE.md ("Visual verification (browser)").
 
+## Login / preview protocol (this project)
+
+The app is behind SSO login, and **only the user can log in**. So:
+
+- **By default, the user opens the preview, logs in, and validates it themselves.**
+  Do NOT open a browser/preview to validate on your own initiative — just make the
+  change, run the CLI gate, and hand it over for the user to check.
+- **Validate yourself only when the user explicitly asks you to.** In that case:
+  - If a screen/session is **already open**, go ahead and validate in sequence.
+  - If **nothing is open yet**, start the preview, then **wait for the user to log
+    in**. Surface a click-to-continue control (an AskUserQuestion with an option
+    like "Estou logado — pode validar") and only proceed once they click it.
+    Never assume the login happened.
+- Either way, report how you verified and never imply a logged-in page was checked
+  when it wasn't.
+
 ## Workflow
 
 1. Make the change.

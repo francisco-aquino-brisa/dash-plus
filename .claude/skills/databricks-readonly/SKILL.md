@@ -1,6 +1,6 @@
 ---
 name: databricks-readonly
-description: How to query the Brisanet Databricks warehouse — READ-ONLY — via the scripts in scripts/. Use when exploring catalogs/schemas/tables, inspecting real column schemas, validating SQL, pulling sample data for the dashboard (e.g. indicadores_cidades, ficha_indicadores, vw_hc_zerado_vendedor, desempenho_hc), or checking any Databricks config. The MCP was removed — always go through the scripts. Never write.
+description: How to query the Brisanet Databricks warehouse — READ-ONLY — via the scripts in scripts/. Use when exploring catalogs/schemas/tables, inspecting real column schemas, validating SQL, pulling sample data for the dashboard (real verified objects: indicadores_cidades, indicadores_cidades_5g, metas_cidades, desempenho_hc, cadastro_usuario), or checking any Databricks config. The MCP was removed — always go through the scripts. Never write. Always verify an object exists before using it (see databricks-first).
 ---
 
 # Querying Databricks (READ-ONLY, via scripts)

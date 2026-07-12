@@ -1,6 +1,7 @@
 // Vendedor repository: single entry point the screen uses. Aggregation runs at
 // the source (SQL) per (matricula, competência) and is cached by (filters,
-// watermark) — ADR 0002. Real → mock fallback on warehouse error; mock mode → mock.
+// watermark) — ADR 0002. Databricks is the source of truth; we NEVER silently
+// fall back to mock. Mock is served only in mock mode (DATA_SOURCE=mock).
 
 import { cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";
@@ -14,14 +15,9 @@ function cacheKey(f: VendedorFilters): string {
 
 export async function getVendedorView(filters: VendedorFilters): Promise<VendedorView> {
   if (isDatabricks()) {
-    try {
-      const { databricksVendedorWatermark, databricksVendedorView } = await import("./databricks");
-      const watermark = await databricksVendedorWatermark();
-      return await cachedByWatermark<VendedorView>(cacheKey(filters), watermark, () => databricksVendedorView(filters));
-    } catch (e) {
-      console.warn("[vendedor] databricks failed, falling back to mock:", (e as Error).message);
-      return mockVendedorView(filters);
-    }
+    const { databricksVendedorWatermark, databricksVendedorView } = await import("./databricks");
+    const watermark = await databricksVendedorWatermark();
+    return cachedByWatermark<VendedorView>(cacheKey(filters), watermark, () => databricksVendedorView(filters));
   }
   return cachedByWatermark<VendedorView>(cacheKey(filters), "mock:vendedor", async () => mockVendedorView(filters));
 }

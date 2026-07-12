@@ -2,9 +2,14 @@ import type { DataClient } from "./types";
 
 export type { DataClient } from "./types";
 
-/** True when the app is wired to the real Databricks warehouse. */
+/**
+ * True when the app is wired to the real Databricks warehouse.
+ *
+ * Databricks is the DEFAULT source of truth: anything other than the literal
+ * `mock` resolves to Databricks. Set `DATA_SOURCE=mock` to opt into the mock.
+ */
 export function isDatabricks(): boolean {
-  return process.env.DATA_SOURCE === "databricks";
+  return process.env.DATA_SOURCE !== "mock";
 }
 
 /**
