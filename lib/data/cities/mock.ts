@@ -112,6 +112,7 @@ function generate(months: string[]): CityIndicatorRecord[] {
         const reativacoesBloq = Math.round(bloqueados * (0.15 + rng() * 0.2));
         const cancelamentos = fechados;
         const cancelVol = Math.round(cancelamentos * (0.5 + rng() * 0.2));
+        const cancelInvol = cancelamentos - cancelVol;
         const metaCresc = Math.max(50, Math.round(Math.abs(cresc) * (0.9 + rng() * 0.6) + baseAtiva * 0.01));
         const metaBaseAtiva = Math.round(baseAtiva * (0.98 + rng() * 0.08));
         const vCriadas = Math.round(baseAtiva * (0.04 + rng() * 0.03));
@@ -145,6 +146,7 @@ function generate(months: string[]): CityIndicatorRecord[] {
           reativacoes_total: reativacoesBloq + Math.round(bloqueados * rng() * 0.1),
           cancelamentos,
           cancelamentos_voluntarios: cancelVol,
+          cancelamentos_involuntarios: cancelInvol,
           cancelamentos_com_consumo: is5g ? Math.round(cancelamentos * 0.6) : 0,
           cancelamentos_sem_consumo: is5g ? Math.round(cancelamentos * 0.4) : 0,
           ativacao_mes: ativacaoMes,

@@ -28,17 +28,29 @@ export interface FooterStatVM {
   tone: "good" | "warn" | "bad" | "default";
 }
 
+/** One point of a chart series. `meta`/`extras` power the detail-chart overlays. */
+export interface SeriesPoint {
+  mes: string;
+  valor: number;
+  /** Optional meta line value (same unit as `valor`). */
+  meta?: number | null;
+  /** Pre-formatted extra rows for the tooltip (e.g. ratio components). */
+  extras?: { label: string; display: string }[];
+}
+
 /** A secondary metric shown in the detail modal; clicking it charts its series. */
 export interface RelatedIndicatorVM {
   id: string;
   label: string;
   unit: IndicatorUnit;
+  /** Decimal places for percent/currency display. */
+  decimals: number;
   polarity: Polarity;
   value: number;
   /** % change vs previous month (relative). */
   delta: number;
   media: number;
-  series: { mes: string; valor: number }[];
+  series: SeriesPoint[];
 }
 
 export interface IndicatorCardVM {
@@ -46,6 +58,8 @@ export interface IndicatorCardVM {
   block: IndicatorBlock;
   label: string;
   unit: IndicatorUnit;
+  /** Decimal places for percent/currency display. */
+  decimals: number;
   polarity: Polarity;
   available: boolean;
   value: number;
@@ -59,16 +73,24 @@ export interface IndicatorCardVM {
   /** Footer columns (Meta / Projeção / Ating. or custom), already resolved. */
   footer: FooterStatVM[];
   /** 12-month series of the realizado, for the detail modal. */
-  series: { mes: string; valor: number }[];
+  series: SeriesPoint[];
   media: number;
   /** Related metrics for the detail modal (empty when none / unavailable). */
   related: RelatedIndicatorVM[];
 }
 
-function fmtUnit(unit: IndicatorUnit, v: number): string {
-  if (unit === "currency") return `R$ ${v.toFixed(1).replace(".", ",")}`;
+/**
+ * Default decimal places per unit — the data team presents rates/currency with
+ * two decimals, so percent/currency default to 2 (a def may still override).
+ */
+export function defaultDecimals(unit: IndicatorUnit): number {
+  return unit === "qtd" ? 0 : 2;
+}
 
-  if (unit === "percent") return formatPct(v);
+function fmtUnit(unit: IndicatorUnit, v: number, decimals = 1): string {
+  if (unit === "currency") return `R$ ${v.toFixed(decimals).replace(".", ",")}`;
+
+  if (unit === "percent") return formatPct(v, decimals);
 
   return formatNumber(v);
 }
@@ -121,24 +143,50 @@ function scopedRows(
   return base.filter((r) => techs.has(r.tecnologia));
 }
 
-function computeValue(
-  c: IndicatorCompute | undefined,
-  rows: CityIndicatorRecord[],
-  prevRows: CityIndicatorRecord[],
-): number {
+/** Everything a compute may need for one month: scoped rows + that month's metas. */
+interface ComputeCtx {
+  rows: CityIndicatorRecord[];
+  prevRows: CityIndicatorRecord[];
+  metaRows: CityMetaRecord[];
+  servico: string;
+  /** id_cidade_src present in scope this month (meta join key). */
+  idsInScope: Set<string>;
+}
+
+/** Σ metas_cidades.meta for one indicator over the cities in scope + servico. */
+function sumMeta(ctx: ComputeCtx, metaId: string): number {
+  let total = 0;
+
+  for (const m of ctx.metaRows)
+    if (m.id_indicador === metaId && m.servico === ctx.servico && ctx.idsInScope.has(m.id_cidade))
+      total += m.meta;
+
+  return total;
+}
+
+function computeValue(c: IndicatorCompute | undefined, ctx: ComputeCtx): number {
   if (!c) return 0;
 
-  if (c.kind === "sum") return sum(rows, (r) => r[c.field] as number);
+  if (c.kind === "sum") return sum(ctx.rows, (r) => r[c.field] as number);
 
   if (c.kind === "ratio") {
-    const den = sumFields(rows, c.den);
+    const den = sumFields(ctx.rows, c.den);
 
-    return den === 0 ? 0 : (sumFields(rows, c.num) / den) * 100;
+    return den === 0 ? 0 : (sumFields(ctx.rows, c.num) / den) * 100;
+  }
+
+  if (c.kind === "metaSum") return sumMeta(ctx, c.metaId);
+
+  if (c.kind === "cancelRate") {
+    const num = sumMeta(ctx, c.numMetaId);
+    const den = sumFields(ctx.prevRows, c.prevBaseFields) + sumMeta(ctx, c.denMetaId);
+
+    return den === 0 ? 0 : (num / den) * 100;
   }
 
   // growthBase
-  const cur = sum(rows, (r) => r.base_ativa) + sum(rows, (r) => r.fechados);
-  const prev = sum(prevRows, (r) => r.base_ativa) + sum(prevRows, (r) => r.fechados);
+  const cur = sum(ctx.rows, (r) => r.base_ativa) + sum(ctx.rows, (r) => r.fechados);
+  const prev = sum(ctx.prevRows, (r) => r.base_ativa) + sum(ctx.prevRows, (r) => r.fechados);
 
   return cur - prev;
 }
@@ -217,18 +265,13 @@ function relDelta(cur: number, prev: number): number {
   return prev === 0 ? 0 : ((cur - prev) / Math.abs(prev)) * 100;
 }
 
-/** 12-month series of a compute, each month using the previous for growthBase. */
+/** 12-month series of a compute, each month resolved through its own context. */
 function buildSeries(
   compute: IndicatorCompute | undefined,
-  rowsByMonth: Map<string, CityIndicatorRecord[]>,
   months: string[],
+  ctxFor: (m: string) => ComputeCtx,
 ): { mes: string; valor: number }[] {
-  return months.map((m, i) => {
-    const rows = rowsByMonth.get(m) ?? [];
-    const pr = i > 0 ? (rowsByMonth.get(months[i - 1]) ?? []) : [];
-
-    return { mes: m, valor: computeValue(compute, rows, pr) };
-  });
+  return months.map((m) => ({ mes: m, valor: computeValue(compute, ctxFor(m)) }));
 }
 
 function seriesMean(series: { valor: number }[]): number {
@@ -239,8 +282,7 @@ interface FooterCtx {
   meta: number | null;
   atingimento: number | null;
   projecao: number;
-  curRows: CityIndicatorRecord[];
-  prevRows: CityIndicatorRecord[];
+  compute: ComputeCtx;
 }
 
 /** Resolve the card footer columns (built-in stats + custom slots). */
@@ -251,16 +293,19 @@ function resolveFooter(def: IndicatorDef, ctx: FooterCtx): FooterStatVM[] {
   return slots.map((slot): FooterStatVM => {
     if (slot === "meta") {
       const metaUnit = def.metaCompare ? def.metaCompare.unit : def.unit;
+      const dec = def.decimals ?? defaultDecimals(metaUnit);
 
       return {
         label: "Meta",
-        display: ctx.meta === null ? "—" : fmtUnit(metaUnit, ctx.meta),
+        display: ctx.meta === null ? "—" : fmtUnit(metaUnit, ctx.meta, dec),
         tone: "default",
       };
     }
 
     if (slot === "projecao") {
-      return { label: "Projeção", display: fmtUnit(def.unit, ctx.projecao), tone: "default" };
+      const dec = def.decimals ?? defaultDecimals(def.unit);
+
+      return { label: "Projeção", display: fmtUnit(def.unit, ctx.projecao, dec), tone: "default" };
     }
 
     if (slot === "atingimento") {
@@ -274,9 +319,14 @@ function resolveFooter(def: IndicatorDef, ctx: FooterCtx): FooterStatVM[] {
       return { label: "Ating.", display: formatPct(a, 0), tone: good ? "good" : warn ? "warn" : "bad" };
     }
 
-    const v = computeValue(slot.compute, ctx.curRows, ctx.prevRows);
+    const unit = slot.unit ?? "qtd";
+    const v = computeValue(slot.compute, ctx.compute);
 
-    return { label: slot.label, display: fmtUnit(slot.unit ?? "qtd", v), tone: "default" };
+    return {
+      label: slot.label,
+      display: fmtUnit(unit, v, slot.decimals ?? defaultDecimals(unit)),
+      tone: "default",
+    };
   });
 }
 
@@ -295,8 +345,37 @@ export function computeIndicatorBlock(
   const rowsByMonth = new Map<string, CityIndicatorRecord[]>();
 
   for (const m of months) rowsByMonth.set(m, scopedRows(records, filters, m, block));
-  const curRows = rowsByMonth.get(comp) ?? [];
-  const prevRows = prevMes ? (rowsByMonth.get(prevMes) ?? []) : [];
+
+  // Metas grouped by month, so a compute can look up targets for any month.
+  const metaByMonth = new Map<string, CityMetaRecord[]>();
+
+  for (const m of metaRecords) {
+    const arr = metaByMonth.get(m.competencia) ?? [];
+
+    arr.push(m);
+    metaByMonth.set(m.competencia, arr);
+  }
+
+  const idsByMonth = new Map<string, Set<string>>();
+
+  for (const [m, rows] of rowsByMonth) idsByMonth.set(m, new Set(rows.map((r) => r.id_cidade_src)));
+
+  const ctxFor = (m: string): ComputeCtx => {
+    const rows = rowsByMonth.get(m) ?? [];
+    const pm = previousMonth(months, m);
+
+    return {
+      rows,
+      prevRows: pm ? (rowsByMonth.get(pm) ?? []) : [],
+      metaRows: metaByMonth.get(m) ?? [],
+      servico,
+      idsInScope: idsByMonth.get(m) ?? new Set(),
+    };
+  };
+
+  const curCtx = ctxFor(comp);
+  const emptyCtx: ComputeCtx = { rows: [], prevRows: [], metaRows: [], servico, idsInScope: new Set() };
+  const prevCtx = prevMes ? ctxFor(prevMes) : emptyCtx;
 
   return indicatorsForBlock(block).map((def): IndicatorCardVM => {
     if (!def.available) {
@@ -305,6 +384,7 @@ export function computeIndicatorBlock(
         block: def.block,
         label: def.label,
         unit: def.unit,
+        decimals: def.decimals ?? defaultDecimals(def.unit),
         polarity: def.polarity,
         available: false,
         value: 0,
@@ -320,29 +400,52 @@ export function computeIndicatorBlock(
       };
     }
 
-    const value = computeValue(def.compute, curRows, prevRows);
-    const prevValue = computeValue(def.compute, prevRows, []);
-    const meta = aggregateMeta(def, curRows, metaRecords, comp, servico);
+    const value = computeValue(def.compute, curCtx);
+    const prevValue = computeValue(def.compute, prevCtx);
+    // metaCompute yields the meta directly (already in final unit); otherwise
+    // aggregate the per-city targets from metas_cidades.
+    const meta = def.metaCompute
+      ? computeValue(def.metaCompute, curCtx)
+      : aggregateMeta(def, curCtx.rows, metaRecords, comp, servico);
     // When the meta describes a derived value (metaCompare), compare against it.
-    const refValue = def.metaCompare ? computeValue(def.metaCompare.compute, curRows, prevRows) : value;
+    const refValue = def.metaCompare ? computeValue(def.metaCompare.compute, curCtx) : value;
     const atingimento = meta === null || meta === 0 ? null : (refValue / meta) * 100;
     // Pro-rata projection only makes sense for volumes; ratios stay as-is.
     const projecao = def.unit === "percent" ? value : projection(value, comp);
-    const footer = resolveFooter(def, { meta, atingimento, projecao, curRows, prevRows });
+    const footer = resolveFooter(def, { meta, atingimento, projecao, compute: curCtx });
 
-    const series = buildSeries(def.compute, rowsByMonth, months);
+    // Enrich the main series with the meta line + tooltip extras when declared.
+    const series: SeriesPoint[] = months.map((m) => {
+      const ctx = ctxFor(m);
+      const point: SeriesPoint = { mes: m, valor: computeValue(def.compute, ctx) };
+
+      if (def.chartMeta) point.meta = aggregateMeta(def, ctx.rows, metaRecords, m, servico);
+
+      if (def.chartExtras)
+        point.extras = def.chartExtras.map((e) => {
+          const unit = e.unit ?? "qtd";
+
+          return {
+            label: e.label,
+            display: fmtUnit(unit, computeValue(e.compute, ctx), e.decimals ?? defaultDecimals(unit)),
+          };
+        });
+
+      return point;
+    });
     const media = seriesMean(series);
 
     // Related metrics (detail modal): same scope, each charted on click.
     const related: RelatedIndicatorVM[] = (def.related ?? []).map((rel) => {
-      const relSeries = buildSeries(rel.compute, rowsByMonth, months);
-      const relValue = computeValue(rel.compute, curRows, prevRows);
-      const relPrev = computeValue(rel.compute, prevRows, []);
+      const relSeries = buildSeries(rel.compute, months, ctxFor);
+      const relValue = computeValue(rel.compute, curCtx);
+      const relPrev = computeValue(rel.compute, prevCtx);
 
       return {
         id: rel.id,
         label: rel.label,
         unit: rel.unit,
+        decimals: rel.decimals ?? defaultDecimals(rel.unit),
         polarity: rel.polarity,
         value: relValue,
         delta: relDelta(relValue, relPrev),
@@ -356,6 +459,7 @@ export function computeIndicatorBlock(
       block: def.block,
       label: def.label,
       unit: def.unit,
+      decimals: def.decimals ?? defaultDecimals(def.unit),
       polarity: def.polarity,
       available: true,
       value,

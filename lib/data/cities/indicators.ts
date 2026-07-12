@@ -31,7 +31,12 @@ export type IndicatorCompute =
    *  num/den may be a single field or several fields summed together. */
   | { kind: "ratio"; num: NumField | NumField[]; den: NumField | NumField[] }
   /** (base_ativa + fechados) − same of previous month. Needs prev-month rows. */
-  | { kind: "growthBase" };
+  | { kind: "growthBase" }
+  /** Σ metas_cidades.meta for `metaId` over cities in scope (servico-aware). */
+  | { kind: "metaSum"; metaId: string }
+  /** Churn-target rate: Σmeta[numMetaId] / (Σ prevBaseFields[prev month] +
+   *  Σmeta[denMetaId]) × 100. Used for the Churn Rate meta (CA12 / base geral). */
+  | { kind: "cancelRate"; numMetaId: string; denMetaId: string; prevBaseFields: NumField[] };
 
 /**
  * A slot in the card footer (the small columns under the value). "meta",
@@ -39,7 +44,10 @@ export type IndicatorCompute =
  * derived value with its own label (e.g. "% Fechados"). Order is preserved.
  */
 export type FooterSlot =
-  "meta" | "projecao" | "atingimento" | { label: string; compute: IndicatorCompute; unit?: IndicatorUnit };
+  | "meta"
+  | "projecao"
+  | "atingimento"
+  | { label: string; compute: IndicatorCompute; unit?: IndicatorUnit; decimals?: number };
 
 /** Default footer when a def doesn't override it. */
 export const DEFAULT_FOOTER: FooterSlot[] = ["meta", "projecao", "atingimento"];
@@ -51,8 +59,15 @@ export interface IndicatorDef {
   unit: IndicatorUnit;
   polarity: Polarity;
   available: boolean;
+  /** Override display decimals (default: 2 for percent/currency, 0 for qtd). */
+  decimals?: number;
   /** Absent when `available` is false. */
   compute?: IndicatorCompute;
+  /**
+   * Meta computed directly (already in final unit), bypassing metas_cidades
+   * per-city aggregation — e.g. Churn Rate's target is a ratio of two metas.
+   */
+  metaCompute?: IndicatorCompute;
   /** id_indicador to look up in metas_cidades; absent → no meta. */
   metaId?: string;
   /** Which metas_cidades.servico row applies at the aggregate (block) level. */
@@ -66,6 +81,10 @@ export interface IndicatorDef {
   metaCompare?: { compute: IndicatorCompute; unit: IndicatorUnit };
   /** Footer columns for this card. Defaults to Meta · Projeção · Ating. */
   footer?: FooterSlot[];
+  /** Plot the meta as a second line in the detail chart (needs a meta). */
+  chartMeta?: boolean;
+  /** Extra values shown in the detail chart tooltip (e.g. the ratio components). */
+  chartExtras?: { label: string; compute: IndicatorCompute; unit?: IndicatorUnit; decimals?: number }[];
   /** Secondary metrics shown in the detail modal (clickable → chart swaps). */
   related?: RelatedDef[];
   /** Readable formula for the InfoHint tooltip. */
@@ -84,6 +103,8 @@ export interface RelatedDef {
   label: string;
   unit: IndicatorUnit;
   polarity: Polarity;
+  /** Override display decimals (default: 2 for percent/currency, 0 for qtd). */
+  decimals?: number;
   compute: IndicatorCompute;
 }
 
@@ -274,19 +295,82 @@ const BANDA_LARGA: IndicatorDef[] = [
     unit: "percent",
     polarity: "down",
     available: true,
-    compute: { kind: "ratio", num: "cancelamentos", den: "base_ativa" },
-    metaId: "CA03",
-    metaServico: "Banda Larga",
-    description: "Cancelamentos do mês ÷ base ativa × 100. Menor é melhor.",
+    // Churn = cancelamentos ÷ base geral (base_ativa + fechados) × 100.
+    compute: { kind: "ratio", num: "cancelamentos", den: ["base_ativa", "fechados"] },
+    // Meta = meta de cancelamento (CA12) ÷ base geral projetada (base geral do mês
+    // anterior + meta de crescimento base BA04) × 100.
+    metaCompute: {
+      kind: "cancelRate",
+      numMetaId: "CA12",
+      denMetaId: "BA04",
+      prevBaseFields: ["base_ativa", "fechados"],
+    },
+    footer: ["meta", "atingimento"],
+    related: [
+      {
+        id: "meta_cancelamentos",
+        label: "Meta de Cancelamentos",
+        unit: "qtd",
+        polarity: "down",
+        compute: { kind: "metaSum", metaId: "CA12" },
+      },
+      {
+        id: "cancelamentos",
+        label: "Cancelamento Mês",
+        unit: "qtd",
+        polarity: "down",
+        compute: { kind: "sum", field: "cancelamentos" },
+      },
+      {
+        id: "cancel_vol",
+        label: "% Cancelamento Voluntário",
+        unit: "percent",
+        polarity: "down",
+        compute: { kind: "ratio", num: "cancelamentos_voluntarios", den: ["base_ativa", "fechados"] },
+      },
+      {
+        id: "cancel_invol",
+        label: "% Cancelamento Involuntário",
+        unit: "percent",
+        polarity: "down",
+        compute: { kind: "ratio", num: "cancelamentos_involuntarios", den: ["base_ativa", "fechados"] },
+      },
+    ],
+    description: "Cancelamentos do mês ÷ base geral (base ativa + fechados) × 100. Menor é melhor.",
   },
   {
     id: "CA04",
     block: "banda-larga",
-    label: "Churn Safra Cidade",
+    label: "Churn Safra",
     unit: "percent",
     polarity: "down",
     available: true,
     compute: { kind: "ratio", num: "cancelados_4_mes", den: "instalados_4_mes" },
+    // Meta = média das metas CA09 ponderada por instalados_4_mes (metas_cidades).
+    metaId: "CA09",
+    metaServico: "Banda Larga",
+    footer: ["meta", "atingimento"],
+    chartMeta: true,
+    chartExtras: [
+      { label: "Cancelados 4m", compute: { kind: "sum", field: "cancelados_4_mes" }, unit: "qtd" },
+      { label: "Instalados 4m", compute: { kind: "sum", field: "instalados_4_mes" }, unit: "qtd" },
+    ],
+    related: [
+      {
+        id: "cancelados_4_mes",
+        label: "Cancelamento de 4 Meses",
+        unit: "qtd",
+        polarity: "down",
+        compute: { kind: "sum", field: "cancelados_4_mes" },
+      },
+      {
+        id: "instalados_4_mes",
+        label: "Instalação de 4 Meses",
+        unit: "qtd",
+        polarity: "up",
+        compute: { kind: "sum", field: "instalados_4_mes" },
+      },
+    ],
     description: "Cancelados ÷ instalações da safra instalada há 4 meses × 100. Menor é melhor.",
   },
   {

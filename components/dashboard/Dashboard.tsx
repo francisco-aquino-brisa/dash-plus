@@ -365,7 +365,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                   {g.tecnologia === "FTTH" && g.takeup !== undefined && (
                     <MiniStat
                       label="Takeup"
-                      value={formatPct(g.takeup, 1)}
+                      value={formatPct(g.takeup)}
                       hint={`HP ${formatNumber(g.hp || 0)}`}
                     />
                   )}
@@ -400,7 +400,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
               <MiniStat
                 label="Churn Rate 5G"
                 value={formatPct(churn5g.churnRate)}
-                hint="Meta 2,0%"
+                hint="Meta 2,00%"
                 good={churn5g.churnRate <= 2}
               />
               <MiniStat label="Cancelamentos" value={formatNumber(churn5g.cancelamentos)} />
@@ -475,13 +475,13 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
               <MiniStat label="Home Passed" value={formatNumber(coverage.totalHP)} />
               <MiniStat
                 label="Takeup Geral"
-                value={formatPct(coverage.takeup, 1)}
+                value={formatPct(coverage.takeup)}
                 good={coverage.takeup >= 25}
               />
               <MiniStat label="Bloqueados" value={formatNumber(kpis.bloqueados)} />
               <MiniStat
                 label="Reativação"
-                value={formatPct(kpis.reativPct, 1)}
+                value={formatPct(kpis.reativPct)}
                 good={kpis.reativPct >= 25}
                 hint={`${formatNumber(kpis.reativacao.resultado)} reativados`}
               />
@@ -517,13 +517,13 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
           {selectedIndicator &&
             (() => {
               const ind = selectedIndicator;
-              const fmtU = (unit: IndicatorCardVM["unit"], v: number) =>
+              const fmtU = (unit: IndicatorCardVM["unit"], v: number, decimals = 1) =>
                 unit === "currency"
-                  ? `R$ ${v.toFixed(1).replace(".", ",")}`
+                  ? `R$ ${v.toFixed(decimals).replace(".", ",")}`
                   : unit === "percent"
-                    ? formatPct(v)
+                    ? formatPct(v, decimals)
                     : formatNumber(v);
-              const fmt = (v: number) => fmtU(ind.unit, v);
+              const fmt = (v: number) => fmtU(ind.unit, v, ind.decimals);
               const atinGood =
                 ind.atingimento === null
                   ? undefined
@@ -536,10 +536,11 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
               const activeRel = ind.related.find((r) => r.id === activeRelatedId) ?? null;
               const chartSeries = activeRel ? activeRel.series : ind.series;
               const chartUnit = activeRel ? activeRel.unit : ind.unit;
+              const chartDecimals = activeRel ? activeRel.decimals : ind.decimals;
               const chartLabel = activeRel ? activeRel.label : ind.label;
-              const chartFmt = (v: number) => fmtU(chartUnit, v);
+              const chartFmt = (v: number) => fmtU(chartUnit, v, chartDecimals);
               const chartCompact = (v: number) =>
-                chartUnit === "qtd" ? formatChartLabel(v) : fmtU(chartUnit, v);
+                chartUnit === "qtd" ? formatChartLabel(v) : fmtU(chartUnit, v, chartDecimals);
 
               const statFor = (s: DetailStat) => {
                 if (s === "atual")
@@ -549,7 +550,10 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
 
                 if (s === "meta")
                   return (
-                    <MiniStat label="Meta" value={ind.meta === null ? "—" : fmtU(ind.metaUnit, ind.meta)} />
+                    <MiniStat
+                      label="Meta"
+                      value={ind.meta === null ? "—" : fmtU(ind.metaUnit, ind.meta, ind.decimals)}
+                    />
                   );
 
                 if (s === "atingimento")
@@ -682,7 +686,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                                 </span>
                               </div>
                               <div className="mt-1 text-xl font-bold tracking-tight text-foreground">
-                                {fmtU(rel.unit, rel.value)}
+                                {fmtU(rel.unit, rel.value, rel.decimals)}
                               </div>
                             </button>
                           );

@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Area,
-  AreaChart,
+  ComposedChart,
   LabelList,
+  Legend,
+  Line,
   ReferenceArea,
   ResponsiveContainer,
   Tooltip,
@@ -19,7 +21,12 @@ import { cn } from "@/lib/utils";
 type Unit = "qtd" | "percent" | "currency";
 
 interface Props {
-  data: { mes: string; valor: number }[];
+  data: {
+    mes: string;
+    valor: number;
+    meta?: number | null;
+    extras?: { label: string; display: string }[];
+  }[];
   color?: string;
   /** Unit of the series — drives how the period dispersion is expressed. */
   unit?: Unit;
@@ -40,7 +47,13 @@ function signed(n: number, digits = 1): string {
 }
 
 /** Datum augmented with its month-over-month dispersion. */
-type ChartDatum = { mes: string; valor: number; delta: number | null };
+type ChartDatum = {
+  mes: string;
+  valor: number;
+  delta: number | null;
+  meta?: number | null;
+  extras?: { label: string; display: string }[];
+};
 
 function ChartTooltip({
   active,
@@ -56,9 +69,21 @@ function ChartTooltip({
     <div className="shadow-elegant rounded-lg border border-border bg-card px-3 py-2 text-xs">
       <div className="mb-1 font-medium text-foreground">{formatMonth(String(label))}</div>
       <div>
-        <span className="text-muted-foreground">Valor: </span>
+        <span className="text-muted-foreground">Real: </span>
         <span className="font-semibold text-foreground">{fmt(d.valor)}</span>
       </div>
+      {d.meta != null && (
+        <div>
+          <span className="text-muted-foreground">Meta: </span>
+          <span className="font-semibold text-foreground">{fmt(d.meta)}</span>
+        </div>
+      )}
+      {d.extras?.map((e) => (
+        <div key={e.label}>
+          <span className="text-muted-foreground">{e.label}: </span>
+          <span className="font-semibold text-foreground">{e.display}</span>
+        </div>
+      ))}
       {d.delta !== null && (
         <div>
           <span className="text-muted-foreground">Disp. mês anterior: </span>
@@ -84,6 +109,7 @@ export function HistoryChart({
     ...d,
     delta: i > 0 ? relPct(d.valor, data[i - 1].valor) : null,
   }));
+  const hasMeta = chart.some((d) => d.meta != null);
 
   // Google-Finance-style period selection: drag over the plot to pick a range;
   // we then show the dispersion between the first and last month of the range.
@@ -181,7 +207,7 @@ export function HistoryChart({
       </div>
       <div className="h-[280px] w-full select-none">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
+          <ComposedChart
             data={chart}
             margin={{ top: 10, right: 10, bottom: 0, left: 0 }}
             onMouseDown={onDown}
@@ -210,15 +236,37 @@ export function HistoryChart({
               width={64}
             />
             <Tooltip content={<ChartTooltip fmt={valueFormatter} />} />
-            <Area type="monotone" dataKey="valor" stroke={color} strokeWidth={2} fill="url(#histGrad)">
-              <LabelList
-                dataKey="valor"
-                position="top"
-                offset={8}
-                formatter={(v: number) => compactFormatter(v)}
-                style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }}
-              />
+            {hasMeta && <Legend iconType="plainline" wrapperStyle={{ fontSize: 11 }} />}
+            <Area
+              type="monotone"
+              name="Real"
+              dataKey="valor"
+              stroke={color}
+              strokeWidth={2}
+              fill="url(#histGrad)"
+            >
+              {!hasMeta && (
+                <LabelList
+                  dataKey="valor"
+                  position="top"
+                  offset={8}
+                  formatter={(v: number) => compactFormatter(v)}
+                  style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }}
+                />
+              )}
             </Area>
+            {hasMeta && (
+              <Line
+                type="monotone"
+                name="Meta"
+                dataKey="meta"
+                stroke="var(--muted-foreground)"
+                strokeWidth={2}
+                strokeDasharray="4 4"
+                dot={false}
+                connectNulls
+              />
+            )}
             {band && (
               <ReferenceArea
                 x1={band.x1}
@@ -229,7 +277,7 @@ export function HistoryChart({
                 fillOpacity={0.12}
               />
             )}
-          </AreaChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </div>

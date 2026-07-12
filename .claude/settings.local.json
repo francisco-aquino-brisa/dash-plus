@@ -110,7 +110,8 @@
       "Bash(chmod +x .husky/pre-commit)",
       "Bash(git config *)",
       "Bash(npx prettier *)",
-      "Bash(node -e \"const c=require\\('eslint-config-prettier'\\); console.log\\('padding-line-between-statements' in c.rules ? 'SIM \\(desativa\\)' : 'NÃO \\(livre para usar\\)'\\)\")"
+      "Bash(node -e \"const c=require\\('eslint-config-prettier'\\); console.log\\('padding-line-between-statements' in c.rules ? 'SIM \\(desativa\\)' : 'NÃO \\(livre para usar\\)'\\)\")",
+      "Bash(node scripts/describe-databricks.mjs projeto_brisa_performance indicadores_cidades)"
     ]
   }
 }

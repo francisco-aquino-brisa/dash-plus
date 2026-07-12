@@ -46,6 +46,7 @@ export interface CityIndicatorRecord {
   // Cancellations.
   cancelamentos: number;
   cancelamentos_voluntarios: number;
+  cancelamentos_involuntarios: number;
   cancelamentos_com_consumo: number; // 5G
   cancelamentos_sem_consumo: number; // 5G
   ativacao_mes: number; // 5G

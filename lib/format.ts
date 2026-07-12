@@ -20,6 +20,6 @@ export function formatChartLabel(n: number) {
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(n);
 }
 
-export function formatPct(n: number, digits = 1) {
+export function formatPct(n: number, digits = 2) {
   return `${n.toFixed(digits)}%`;
 }

@@ -66,10 +66,10 @@ function iconFor(kpi: IndicatorCardVM): LucideIcon {
   );
 }
 
-function formatValue(unit: IndicatorCardVM["unit"], v: number): string {
-  if (unit === "currency") return `R$ ${v.toFixed(1).replace(".", ",")}`;
+function formatValue(unit: IndicatorCardVM["unit"], v: number, decimals = 1): string {
+  if (unit === "currency") return `R$ ${v.toFixed(decimals).replace(".", ",")}`;
 
-  if (unit === "percent") return formatPct(v);
+  if (unit === "percent") return formatPct(v, decimals);
 
   return formatNumber(v);
 }
@@ -141,7 +141,7 @@ export function CityIndicatorCard({ kpi, onClick }: { kpi: IndicatorCardVM; onCl
 
       <div className="mt-3 flex items-baseline gap-2">
         <span className="text-3xl font-bold tracking-tight text-foreground">
-          {formatValue(kpi.unit, kpi.value)}
+          {formatValue(kpi.unit, kpi.value, kpi.decimals)}
         </span>
         {hasMeta && <span className={cn("text-sm font-semibold", atinColor)}>{atin.toFixed(0)}%</span>}
       </div>
