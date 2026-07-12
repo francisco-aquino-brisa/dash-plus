@@ -27,10 +27,25 @@ type NumField = {
 /** How to aggregate the realizado over a set of rows in scope. */
 export type IndicatorCompute =
   | { kind: "sum"; field: NumField }
-  /** (Σnum / Σden) × 100 — recomputed from summed components, never averaged. */
-  | { kind: "ratio"; num: NumField; den: NumField }
+  /** (Σnum / Σden) × 100 — recomputed from summed components, never averaged.
+   *  num/den may be a single field or several fields summed together. */
+  | { kind: "ratio"; num: NumField | NumField[]; den: NumField | NumField[] }
   /** (base_ativa + fechados) − same of previous month. Needs prev-month rows. */
   | { kind: "growthBase" };
+
+/**
+ * A slot in the card footer (the small columns under the value). "meta",
+ * "projecao" and "atingimento" are the built-in stats; a custom slot renders a
+ * derived value with its own label (e.g. "% Fechados"). Order is preserved.
+ */
+export type FooterSlot =
+  | "meta"
+  | "projecao"
+  | "atingimento"
+  | { label: string; compute: IndicatorCompute; unit?: IndicatorUnit };
+
+/** Default footer when a def doesn't override it. */
+export const DEFAULT_FOOTER: FooterSlot[] = ["meta", "projecao", "atingimento"];
 
 export interface IndicatorDef {
   id: string;
@@ -45,6 +60,15 @@ export interface IndicatorDef {
   metaId?: string;
   /** Which metas_cidades.servico row applies at the aggregate (block) level. */
   metaServico?: "Banda Larga" | "5G";
+  /**
+   * When the stored meta refers to a DERIVED value (not the card's main value),
+   * with its own unit — e.g. Base Fechada shows a quantity but its meta is the
+   * fechamento RATE (%). The atingimento then compares this computed value to the
+   * meta, and the Meta column is formatted with `unit`.
+   */
+  metaCompare?: { compute: IndicatorCompute; unit: IndicatorUnit };
+  /** Footer columns for this card. Defaults to Meta · Projeção · Ating. */
+  footer?: FooterSlot[];
   /** Readable formula for the InfoHint tooltip. */
   description: string;
 }
@@ -73,9 +97,11 @@ const BANDA_LARGA: IndicatorDef[] = [
     description: "Soma do crescimento de clientes ativos no mês (Soma[crescimento])." },
   { id: "BA03", block: "banda-larga", label: "Base Fechada", unit: "qtd", polarity: "down", available: true,
     compute: { kind: "sum", field: "fechados" }, metaId: "BA03", metaServico: "Banda Larga",
-    description: "Soma de clientes fechados no mês (Soma[fechados]). Menor é melhor." },
+    metaCompare: { compute: { kind: "ratio", num: "fechados", den: ["base_ativa", "fechados"] }, unit: "percent" },
+    footer: ["meta", { label: "% Fechados", compute: { kind: "ratio", num: "fechados", den: ["base_ativa", "fechados"] }, unit: "percent" }, "atingimento"],
+    description: "Soma de clientes fechados no mês (Soma[fechados]). Meta = taxa de fechamento (metas_cidades). Menor é melhor." },
   { id: "BA04", block: "banda-larga", label: "Crescimento Base", unit: "qtd", polarity: "up", available: true,
-    compute: { kind: "growthBase" }, metaId: "BA04", metaServico: "Banda Larga",
+    compute: { kind: "growthBase" }, metaId: "BA04", metaServico: "Banda Larga", footer: ["meta", "atingimento"],
     description: "(Base Ativa + Fechados) do mês − (Base Ativa + Fechados) do mês anterior." },
   { id: "BA10", block: "banda-larga", label: "Clientes Bloqueados", unit: "qtd", polarity: "down", available: true,
     compute: { kind: "sum", field: "bloqueados" },

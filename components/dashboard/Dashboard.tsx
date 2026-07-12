@@ -481,12 +481,13 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
           {selectedIndicator &&
             (() => {
               const ind = selectedIndicator;
-              const fmt = (v: number) =>
-                ind.unit === "currency"
+              const fmtU = (unit: typeof ind.unit, v: number) =>
+                unit === "currency"
                   ? `R$ ${v.toFixed(1).replace(".", ",")}`
-                  : ind.unit === "percent"
+                  : unit === "percent"
                     ? formatPct(v)
                     : formatNumber(v);
+              const fmt = (v: number) => fmtU(ind.unit, v);
               const atinGood =
                 ind.atingimento === null
                   ? undefined
@@ -503,7 +504,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                   </DialogHeader>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <MiniStat label="Atual" value={fmt(ind.value)} hint={formatMonth(filters.competencia)} />
-                    <MiniStat label="Meta" value={ind.meta === null ? "—" : fmt(ind.meta)} />
+                    <MiniStat label="Meta" value={ind.meta === null ? "—" : fmtU(ind.metaUnit, ind.meta)} />
                     <MiniStat
                       label="Atingimento"
                       value={ind.atingimento === null ? "—" : formatPct(ind.atingimento, 0)}

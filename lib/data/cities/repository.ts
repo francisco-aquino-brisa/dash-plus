@@ -32,7 +32,11 @@ export async function getCityDataset(): Promise<CityDataset> {
 
 /** Distinct filter option lists derived from the dataset. */
 export function buildFilterOptions(dataset: CityDataset): FilterOptions {
-  const uniq = (xs: string[]) => Array.from(new Set(xs)).filter(Boolean).sort();
+  // Cities with no org (gerência "-"/"NAO REGISTRADO") stay in the dataset for
+  // totals, but must not pollute the drill-down dropdowns.
+  const PLACEHOLDER = new Set(["-", "NAO REGISTRADO", "NÃO REGISTRADO"]);
+  const uniq = (xs: string[]) =>
+    Array.from(new Set(xs)).filter((v) => v && !PLACEHOLDER.has(v.toUpperCase())).sort();
   return {
     meses: dataset.months,
     gerencias: uniq(dataset.records.map((r) => r.gerencia)),

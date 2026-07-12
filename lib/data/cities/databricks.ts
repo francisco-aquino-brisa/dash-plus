@@ -72,9 +72,10 @@ async function fetchCitiesFTTHFWA(): Promise<CityIndicatorRecord[]> {
     FROM ${FQ("indicadores_cidades")}
     WHERE data >= ${WINDOW}
       AND upper(tecnologia) IN ('FTTH', 'FWA')
-      AND coalesce(gerencia, '-') <> '-'
       AND coalesce(cidade, '') <> ''
   `;
+  // NOTE: cities with no gerência ('-') are kept — the official panel counts them
+  // when no filter is applied. The Gerência dropdown filters '-' out separately.
   const raw = await getDataClient().query<Record<string, unknown>>(sql);
   return raw.map((r) => {
     const cidade = str(r.cidade);
@@ -83,6 +84,7 @@ async function fetchCitiesFTTHFWA(): Promise<CityIndicatorRecord[]> {
     return {
       competencia: str(r.competencia),
       id_cidade: `${str(r.competencia)}|${cidade}`,
+      id_cidade_src: str(r.id_cidade),
       cidade,
       uf: ufFrom(cidade),
       gerencia: str(r.gerencia),
@@ -126,15 +128,15 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
   const sql = `
     SELECT
       date_format(data, 'yyyy-MM-01') AS competencia,
-      cidade, gerencia, coordenacao, tipo_cidade,
+      id_cidade, cidade, gerencia, coordenacao, tipo_cidade,
       base_ativa, base_ativa_anterior, crescimento, ativacao_mes, cancelamento_mes,
       cancel_com_consumo, cancel_sem_consumo, chips_combo,
       instalacoes_4_mes, cancelamentos_4_mes
     FROM ${FQ("indicadores_cidades_5g")}
     WHERE data >= ${WINDOW}
-      AND coalesce(gerencia, 'NAO REGISTRADO') <> 'NAO REGISTRADO'
       AND trim(coalesce(cidade, '')) NOT IN ('', '/')
   `;
+  // Cities with no gerência are kept (counted when no filter is applied).
   const raw = await getDataClient().query<Record<string, unknown>>(sql);
   return raw.map((r) => {
     const cidade = str(r.cidade);
@@ -142,6 +144,7 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
     return {
       competencia: str(r.competencia),
       id_cidade: `${str(r.competencia)}|${cidade}|5G`,
+      id_cidade_src: str(r.id_cidade),
       cidade,
       uf: ufFrom(cidade),
       gerencia: str(r.gerencia),
@@ -190,17 +193,18 @@ async function fetchMetas(): Promise<CityMetaRecord[]> {
   const sql = `
     SELECT
       date_format(data, 'yyyy-MM-01') AS competencia,
-      cidade, id_indicador, servico, meta
+      id_cidade, cidade, id_indicador, servico, meta
     FROM ${FQ("metas_cidades")}
     WHERE data >= ${WINDOW}
       AND upper(coalesce(stutus, '')) = 'ATIVO'
       AND coalesce(id_indicador, '') <> ''
-      AND coalesce(cidade, '') <> ''
+      AND coalesce(id_cidade, '') <> ''
   `;
   const raw = await getDataClient().query<Record<string, unknown>>(sql);
   return raw.map((r) => ({
     competencia: str(r.competencia),
     cidade: str(r.cidade),
+    id_cidade: str(r.id_cidade),
     id_indicador: str(r.id_indicador),
     servico: str(r.servico),
     meta: num(r.meta),

@@ -9,13 +9,24 @@
 
 import type { CityIndicatorRecord, CityMetaRecord, Filters } from "./types";
 import {
+  DEFAULT_FOOTER,
   indicatorsForBlock,
+  type FooterSlot,
   type IndicatorBlock,
+  type IndicatorCompute,
   type IndicatorDef,
   type IndicatorUnit,
   type Polarity,
 } from "./indicators";
 import { applyFilters, previousMonth, projection, sum } from "./compute";
+import { formatNumber, formatPct } from "@/lib/format";
+
+/** A resolved footer column: label + formatted value + color tone. */
+export interface FooterStatVM {
+  label: string;
+  display: string;
+  tone: "good" | "warn" | "bad" | "default";
+}
 
 export interface IndicatorCardVM {
   id: string;
@@ -26,25 +37,33 @@ export interface IndicatorCardVM {
   available: boolean;
   value: number;
   meta: number | null;
+  /** Unit of the meta (may differ from the value's unit, e.g. Base Fechada). */
+  metaUnit: IndicatorUnit;
   atingimento: number | null;
-  /** Day-of-month projection of the realizado (= value for ratios/percent). */
-  projecao: number;
   /** % change vs previous month (relative). */
   delta: number;
   description: string;
+  /** Footer columns (Meta / Projeção / Ating. or custom), already resolved. */
+  footer: FooterStatVM[];
   /** 12-month series of the realizado, for the detail modal. */
   series: { mes: string; valor: number }[];
   media: number;
 }
 
-/**
- * Canonical city key for joining across tables whose "Cidade / UF" formatting
- * differs (indicadores_cidades uses " / ", metas_cidades uses "/"). Uppercase,
- * collapse whitespace, drop spaces around the slash.
- */
-function canonCity(cidade: string): string {
-  return cidade.toUpperCase().replace(/\s*\/\s*/g, "/").replace(/\s+/g, " ").trim();
+function fmtUnit(unit: IndicatorUnit, v: number): string {
+  if (unit === "currency") return `R$ ${v.toFixed(1).replace(".", ",")}`;
+  if (unit === "percent") return formatPct(v);
+  return formatNumber(v);
 }
+
+/** Sum one or several numeric fields across rows. */
+function sumFields(rows: CityIndicatorRecord[], fields: NumFieldish): number {
+  const list = Array.isArray(fields) ? fields : [fields];
+  let total = 0;
+  for (const r of rows) for (const f of list) total += Number(r[f]) || 0;
+  return total;
+}
+type NumFieldish = keyof CityIndicatorRecord | (keyof CityIndicatorRecord)[];
 
 /** Technologies in scope for a block, honoring the Tecnologia filter (BL only). */
 function techScope(block: IndicatorBlock, tecnologia: string): CityIndicatorRecord["tecnologia"][] {
@@ -75,13 +94,16 @@ function scopedRows(
   return base.filter((r) => techs.has(r.tecnologia));
 }
 
-function realizado(def: IndicatorDef, rows: CityIndicatorRecord[], prevRows: CityIndicatorRecord[]): number {
-  const c = def.compute;
+function computeValue(
+  c: IndicatorCompute | undefined,
+  rows: CityIndicatorRecord[],
+  prevRows: CityIndicatorRecord[],
+): number {
   if (!c) return 0;
   if (c.kind === "sum") return sum(rows, (r) => r[c.field] as number);
   if (c.kind === "ratio") {
-    const den = sum(rows, (r) => r[c.den] as number);
-    return den === 0 ? 0 : (sum(rows, (r) => r[c.num] as number) / den) * 100;
+    const den = sumFields(rows, c.den);
+    return den === 0 ? 0 : (sumFields(rows, c.num) / den) * 100;
   }
   // growthBase
   const cur = sum(rows, (r) => r.base_ativa) + sum(rows, (r) => r.fechados);
@@ -102,25 +124,30 @@ function aggregateMeta(
     (m) => m.id_indicador === def.metaId && m.servico === servico && m.competencia === competencia,
   );
   if (metas.length === 0) return null;
-  const metaByCity = new Map(metas.map((m) => [canonCity(m.cidade), m.meta]));
-  const factor = def.unit === "percent" ? 100 : 1; // fractions → percent points
+  // Join to the realizado by raw source id_cidade (month-prefixed), per the
+  // data team: metas_cidades links on (id_cidade, id_indicador, servico).
+  const metaById = new Map(metas.map((m) => [m.id_cidade, m.meta]));
+  // The meta may describe a derived value (metaCompare) instead of the main one.
+  const metaUnit = def.metaCompare ? def.metaCompare.unit : def.unit;
+  const ratioForWeight = def.metaCompare?.compute ?? def.compute;
+  const factor = metaUnit === "percent" ? 100 : 1; // fractions → percent points
 
-  if (def.unit === "percent" && def.compute?.kind === "ratio") {
+  if (metaUnit === "percent" && ratioForWeight?.kind === "ratio") {
     // Weight each city's target % by that city's realizado denominator.
-    const denField = def.compute.den;
+    const denFields = ratioForWeight.den;
     let weighted = 0;
     let weight = 0;
-    const denByCity = new Map<string, number>();
-    for (const r of rows) denByCity.set(canonCity(r.cidade), (denByCity.get(canonCity(r.cidade)) ?? 0) + (Number(r[denField]) || 0));
-    for (const [cidade, meta] of metaByCity) {
-      const den = denByCity.get(cidade);
+    const denById = new Map<string, number>();
+    for (const r of rows) denById.set(r.id_cidade_src, (denById.get(r.id_cidade_src) ?? 0) + sumFields([r], denFields));
+    for (const [id, meta] of metaById) {
+      const den = denById.get(id);
       if (den === undefined) continue;
       weighted += meta * den;
       weight += den;
     }
     if (weight === 0) {
       // No denominator in scope → fall back to the simple mean of in-scope metas.
-      const inScope = [...metaByCity].filter(([c]) => denByCity.has(c)).map(([, m]) => m);
+      const inScope = [...metaById].filter(([id]) => denById.has(id)).map(([, m]) => m);
       if (inScope.length === 0) return null;
       return (inScope.reduce((a, b) => a + b, 0) / inScope.length) * factor;
     }
@@ -128,11 +155,11 @@ function aggregateMeta(
   }
 
   // Qtd / growthBase → sum the per-city targets over cities present in scope.
-  const citiesInScope = new Set(rows.map((r) => canonCity(r.cidade)));
+  const idsInScope = new Set(rows.map((r) => r.id_cidade_src));
   let total = 0;
   let matched = 0;
-  for (const [cidade, meta] of metaByCity) {
-    if (!citiesInScope.has(cidade)) continue;
+  for (const [id, meta] of metaById) {
+    if (!idsInScope.has(id)) continue;
     total += meta;
     matched++;
   }
@@ -141,6 +168,38 @@ function aggregateMeta(
 
 function relDelta(cur: number, prev: number): number {
   return prev === 0 ? 0 : ((cur - prev) / Math.abs(prev)) * 100;
+}
+
+interface FooterCtx {
+  meta: number | null;
+  atingimento: number | null;
+  projecao: number;
+  curRows: CityIndicatorRecord[];
+  prevRows: CityIndicatorRecord[];
+}
+
+/** Resolve the card footer columns (built-in stats + custom slots). */
+function resolveFooter(def: IndicatorDef, ctx: FooterCtx): FooterStatVM[] {
+  const slots: FooterSlot[] = def.footer ?? DEFAULT_FOOTER;
+  const inverse = def.polarity === "down";
+  return slots.map((slot): FooterStatVM => {
+    if (slot === "meta") {
+      const metaUnit = def.metaCompare ? def.metaCompare.unit : def.unit;
+      return { label: "Meta", display: ctx.meta === null ? "—" : fmtUnit(metaUnit, ctx.meta), tone: "default" };
+    }
+    if (slot === "projecao") {
+      return { label: "Projeção", display: fmtUnit(def.unit, ctx.projecao), tone: "default" };
+    }
+    if (slot === "atingimento") {
+      const a = ctx.atingimento;
+      if (a === null) return { label: "Ating.", display: "—", tone: "default" };
+      const good = inverse ? a <= 100 : a >= 100;
+      const warn = inverse ? a > 100 && a <= 130 : a >= 70 && a < 100;
+      return { label: "Ating.", display: formatPct(a, 0), tone: good ? "good" : warn ? "warn" : "bad" };
+    }
+    const v = computeValue(slot.compute, ctx.curRows, ctx.prevRows);
+    return { label: slot.label, display: fmtUnit(slot.unit ?? "qtd", v), tone: "default" };
+  });
 }
 
 export function computeIndicatorBlock(
@@ -164,29 +223,34 @@ export function computeIndicatorBlock(
     if (!def.available) {
       return {
         id: def.id, block: def.block, label: def.label, unit: def.unit, polarity: def.polarity,
-        available: false, value: 0, meta: null, atingimento: null, projecao: 0, delta: 0,
-        description: def.description, series: [], media: 0,
+        available: false, value: 0, meta: null, metaUnit: def.metaCompare?.unit ?? def.unit,
+        atingimento: null, delta: 0,
+        description: def.description, footer: [], series: [], media: 0,
       };
     }
 
-    const value = realizado(def, curRows, prevRows);
-    const prevValue = realizado(def, prevRows, []);
+    const value = computeValue(def.compute, curRows, prevRows);
+    const prevValue = computeValue(def.compute, prevRows, []);
     const meta = aggregateMeta(def, curRows, metaRecords, comp, servico);
-    const atingimento = meta === null || meta === 0 ? null : (value / meta) * 100;
+    // When the meta describes a derived value (metaCompare), compare against it.
+    const refValue = def.metaCompare ? computeValue(def.metaCompare.compute, curRows, prevRows) : value;
+    const atingimento = meta === null || meta === 0 ? null : (refValue / meta) * 100;
     // Pro-rata projection only makes sense for volumes; ratios stay as-is.
     const projecao = def.unit === "percent" ? value : projection(value, comp);
+    const footer = resolveFooter(def, { meta, atingimento, projecao, curRows, prevRows });
 
     const series = months.map((m, i) => {
       const rows = rowsByMonth.get(m) ?? [];
       const pr = i > 0 ? (rowsByMonth.get(months[i - 1]) ?? []) : [];
-      return { mes: m, valor: realizado(def, rows, pr) };
+      return { mes: m, valor: computeValue(def.compute, rows, pr) };
     });
     const media = series.reduce((a, s) => a + s.valor, 0) / (series.length || 1);
 
     return {
       id: def.id, block: def.block, label: def.label, unit: def.unit, polarity: def.polarity,
-      available: true, value, meta, atingimento, projecao, delta: relDelta(value, prevValue),
-      description: def.description, series, media,
+      available: true, value, meta, metaUnit: def.metaCompare?.unit ?? def.unit,
+      atingimento, delta: relDelta(value, prevValue),
+      description: def.description, footer, series, media,
     };
   });
 }

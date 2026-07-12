@@ -17,7 +17,10 @@ export type TipoCidade = "ONLY" | "HÍBRIDA" | "FTTH";
 export interface CityIndicatorRecord {
   /** Reference month, first day (real column: `data`, yyyy-MM-01). */
   competencia: string;
+  /** Synthetic per-month city+tech identity used across compute (stable). */
   id_cidade: string;
+  /** Raw source `id_cidade` (month-prefixed, e.g. "052026CIDADEUF") — joins to metas_cidades. */
+  id_cidade_src: string;
   /** "Cidade / UF". */
   cidade: string;
   uf: string;
@@ -78,6 +81,8 @@ export interface CityIndicatorRecord {
 export interface CityMetaRecord {
   competencia: string;
   cidade: string;
+  /** Raw source `id_cidade` — join key against CityIndicatorRecord.id_cidade_src. */
+  id_cidade: string;
   id_indicador: string;
   /** "Banda Larga" | "FTTH" | "FWA" | "5G". */
   servico: string;

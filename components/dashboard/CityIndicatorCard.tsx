@@ -27,7 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatNumber, formatPct } from "@/lib/format";
 import { InfoHint } from "@/components/ui/info-hint";
-import type { IndicatorCardVM } from "@/lib/data/cities/indicator-blocks";
+import type { FooterStatVM, IndicatorCardVM } from "@/lib/data/cities/indicator-blocks";
 
 // Icon per id_indicador (shared meaning across blocks). Falls back by unit.
 const ICON_BY_ID: Record<string, LucideIcon> = {
@@ -70,6 +70,13 @@ function formatValue(unit: IndicatorCardVM["unit"], v: number): string {
   return formatNumber(v);
 }
 
+const TONE_CLASS: Record<FooterStatVM["tone"], string> = {
+  good: "text-success",
+  warn: "text-warning",
+  bad: "text-destructive",
+  default: "text-foreground",
+};
+
 export function CityIndicatorCard({ kpi, onClick }: { kpi: IndicatorCardVM; onClick?: () => void }) {
   const Icon = iconFor(kpi);
 
@@ -90,7 +97,7 @@ export function CityIndicatorCard({ kpi, onClick }: { kpi: IndicatorCardVM; onCl
   }
 
   const inverse = kpi.polarity === "down";
-  const hasMeta = kpi.meta !== null && kpi.atingimento !== null;
+  const hasMeta = kpi.atingimento !== null;
   const atin = kpi.atingimento ?? 0;
   const good = inverse ? atin <= 100 : atin >= 100;
   const warn = inverse ? atin > 100 && atin <= 130 : atin >= 70 && atin < 100;
@@ -102,7 +109,7 @@ export function CityIndicatorCard({ kpi, onClick }: { kpi: IndicatorCardVM; onCl
   const tendGood = inverse ? down : up;
   const TendIcon = up ? ArrowUp : down ? ArrowDown : Minus;
 
-  const fmt = (v: number) => formatValue(kpi.unit, v);
+  const cols = Math.max(1, kpi.footer.length);
 
   return (
     <button
@@ -129,26 +136,23 @@ export function CityIndicatorCard({ kpi, onClick }: { kpi: IndicatorCardVM; onCl
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
-        <span className="text-3xl font-bold tracking-tight text-foreground">{fmt(kpi.value)}</span>
+        <span className="text-3xl font-bold tracking-tight text-foreground">{formatValue(kpi.unit, kpi.value)}</span>
         {hasMeta && <span className={cn("text-sm font-semibold", atinColor)}>{atin.toFixed(0)}%</span>}
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border/60 pt-3 text-xs">
-        <div>
-          <div className="text-muted-foreground">Meta</div>
-          <div className="font-semibold text-foreground">{kpi.meta === null ? "—" : fmt(kpi.meta)}</div>
+      {kpi.footer.length > 0 && (
+        <div
+          className="mt-3 grid gap-2 border-t border-border/60 pt-3 text-xs"
+          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        >
+          {kpi.footer.map((stat) => (
+            <div key={stat.label}>
+              <div className="text-muted-foreground">{stat.label}</div>
+              <div className={cn("font-semibold", TONE_CLASS[stat.tone])}>{stat.display}</div>
+            </div>
+          ))}
         </div>
-        <div>
-          <div className="text-muted-foreground">Projeção</div>
-          <div className="font-semibold text-foreground">{fmt(kpi.projecao)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Ating.</div>
-          <div className={cn("font-semibold", hasMeta ? atinColor : "text-foreground")}>
-            {hasMeta ? `${atin.toFixed(0)}%` : "—"}
-          </div>
-        </div>
-      </div>
+      )}
 
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
         {hasMeta && (

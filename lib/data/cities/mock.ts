@@ -112,6 +112,7 @@ function generate(months: string[]): CityIndicatorRecord[] {
         out.push({
           competencia,
           id_cidade: `${c.uf}-${ci}`,
+          id_cidade_src: `${competencia}-${c.uf}-${ci}`,
           cidade: `${c.nome} / ${c.uf}`,
           uf: c.uf,
           gerencia: c.gerencia,
@@ -184,9 +185,10 @@ function buildMockMetas(records: CityIndicatorRecord[]): CityMetaRecord[] {
     specs: { id: string; value: number; percent?: boolean }[],
   ) => {
     if (rows.length === 0) return;
+    const id_cidade = rows[0].id_cidade_src;
     for (const { id, value, percent } of specs) {
       const meta = percent ? value : Math.round(value);
-      out.push({ competencia, cidade, id_indicador: id, servico, meta });
+      out.push({ competencia, cidade, id_cidade, id_indicador: id, servico, meta });
     }
   };
 
