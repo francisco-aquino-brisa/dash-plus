@@ -27,7 +27,7 @@ export function NegativeCitiesTable({ rows }: { rows: NegativeCityRow[] }) {
           </p>
         </div>
         <div className="relative w-64">
-          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Buscar cidade…"
             value={q}
@@ -39,7 +39,7 @@ export function NegativeCitiesTable({ rows }: { rows: NegativeCityRow[] }) {
       <div className="max-h-[440px] overflow-auto">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur">
-            <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+            <tr className="text-left text-xs tracking-wider text-muted-foreground uppercase">
               <th className="px-4 py-2 font-medium">Cidade</th>
               <th className="px-3 py-2 font-medium">Gerência</th>
               <th className="px-3 py-2 font-medium">Coord.</th>
@@ -67,7 +67,11 @@ export function NegativeCitiesTable({ rows }: { rows: NegativeCityRow[] }) {
                 <td
                   className={cn(
                     "px-3 py-2 text-right font-semibold",
-                    r.atingCresc < 0 ? "text-destructive" : r.atingCresc < 70 ? "text-warning" : "text-foreground",
+                    r.atingCresc < 0
+                      ? "text-destructive"
+                      : r.atingCresc < 70
+                        ? "text-warning"
+                        : "text-foreground",
                   )}
                 >
                   {formatPct(r.atingCresc, 0)}

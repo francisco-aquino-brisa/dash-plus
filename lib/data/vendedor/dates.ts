@@ -2,8 +2,18 @@
 // Zerados are inherently monthly, so the screen filters by a single month.
 
 const MESES = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
 ];
 
 export interface ResolvedCompetencia {
@@ -33,6 +43,7 @@ export function resolveCompetencia(ym: string, today = new Date()): ResolvedComp
   const lastDay = new Date(y, m, 0).getDate();
   const isCurrentMonth = y === today.getFullYear() && m === today.getMonth() + 1;
   const toDay = isCurrentMonth ? today.getDate() : lastDay;
+
   return {
     ym: safe,
     ano: y,
@@ -52,5 +63,6 @@ export function lastCompetencias(n: number, today = new Date()): string[] {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
     out.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`);
   }
+
   return out;
 }

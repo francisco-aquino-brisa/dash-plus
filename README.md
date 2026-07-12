@@ -53,7 +53,7 @@ The runtime injects the app service principal's `DATABRICKS_HOST` /
   databricks secrets create-scope brisa
   databricks secrets put-secret brisa jwt-secret --string-value "$(openssl rand -hex 32)"
   ```
-  then in the app (UI → *Edit* → *Resources* → *Add* → *Secret*) add a resource
+  then in the app (UI → _Edit_ → _Resources_ → _Add_ → _Secret_) add a resource
   **named `jwt-secret`** pointing to scope `brisa`, key `jwt-secret`, permission
   `READ`. (Without the resource the deploy fails: `jwt-secret not found`.)
 - Add a **SQL Warehouse** resource for the warehouse the app queries.
@@ -89,15 +89,15 @@ code in English, UI copy in pt-BR.
 
 **Color** — semantic tokens used as `bg-*` / `text-*` / `border-*`:
 
-| Token | Role |
-|---|---|
-| `background` / `foreground` | soft off-white canvas / ink |
-| `primary` | warm coral-orange — actions & emphasis |
-| `accent` | soft teal |
-| `secondary` / `muted` | quiet surfaces / secondary text |
-| `success` `warning` `destructive` | status (KPI attainment, churn…) |
-| `chart-1…5` | Recharts series colors |
-| `card` `popover` `border` `input` `ring` | surfaces & controls |
+| Token                                    | Role                                   |
+| ---------------------------------------- | -------------------------------------- |
+| `background` / `foreground`              | soft off-white canvas / ink            |
+| `primary`                                | warm coral-orange — actions & emphasis |
+| `accent`                                 | soft teal                              |
+| `secondary` / `muted`                    | quiet surfaces / secondary text        |
+| `success` `warning` `destructive`        | status (KPI attainment, churn…)        |
+| `chart-1…5`                              | Recharts series colors                 |
+| `card` `popover` `border` `input` `ring` | surfaces & controls                    |
 
 Gradients/shadows are utilities: `bg-gradient-primary`, `bg-gradient-card`,
 `text-gradient`, `shadow-elegant`, `shadow-glow` (body carries a fixed
@@ -112,14 +112,14 @@ variant is wired but the app ships **light-only**.
 
 **Recurring patterns** (reuse — don't re-invent):
 
-| Pattern | Classes |
-|---|---|
-| Section card | `rounded-2xl border border-border bg-card/40 p-5 shadow-elegant backdrop-blur` |
-| KPI card | `rounded-xl border border-border bg-gradient-card p-5` |
-| Filter bar | `rounded-xl border border-border bg-card/60 p-3 backdrop-blur` |
-| Mini stat | `rounded-lg border border-border bg-secondary/30 p-3` |
-| Field label | `text-[10px] font-medium uppercase tracking-wider text-muted-foreground` |
-| Progress fill | `success` ≥100% · `warning` ≥70% · else `destructive` |
+| Pattern       | Classes                                                                        |
+| ------------- | ------------------------------------------------------------------------------ |
+| Section card  | `rounded-2xl border border-border bg-card/40 p-5 shadow-elegant backdrop-blur` |
+| KPI card      | `rounded-xl border border-border bg-gradient-card p-5`                         |
+| Filter bar    | `rounded-xl border border-border bg-card/60 p-3 backdrop-blur`                 |
+| Mini stat     | `rounded-lg border border-border bg-secondary/30 p-3`                          |
+| Field label   | `text-[10px] font-medium uppercase tracking-wider text-muted-foreground`       |
+| Progress fill | `success` ≥100% · `warning` ≥70% · else `destructive`                          |
 
 **Shared building blocks** — `components/ui/filter-select` (dimension dropdown,
 "Todos" = cleared) and `mock-data-badge`; [lib/format.ts](./lib/format.ts)
@@ -143,4 +143,5 @@ lib/data/cities/  types, compute (KPIs), mock, databricks repo, repository
 scripts/        stub-sso.mjs (local SSO mock)
 docs/           CSVs, prototypes (references), ADRs
 ```
+
 # dash-plus

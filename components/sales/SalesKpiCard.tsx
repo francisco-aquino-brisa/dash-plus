@@ -9,12 +9,16 @@ import type { KpiBlock } from "@/lib/data/sales/types";
 
 function formatValue(k: KpiBlock): string {
   if (k.unit === "currency") return `R$ ${k.value.toFixed(1).replace(".", ",")}`;
+
   if (k.unit === "percent") return formatPct(k.value);
+
   return formatNumber(k.value);
 }
 function formatMeta(k: KpiBlock): string {
   if (k.unit === "currency") return `R$ ${k.meta.toFixed(1).replace(".", ",")}`;
+
   if (k.unit === "percent") return formatPct(k.meta);
+
   return formatNumber(k.meta);
 }
 
@@ -48,7 +52,7 @@ export function SalesKpiCard({ kpi }: { kpi: KpiBlock }) {
   const DeltaIcon = up ? ArrowUp : down ? ArrowDown : Minus;
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-gradient-card p-5 shadow-elegant">
+    <div className="bg-gradient-card shadow-elegant relative overflow-hidden rounded-xl border border-border p-5">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <h3 className="text-sm font-medium text-muted-foreground">{kpi.label}</h3>
@@ -71,7 +75,10 @@ export function SalesKpiCard({ kpi }: { kpi: KpiBlock }) {
 
       {hasMeta && (
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
-          <div className={cn("h-full rounded-full", barColor)} style={{ width: `${Math.max(2, Math.min(100, atingimento))}%` }} />
+          <div
+            className={cn("h-full rounded-full", barColor)}
+            style={{ width: `${Math.max(2, Math.min(100, atingimento))}%` }}
+          />
         </div>
       )}
 

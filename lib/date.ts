@@ -8,17 +8,22 @@ import { ptBR } from "date-fns/locale";
 /** Date → "yyyy-MM-dd" in local time (no UTC shift). */
 export function toIso(d?: Date): string | undefined {
   if (!d) return undefined;
+
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
+
   return `${y}-${m}-${day}`;
 }
 
 /** "yyyy-MM-dd" → Date in local time. Invalid/empty input → undefined. */
 export function fromIso(s?: string): Date | undefined {
   if (!s) return undefined;
+
   const [y, m, d] = s.split("-").map(Number);
+
   if (!y || !m || !d) return undefined;
+
   return new Date(y, m - 1, d);
 }
 
@@ -26,5 +31,6 @@ export function fromIso(s?: string): Date | undefined {
 export function formatDateRange(from: Date, to?: Date): string {
   const start = format(from, "dd MMM", { locale: ptBR });
   const end = to ? format(to, "dd MMM yyyy", { locale: ptBR }) : "…";
+
   return `${start} – ${end}`;
 }

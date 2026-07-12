@@ -7,6 +7,7 @@ import type { KpiBlock } from "./sales/types";
 /** Coerce an unknown DB/JSON value to a finite number (non-finite → 0). */
 export function num(v: unknown): number {
   const n = typeof v === "number" ? v : Number(v);
+
   return Number.isFinite(n) ? n : 0;
 }
 

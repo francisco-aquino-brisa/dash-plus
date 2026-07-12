@@ -23,13 +23,16 @@ export class DatabricksDataClient implements DataClient {
     await client.connect(buildConnectionOptions());
 
     const session = await client.openSession();
+
     try {
       const op = await session.executeStatement(sql, {
         runAsync: true,
         ordinalParameters: params as DBSQLParameterValue[],
       });
+
       try {
         const rows = await op.fetchAll();
+
         return rows as T[];
       } finally {
         await op.close();
@@ -86,6 +89,8 @@ function buildConnectionOptions(): ConnectionOptions {
 
 function required(name: string): string {
   const value = process.env[name];
+
   if (!value) throw new Error(`${name} is not configured`);
+
   return value;
 }

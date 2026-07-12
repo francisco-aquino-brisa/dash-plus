@@ -8,8 +8,18 @@ import { cn } from "@/lib/utils";
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES_LONG = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
 ];
 
 /** Prototype-style competência pill → month/year picker modal. */
@@ -26,6 +36,7 @@ export function CompetenciaPicker({ value, onChange }: { value: string; onChange
       open={open}
       onOpenChange={(o) => {
         setOpen(o);
+
         if (o) {
           setTempYear(y || new Date().getFullYear());
           setTempMonth((m || 1) - 1);
@@ -33,10 +44,12 @@ export function CompetenciaPicker({ value, onChange }: { value: string; onChange
       }}
     >
       <DialogTrigger asChild>
-        <button className="flex items-center gap-2 rounded-xl border border-border bg-card/60 px-3 py-2.5 text-sm shadow-elegant backdrop-blur transition-colors hover:border-primary/40">
+        <button className="shadow-elegant flex items-center gap-2 rounded-xl border border-border bg-card/60 px-3 py-2.5 text-sm backdrop-blur transition-colors hover:border-primary/40">
           <CalendarDays className="h-4 w-4 text-primary" />
           <span className="min-w-0">
-            <span className="block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Competência</span>
+            <span className="block text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+              Competência
+            </span>
             <span className="block font-medium text-foreground">{label}</span>
           </span>
         </button>
@@ -48,7 +61,9 @@ export function CompetenciaPicker({ value, onChange }: { value: string; onChange
 
         <div className="space-y-4">
           <div>
-            <label className="mb-2 block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Ano</label>
+            <label className="mb-2 block text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+              Ano
+            </label>
             <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/40 p-1.5">
               <button
                 onClick={() => setTempYear((v) => v - 1)}
@@ -69,14 +84,16 @@ export function CompetenciaPicker({ value, onChange }: { value: string; onChange
           </div>
 
           <div>
-            <label className="mb-2 block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Mês</label>
+            <label className="mb-2 block text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+              Mês
+            </label>
             <div className="grid grid-cols-3 gap-2">
               {MESES.map((mes, i) => (
                 <button
                   key={mes}
                   onClick={() => setTempMonth(i)}
                   className={cn(
-                    "rounded-md border py-2 text-xs font-medium uppercase tracking-wider transition-colors",
+                    "rounded-md border py-2 text-xs font-medium tracking-wider uppercase transition-colors",
                     tempMonth === i
                       ? "border-primary/40 bg-primary/15 text-primary"
                       : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground",

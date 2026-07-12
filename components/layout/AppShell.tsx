@@ -3,7 +3,17 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Activity, BarChart3, LogOut, Menu, PanelLeft, ShoppingCart, UserRound, Users, X } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  LogOut,
+  Menu,
+  PanelLeft,
+  ShoppingCart,
+  UserRound,
+  Users,
+  X,
+} from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -19,10 +29,11 @@ const STORAGE_KEY = "brisa-sidebar-collapsed";
 /** Navigation links, shared by the desktop rail and the mobile drawer. */
 function NavLinks({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
+
   return (
     <>
       {!collapsed && (
-        <div className="px-2 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="px-2 pt-2 pb-1 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
           Navegação
         </div>
       )}
@@ -43,6 +54,7 @@ function NavLinks({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
             {!collapsed && <span className="truncate">{item.title}</span>}
           </Link>
         );
+
         return collapsed ? (
           <Tooltip key={item.href}>
             <TooltipTrigger asChild>{link}</TooltipTrigger>
@@ -59,7 +71,7 @@ function NavLinks({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: 
 function Brand({ collapsed }: { collapsed: boolean }) {
   return (
     <div className="flex h-10 items-center gap-2 border-b border-border px-3">
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-primary text-primary-foreground shadow-glow">
+      <span className="bg-gradient-primary shadow-glow grid h-7 w-7 shrink-0 place-items-center rounded-lg text-primary-foreground">
         <BarChart3 className="h-4 w-4" />
       </span>
       {!collapsed && (
@@ -91,6 +103,7 @@ export function AppShell({ user, children }: { user: { name: string }; children:
     setCollapsed((c) => {
       const next = !c;
       localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+
       return next;
     });
 
@@ -128,7 +141,7 @@ export function AppShell({ user, children }: { user: { name: string }; children:
               onClick={() => setMobileOpen(false)}
               aria-hidden
             />
-            <aside className="absolute left-0 top-0 h-full w-64 border-r border-border bg-card shadow-elegant">
+            <aside className="shadow-elegant absolute top-0 left-0 h-full w-64 border-r border-border bg-card">
               <div className="flex h-full flex-col">
                 <div className="flex items-center justify-between border-b border-border pr-2">
                   <div className="flex-1">

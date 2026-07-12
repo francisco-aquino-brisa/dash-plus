@@ -61,12 +61,16 @@ const ICON_BY_ID: Record<string, LucideIcon> = {
 };
 
 function iconFor(kpi: IndicatorCardVM): LucideIcon {
-  return ICON_BY_ID[kpi.id] ?? (kpi.unit === "currency" ? DollarSign : kpi.unit === "percent" ? Percent : Activity);
+  return (
+    ICON_BY_ID[kpi.id] ?? (kpi.unit === "currency" ? DollarSign : kpi.unit === "percent" ? Percent : Activity)
+  );
 }
 
 function formatValue(unit: IndicatorCardVM["unit"], v: number): string {
   if (unit === "currency") return `R$ ${v.toFixed(1).replace(".", ",")}`;
+
   if (unit === "percent") return formatPct(v);
+
   return formatNumber(v);
 }
 
@@ -115,7 +119,7 @@ export function CityIndicatorCard({ kpi, onClick }: { kpi: IndicatorCardVM; onCl
     <button
       type="button"
       onClick={onClick}
-      className="group relative w-full overflow-hidden rounded-xl border border-border bg-gradient-card p-5 text-left shadow-elegant transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+      className="group bg-gradient-card shadow-elegant hover:shadow-glow relative w-full overflow-hidden rounded-xl border border-border p-5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -136,7 +140,9 @@ export function CityIndicatorCard({ kpi, onClick }: { kpi: IndicatorCardVM; onCl
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
-        <span className="text-3xl font-bold tracking-tight text-foreground">{formatValue(kpi.unit, kpi.value)}</span>
+        <span className="text-3xl font-bold tracking-tight text-foreground">
+          {formatValue(kpi.unit, kpi.value)}
+        </span>
         {hasMeta && <span className={cn("text-sm font-semibold", atinColor)}>{atin.toFixed(0)}%</span>}
       </div>
 

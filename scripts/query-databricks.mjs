@@ -19,6 +19,7 @@ function loadEnv() {
     const txt = readFileSync(join(__dirname, "..", ".env.local"), "utf8");
     for (const line of txt.split("\n")) {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+
       if (m && !line.trim().startsWith("#") && process.env[m[1]] === undefined) {
         process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
       }
@@ -35,16 +36,30 @@ const token = process.env.DATABRICKS_TOKEN;
 
 function connectionOptions() {
   if (clientId && clientSecret)
-    return { host, path, authType: "databricks-oauth", oauthClientId: clientId, oauthClientSecret: clientSecret };
+    return {
+      host,
+      path,
+      authType: "databricks-oauth",
+      oauthClientId: clientId,
+      oauthClientSecret: clientSecret,
+    };
+
   if (token) return { host, path, authType: "access-token", token };
+
   return { host, path, authType: "databricks-oauth", persistence: new FilePersistence() };
 }
 
 const READ_OK = /^(SELECT|WITH|SHOW|DESCRIBE|DESC|EXPLAIN|VALUES|TABLE|USE)\b/i;
 function assertReadOnly(sql) {
-  const stripped = sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "").trim();
+  const stripped = sql
+    .replace(/--[^\n]*/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .trim();
+
   if (!READ_OK.test(stripped)) {
-    console.error("❌ Refused: not a read-only statement. Allowed: SELECT/WITH/SHOW/DESCRIBE/EXPLAIN/VALUES/TABLE/USE.");
+    console.error(
+      "❌ Refused: not a read-only statement. Allowed: SELECT/WITH/SHOW/DESCRIBE/EXPLAIN/VALUES/TABLE/USE.",
+    );
     process.exit(2);
   }
 }
@@ -58,15 +73,18 @@ function parseArgs() {
     else if (a[i] === "--max") max = parseInt(a[++i], 10) || max;
     else sql += (sql ? " " : "") + a[i];
   }
+
   return { sql: sql.trim(), max };
 }
 
 async function main() {
   const { sql, max } = parseArgs();
+
   if (!sql) {
-    console.error("Usage: node scripts/query-databricks.mjs \"SELECT …\"  |  --file q.sql [--max N]");
+    console.error('Usage: node scripts/query-databricks.mjs "SELECT …"  |  --file q.sql [--max N]');
     process.exit(1);
   }
+
   assertReadOnly(sql);
 
   const mod = await import("@databricks/sql");
@@ -74,6 +92,7 @@ async function main() {
   const client = new DBSQLClient();
   await client.connect(connectionOptions());
   const session = await client.openSession();
+
   try {
     const op = await session.executeStatement(sql, { runAsync: true, maxRows: max });
     const rows = await op.fetchAll();
@@ -87,6 +106,12 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error("❌", String(e?.message ?? e).split("\n").slice(0, 3).join(" | "));
+  console.error(
+    "❌",
+    String(e?.message ?? e)
+      .split("\n")
+      .slice(0, 3)
+      .join(" | "),
+  );
   process.exit(1);
 });

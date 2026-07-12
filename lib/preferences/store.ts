@@ -18,9 +18,12 @@ function storageKey(key: string): string {
 /** Read a preference, returning `fallback` when unset, unavailable, or corrupt. */
 export function readPreference<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
+
   try {
     const raw = window.localStorage.getItem(storageKey(key));
+
     if (raw == null) return fallback;
+
     return JSON.parse(raw) as T;
   } catch {
     return fallback;
@@ -30,6 +33,7 @@ export function readPreference<T>(key: string, fallback: T): T {
 /** Persist a preference. No-op on the server or when storage is unavailable. */
 export function writePreference<T>(key: string, value: T): void {
   if (typeof window === "undefined") return;
+
   try {
     window.localStorage.setItem(storageKey(key), JSON.stringify(value));
   } catch {
@@ -40,6 +44,7 @@ export function writePreference<T>(key: string, value: T): void {
 /** Remove a single preference. */
 export function clearPreference(key: string): void {
   if (typeof window === "undefined") return;
+
   try {
     window.localStorage.removeItem(storageKey(key));
   } catch {

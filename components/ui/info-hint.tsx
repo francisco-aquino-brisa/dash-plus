@@ -32,7 +32,10 @@ export function InfoHint({ def, className }: { def: IndicatorDef; className?: st
           <Info className="h-3.5 w-3.5" />
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-[280px] whitespace-normal text-left text-xs leading-relaxed">
+      <TooltipContent
+        side="top"
+        className="max-w-[280px] text-left text-xs leading-relaxed whitespace-normal"
+      >
         {def.formula}
       </TooltipContent>
     </Tooltip>

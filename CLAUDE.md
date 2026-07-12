@@ -72,3 +72,14 @@ For the full table-by-table map — which schema each screen reads, the Cities
 cubes (`indicadores_cidades`, `indicadores_cidades_5g`, `metas_cidades`), the
 join keys (`id_cidade`/`id_indicador`/`servico`), aggregation rules, the
 indicator→source map and the known gotchas — see [docs/data-map.md](./docs/data-map.md).
+
+## Formatting & linting
+
+Code style is enforced by **Prettier** (config in `.prettierrc.json`, incl.
+`prettier-plugin-tailwindcss` to order Tailwind classes) and **ESLint**
+(`next/core-web-vitals` + `eslint-config-prettier` to disable conflicting rules).
+Do NOT hand-format — let Prettier do it. Run `npm run format` before wrapping up,
+and `npm run check` (`prettier --check` + `next lint` + `tsc`) as the gate. A
+Husky `pre-commit` hook runs `lint-staged` (Prettier + `eslint --fix` on staged
+files), and `.vscode/` enables format-on-save. Per Prettier's guidance we do NOT
+use `eslint-plugin-prettier` (formatting and linting stay separate).

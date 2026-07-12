@@ -11,8 +11,10 @@ function businessDays(ano: number, mes: number): number {
   let n = 0;
   for (let d = 1; d <= last; d++) {
     const dow = new Date(ano, mes - 1, d).getDay();
+
     if (dow !== 0 && dow !== 6) n++;
   }
+
   return n;
 }
 
@@ -50,6 +52,7 @@ export function RaioXModal({
             <div className="max-h-[60vh] space-y-3 overflow-y-auto">
               {card.indicadores.map((ind) => {
                 const projReal = Math.round(ind.realizado * factor);
+
                 return (
                   <div key={ind.label} className="rounded-xl border border-border bg-secondary/30 p-3">
                     <h4 className="mb-2 text-sm font-semibold text-foreground">{ind.label}</h4>
@@ -59,7 +62,8 @@ export function RaioXModal({
                       <Box label="Atingimento" value="—" muted />
                     </div>
                     <div className="mt-2 flex items-center gap-1.5 rounded-md border border-dashed border-border bg-card px-2 py-1.5 text-[10px] text-muted-foreground">
-                      <Lock className="h-3 w-3" /> Atingimento estimado e quintil aguardando meta por vendedor.
+                      <Lock className="h-3 w-3" /> Atingimento estimado e quintil aguardando meta por
+                      vendedor.
                     </div>
                   </div>
                 );
@@ -67,12 +71,15 @@ export function RaioXModal({
 
               {card.aguardando.length > 0 && (
                 <div className="rounded-xl border border-dashed border-border bg-secondary/20 p-3">
-                  <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  <div className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
                     Outros indicadores aguardando meta/fonte
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     {card.aguardando.map((a) => (
-                      <span key={a} className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      <span
+                        key={a}
+                        className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                      >
                         {a}
                       </span>
                     ))}
@@ -87,11 +94,29 @@ export function RaioXModal({
   );
 }
 
-function Box({ label, value, accent, muted }: { label: string; value: string; accent?: boolean; muted?: boolean }) {
+function Box({
+  label,
+  value,
+  accent,
+  muted,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  muted?: boolean;
+}) {
   return (
     <div className="rounded-lg border border-border bg-card p-2 text-center">
-      <div className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={accent ? "text-sm font-bold text-primary" : muted ? "text-sm font-bold text-muted-foreground" : "text-sm font-bold text-foreground"}>
+      <div className="text-[9px] font-medium tracking-wider text-muted-foreground uppercase">{label}</div>
+      <div
+        className={
+          accent
+            ? "text-sm font-bold text-primary"
+            : muted
+              ? "text-sm font-bold text-muted-foreground"
+              : "text-sm font-bold text-foreground"
+        }
+      >
         {value}
       </div>
     </div>

@@ -17,17 +17,26 @@ export async function getVendedorView(filters: VendedorFilters): Promise<Vendedo
   if (isDatabricks()) {
     const { databricksVendedorWatermark, databricksVendedorView } = await import("./databricks");
     const watermark = await databricksVendedorWatermark();
-    return cachedByWatermark<VendedorView>(cacheKey(filters), watermark, () => databricksVendedorView(filters));
+
+    return cachedByWatermark<VendedorView>(cacheKey(filters), watermark, () =>
+      databricksVendedorView(filters),
+    );
   }
-  return cachedByWatermark<VendedorView>(cacheKey(filters), "mock:vendedor", async () => mockVendedorView(filters));
+
+  return cachedByWatermark<VendedorView>(cacheKey(filters), "mock:vendedor", async () =>
+    mockVendedorView(filters),
+  );
 }
 
 export async function buildVendedorFilterOptions(competencia: string): Promise<VendedorFilterOptions> {
   const base = mockVendedorFilterOptions();
+
   if (!isDatabricks()) return base;
+
   try {
     const { databricksVendedorFilterOptions } = await import("./databricks");
     const real = await databricksVendedorFilterOptions(resolveCompetencia(competencia).ym);
+
     return {
       vendedores: real.vendedores?.length ? real.vendedores : base.vendedores,
       competencias: real.competencias?.length ? real.competencias : base.competencias,

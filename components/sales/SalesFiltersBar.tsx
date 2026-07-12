@@ -14,10 +14,12 @@ import type { SalesFilters, SalesFilterOptions } from "@/lib/data/sales/types";
 
 function getDefaultRange(): DateRange {
   const today = new Date();
+
   return { from: new Date(today.getFullYear(), today.getMonth(), 1), to: today };
 }
 function formatRange(range: DateRange | undefined): string {
   if (!range?.from) return "Personalizado";
+
   return formatDateRange(range.from, range.to);
 }
 
@@ -49,7 +51,9 @@ export function SalesFiltersBar({
     <div className="space-y-3 rounded-xl border border-border bg-card/60 p-3 backdrop-blur">
       {/* Period presets + styled custom-range calendar */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Período</span>
+        <span className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+          Período
+        </span>
         {options.periods.map((p) => (
           <button
             key={p.key}
@@ -69,6 +73,7 @@ export function SalesFiltersBar({
           open={open}
           onOpenChange={(o) => {
             setOpen(o);
+
             if (o) setDraft(currentRange); // reopen shows the committed range; discard unapplied drafts
           }}
         >
@@ -83,7 +88,9 @@ export function SalesFiltersBar({
               title="Buscar por período (intervalo livre)"
             >
               <CalendarIcon className="h-3.5 w-3.5 text-primary" />
-              {custom && <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Período:</span>}
+              {custom && (
+                <span className="text-[10px] tracking-wide text-muted-foreground uppercase">Período:</span>
+              )}
               {custom ? formatRange(currentRange) : "Personalizado"}
             </button>
           </PopoverTrigger>
@@ -118,6 +125,7 @@ export function SalesFiltersBar({
                   disabled={!draft?.from || !draft?.to}
                   onClick={() => {
                     if (!draft?.from || !draft?.to) return;
+
                     // Enforce início ≤ fim before fetching.
                     const [lo, hi] = draft.from <= draft.to ? [draft.from, draft.to] : [draft.to, draft.from];
                     onChange({ ...filters, period: "custom", from: toIso(lo), to: toIso(hi) });
@@ -134,17 +142,37 @@ export function SalesFiltersBar({
 
       {/* Dimension filters */}
       <div className="flex flex-wrap items-end gap-3">
-        <FilterSelect label="Serviço" value={filters.servico} options={options.servicos} onChange={(v) => onChange({ ...filters, servico: v })} />
-        <FilterSelect label="Gerente" value={filters.gerente} options={options.gerentes} onChange={(v) => onChange({ ...filters, gerente: v })} />
-        <FilterSelect label="Canal" value={filters.canal} options={options.canais} onChange={(v) => onChange({ ...filters, canal: v })} />
-        <FilterSelect label="Nicho" value={filters.nicho} options={options.nichos} onChange={(v) => onChange({ ...filters, nicho: v })} />
+        <FilterSelect
+          label="Serviço"
+          value={filters.servico}
+          options={options.servicos}
+          onChange={(v) => onChange({ ...filters, servico: v })}
+        />
+        <FilterSelect
+          label="Gerente"
+          value={filters.gerente}
+          options={options.gerentes}
+          onChange={(v) => onChange({ ...filters, gerente: v })}
+        />
+        <FilterSelect
+          label="Canal"
+          value={filters.canal}
+          options={options.canais}
+          onChange={(v) => onChange({ ...filters, canal: v })}
+        />
+        <FilterSelect
+          label="Nicho"
+          value={filters.nicho}
+          options={options.nichos}
+          onChange={(v) => onChange({ ...filters, nicho: v })}
+        />
         <FilterSelect
           label="UF"
           value={filters.uf}
           options={options.ufs}
           onChange={(v) => {
             // Narrow Cidade to the chosen UF; drop a city that doesn't belong to it.
-            const allowed = v ? options.cidadesByUf[v] ?? [] : null;
+            const allowed = v ? (options.cidadesByUf[v] ?? []) : null;
             const keepCidade = !filters.cidade || !allowed || allowed.includes(filters.cidade);
             onChange({ ...filters, uf: v, cidade: keepCidade ? filters.cidade : "" });
           }}
@@ -152,10 +180,15 @@ export function SalesFiltersBar({
         <FilterSelect
           label="Cidade"
           value={filters.cidade}
-          options={filters.uf ? options.cidadesByUf[filters.uf] ?? [] : options.cidades}
+          options={filters.uf ? (options.cidadesByUf[filters.uf] ?? []) : options.cidades}
           onChange={(v) => onChange({ ...filters, cidade: v })}
         />
-        <FilterSelect label="Tipo Cidade" value={filters.tipo} options={options.tipos} onChange={(v) => onChange({ ...filters, tipo: v })} />
+        <FilterSelect
+          label="Tipo Cidade"
+          value={filters.tipo}
+          options={options.tipos}
+          onChange={(v) => onChange({ ...filters, tipo: v })}
+        />
         <Button variant="ghost" size="sm" onClick={onReset} className="ml-auto gap-2">
           <RotateCcw className="h-3.5 w-3.5" /> Limpar
         </Button>

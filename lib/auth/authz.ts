@@ -29,6 +29,7 @@ export interface UserAuthorization {
  */
 export async function authorizeByCpf(cpf: string): Promise<UserAuthorization | null> {
   const digits = onlyDigits(cpf);
+
   if (digits.length !== 11) return null;
 
   const rows = await new DatabricksDataClient().query<{
@@ -38,6 +39,7 @@ export async function authorizeByCpf(cpf: string): Promise<UserAuthorization | n
   }>(`SELECT email, usuario_ativo, permissao FROM ${TABLE} WHERE cpf = ? LIMIT 1`, [digits]);
 
   const r = rows[0];
+
   if (!r || r.usuario_ativo !== true) return null;
 
   return { email: String(r.email ?? ""), permissao: String(r.permissao ?? "") };

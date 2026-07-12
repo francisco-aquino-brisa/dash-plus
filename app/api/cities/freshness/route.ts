@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const watermark = await getCitiesWatermark();
+
     return NextResponse.json({ watermark }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "freshness probe failed" }, { status: 502 });

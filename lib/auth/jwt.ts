@@ -21,21 +21,25 @@ export interface SessionUser {
 
 function getSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
+
   if (!secret) {
     throw new Error("JWT_SECRET is not configured");
   }
+
   return new TextEncoder().encode(secret);
 }
 
 function getTtlSeconds(): number {
   const raw = process.env.JWT_TTL_SECONDS;
   const parsed = raw ? parseInt(raw, 10) : NaN;
+
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 8 * 60 * 60; // 8h
 }
 
 /** Sign the session JWT from the user data. */
 export async function signSession(user: SessionUser): Promise<string> {
   const ttl = getTtlSeconds();
+
   return new SignJWT({ ...user } as unknown as JWTPayload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -50,8 +54,10 @@ export async function signSession(user: SessionUser): Promise<string> {
  */
 export async function verifySession(token: string | undefined): Promise<SessionUser | null> {
   if (!token) return null;
+
   try {
     const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] });
+
     if (
       typeof payload.id === "number" &&
       typeof payload.picture === "string" &&
@@ -69,6 +75,7 @@ export async function verifySession(token: string | undefined): Promise<SessionU
         permissao: payload.permissao,
       };
     }
+
     return null;
   } catch {
     return null;

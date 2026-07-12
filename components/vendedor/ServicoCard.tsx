@@ -16,8 +16,10 @@ const ICONS: Record<ServicoKey, React.ElementType> = {
 function MiniStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-center">
-      <div className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={cn("text-sm font-bold leading-none", accent ? "text-primary" : "text-foreground")}>{value}</div>
+      <div className="text-[9px] font-medium tracking-wider text-muted-foreground uppercase">{label}</div>
+      <div className={cn("text-sm leading-none font-bold", accent ? "text-primary" : "text-foreground")}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -32,10 +34,11 @@ export function ServicoCard({
   onOpen: (key: ServicoKey) => void;
 }) {
   const Icon = ICONS[card.key];
+
   return (
     <button
       onClick={() => onOpen(card.key)}
-      className="flex w-full flex-col rounded-2xl border border-border bg-gradient-card p-4 text-left shadow-elegant transition-colors hover:border-primary/40"
+      className="bg-gradient-card shadow-elegant flex w-full flex-col rounded-2xl border border-border p-4 text-left transition-colors hover:border-primary/40"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5">
@@ -47,9 +50,7 @@ export function ServicoCard({
           </span>
           <div>
             <h3 className="font-bold text-foreground">{card.label}</h3>
-            <p className="text-[11px] text-muted-foreground">
-              Realizado {formatNumber(card.realizado)}
-            </p>
+            <p className="text-[11px] text-muted-foreground">Realizado {formatNumber(card.realizado)}</p>
           </div>
         </div>
         <div className="flex gap-1.5">
@@ -83,12 +84,15 @@ export function ServicoCard({
       {/* Grouped "aguardando" indicators */}
       {card.aguardando.length > 0 && (
         <div className="mt-2 rounded-lg border border-dashed border-border bg-secondary/20 px-2.5 py-2">
-          <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
             <Clock className="h-3.5 w-3.5" /> Outros indicadores aguardando meta/fonte
           </div>
           <div className="mt-1.5 flex flex-wrap gap-1">
             {card.aguardando.map((a) => (
-              <span key={a} className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <span
+                key={a}
+                className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground"
+              >
                 {a}
               </span>
             ))}
@@ -103,11 +107,26 @@ export function ServicoCard({
   );
 }
 
-function Cell({ label, value, accent, muted }: { label: string; value: string; accent?: boolean; muted?: boolean }) {
+function Cell({
+  label,
+  value,
+  accent,
+  muted,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  muted?: boolean;
+}) {
   return (
     <div className="rounded-md border border-border bg-card px-1 py-1 text-center">
-      <div className="text-[8px] font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={cn("text-[11px] font-bold", accent ? "text-primary" : muted ? "text-muted-foreground" : "text-foreground")}>
+      <div className="text-[8px] font-medium tracking-wider text-muted-foreground uppercase">{label}</div>
+      <div
+        className={cn(
+          "text-[11px] font-bold",
+          accent ? "text-primary" : muted ? "text-muted-foreground" : "text-foreground",
+        )}
+      >
         {value}
       </div>
     </div>

@@ -19,10 +19,15 @@ export const DEFAULT_FILTERS: Omit<Filters, "competencia"> = {
 export function applyFilters(rows: CityIndicatorRecord[], f: Filters): CityIndicatorRecord[] {
   return rows.filter((r) => {
     if (f.competencia && r.competencia !== f.competencia) return false;
+
     if (f.gerencia && r.gerencia !== f.gerencia) return false;
+
     if (f.coordenacao && r.coordenacao !== f.coordenacao) return false;
+
     if (f.tipoCidade && r.tipo_cidade !== f.tipoCidade) return false;
+
     if (f.cidade && r.cidade !== f.cidade) return false;
+
     if (f.tecnologia) {
       if (f.tecnologia === "Banda Larga") {
         if (r.tecnologia !== "FTTH" && r.tecnologia !== "FWA") return false;
@@ -30,6 +35,7 @@ export function applyFilters(rows: CityIndicatorRecord[], f: Filters): CityIndic
         return false;
       }
     }
+
     return true;
   });
 }
@@ -40,6 +46,7 @@ export function sum<T>(arr: T[], pick: (x: T) => number): number {
 
 export function previousMonth(months: string[], competencia: string): string | null {
   const idx = months.indexOf(competencia);
+
   return idx > 0 ? months[idx - 1] : null;
 }
 
@@ -48,9 +55,12 @@ export function projection(result: number, competencia: string): number {
   const [y, m] = competencia.split("-").map(Number);
   const now = new Date();
   const isCurrent = now.getFullYear() === y && now.getMonth() + 1 === m;
+
   if (!isCurrent) return result;
+
   const daysInMonth = new Date(y, m, 0).getDate();
   const dayOfMonth = Math.max(1, now.getDate());
+
   return Math.round(result * (daysInMonth / dayOfMonth));
 }
 
@@ -73,6 +83,7 @@ function mkKpi(
 ): KpiValue {
   const atingimento = meta === 0 ? 0 : (resultado / meta) * 100;
   const tendencia = prev === 0 ? 0 : ((resultado - prev) / Math.abs(prev)) * 100;
+
   return { meta, resultado, atingimento, projecao: projection(resultado, competencia), tendencia, ...opts };
 }
 
@@ -164,6 +175,7 @@ export function computeKpis(rows: CityIndicatorRecord[], months: string[], filte
   const base5g = sum(current5g, (r) => r.base_ativa);
 
   const mes = filters.competencia;
+
   return {
     crescimentoBase: mkKpi(metaCrescBase, crescBase, crescBasePrev, mes),
     crescimentoBaseAtiva: mkKpi(metaCrescBase, crescBaseAtiva, crescBaseAtivaPrev, mes),
@@ -171,9 +183,24 @@ export function computeKpis(rows: CityIndicatorRecord[], months: string[], filte
     reativacao: mkKpi(metaReativ, reativacoes, reativPrev, mes),
     churnRate: mkKpi(2, churnRate, churnRatePrev, mes, { isPct: true, inverse: true }),
     churnSafra: mkKpi(3, churnSafra, 0, mes, { isPct: true, inverse: true }),
-    vendasCriadas: mkKpi(mCriadas, vCriadas, sum(mainPrev, (r) => r.vendas_criadas), mes),
-    vendasEfetivadas: mkKpi(mEfet, vEfet, sum(mainPrev, (r) => r.vendas_efetivadas), mes),
-    vendasInstaladas: mkKpi(mInst, vInst, sum(mainPrev, (r) => r.vendas_instaladas), mes),
+    vendasCriadas: mkKpi(
+      mCriadas,
+      vCriadas,
+      sum(mainPrev, (r) => r.vendas_criadas),
+      mes,
+    ),
+    vendasEfetivadas: mkKpi(
+      mEfet,
+      vEfet,
+      sum(mainPrev, (r) => r.vendas_efetivadas),
+      mes,
+    ),
+    vendasInstaladas: mkKpi(
+      mInst,
+      vInst,
+      sum(mainPrev, (r) => r.vendas_instaladas),
+      mes,
+    ),
     ativacoes5g: mkKpi(metaAtiv5g, ativ5g, ativ5gPrev, mes),
     baseAtivaTotal,
     base5g,
@@ -195,6 +222,7 @@ type TecFiltroLabel = "FTTH" | "FWA" | "Banda Larga" | "5G";
 
 export function growthByTech(rows: CityIndicatorRecord[], filters: Filters): GrowthByTech[] {
   const techs: TecFiltroLabel[] = ["FTTH", "FWA", "Banda Larga", "5G"];
+
   return techs.map((t) => {
     const r = applyFilters(rows, { ...filters, tecnologia: t });
     const baseClientes = sum(r, (x) => x.base_ativa);
@@ -204,6 +232,7 @@ export function growthByTech(rows: CityIndicatorRecord[], filters: Filters): Gro
     const fechados = sum(r, (x) => x.fechados);
     const takeup = hp === 0 ? 0 : ((baseClientes + fechados) / hp) * 100;
     const showTakeup = t === "FTTH" || t === "Banda Larga";
+
     return {
       tecnologia: t,
       baseClientes,
@@ -237,7 +266,9 @@ export function negativeCities(rows: CityIndicatorRecord[], filters: Filters): N
     const key = `${x.id_cidade}-${x.tecnologia}`;
     const negCresc = x.crescimento < 0 || x.crescimento < x.meta_crescimento * 0.5;
     const negBase = x.base_ativa < x.meta_base_ativa;
+
     if (!negCresc && !negBase) continue;
+
     const status: NegativeCityRow["status"] =
       negCresc && negBase ? "Ambas" : negCresc ? "Negativa Crescimento" : "Negativa Base Ativa";
     map.set(key, {
@@ -255,6 +286,7 @@ export function negativeCities(rows: CityIndicatorRecord[], filters: Filters): N
       status,
     });
   }
+
   return Array.from(map.values()).sort((a, b) => a.atingCresc - b.atingCresc);
 }
 
@@ -283,16 +315,19 @@ export function quartiles(rows: CityIndicatorRecord[], filters: Filters): Quarti
   ];
   for (const c of all) {
     let idx = 2;
+
     if (c.atin >= 100) idx = 0;
     else if (c.atin >= 70) idx = 1;
     else if (c.atin >= 0) idx = 2;
     else idx = 3;
+
     buckets[idx].count++;
     buckets[idx].cidades.push({ cidade: c.cidade, atingimento: c.atin, tecnologia: c.tec });
   }
   const total = all.length || 1;
   buckets.forEach((b) => (b.pct = (b.count / total) * 100));
   buckets.forEach((b) => b.cidades.sort((a, b) => b.atingimento - a.atingimento));
+
   return buckets;
 }
 
@@ -304,6 +339,7 @@ export function historicSeries(
 ): { mes: string; valor: number }[] {
   return months.map((m) => {
     const r = applyFilters(rows, { ...filters, competencia: m });
+
     return { mes: m, valor: sum(r, picker) };
   });
 }
@@ -367,8 +403,7 @@ export function buildDashboardView(
   const totalCidades = new Set(currentRows.map((r) => r.id_cidade)).size;
   const totalBase = sum(coverageRows, (r) => r.base_ativa);
   const totalHP = sum(coverageRows, (r) => r.total_de_hp);
-  const takeup =
-    totalHP === 0 ? 0 : ((totalBase + sum(coverageRows, (r) => r.fechados)) / totalHP) * 100;
+  const takeup = totalHP === 0 ? 0 : ((totalBase + sum(coverageRows, (r) => r.fechados)) / totalHP) * 100;
 
   const r5g = currentRows.filter((r) => r.tecnologia === "5G");
   const cancel5g = sum(r5g, (r) => r.cancelamentos);

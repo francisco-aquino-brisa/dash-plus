@@ -1,0 +1,106 @@
+---
+name: code-style
+description: Code style & conventions for Brisa Dash — how to write and format code so it stays consistent. Use whenever writing or reviewing TypeScript/React/CSS in this repo: formatting (Prettier/ESLint, the gate), spacing rules (blank lines around return/if/try), naming, language (pt-BR UI vs English code), design tokens, component/data-layer structure, imports, comments. Complements databricks-first (data), verify-ui (verification), frontend-design (visual) and vercel-react-best-practices (perf).
+---
+
+# Code style & conventions
+
+Consistency is enforced two ways: **tooling** (mechanical) and **conventions**
+(judgment). Never hand-fight the tooling; do follow the conventions it can't check.
+
+## Formatting is Prettier's job — don't hand-format
+
+- **Prettier** owns formatting (`.prettierrc.json`: printWidth 110, double quotes,
+  semicolons, trailing commas, 2-space indent, `prettier-plugin-tailwindcss` to
+  order Tailwind classes). Never manually align/space code or reorder className.
+- **ESLint** = `next/core-web-vitals` + `eslint-config-prettier` (turns off rules
+  that fight Prettier). We deliberately do **not** use `eslint-plugin-prettier`
+  (Prettier's own guidance — keep formatting and linting separate).
+- **Commands:** `npm run format` (write) · `npm run format:check` · `npm run check`
+  (`prettier --check` + `next lint` + `tsc`, the gate before wrapping up). A Husky
+  `pre-commit` runs `lint-staged` (`eslint --fix` then `prettier --write` on staged
+  files); `.vscode/` does format-on-save.
+- After editing, run `npm run format` (and `next lint --fix` for the spacing rules
+  below) so you never leave hand-formatted code behind.
+
+## Statement spacing (enforced by ESLint `padding-line-between-statements`)
+
+Prettier does NOT manage blank lines, so these are ESLint rules (auto-fixable).
+Breathing room around control flow:
+
+- **Blank line before every `return`** (unless it's the first statement).
+- **Blank line before and after every `if`** (skipped when the `if` is the first
+  statement in its block).
+- **Blank line before `try`** (unless the `try` is the only statement in the function).
+
+```ts
+async function example(x: number) {
+  const rows = await load(x);
+  const r = rows[0] ?? {};
+
+  if (!r) return null;
+
+  return shape(r);
+}
+```
+
+Don't add these by hand — `next lint --fix` applies them.
+
+## Alignment: open and close at the same indent
+
+What opens on a line must close at the **same alignment**. Prettier handles this
+for normal calls; the trap is wrapping an expression around a multiline template
+(SQL). Never write `(await q(\`…\`))[0]` — the SQL body breaks the alignment.
+Extract to a named const instead:
+
+```ts
+// bad — the `(` and `)[0]` drift around the SQL block
+const r = (await q(`SELECT …`))[0] ?? {};
+
+// good
+const rows = await q(`SELECT …`);
+const r = rows[0] ?? {};
+```
+
+## Language: pt-BR in the UI, English in the code
+
+- **User-facing copy** (labels, headings, tooltips, empty/error states) is **pt-BR**
+  (see CONTEXT.md for canonical terms).
+- **Identifiers, comments, commit messages, docs are English** — but keep Brisanet
+  domain terms in their pt-BR form when that's the ubiquitous language
+  (`crescimento`, `metas_cidades`, `gerencia`).
+
+## Naming
+
+- `camelCase` vars/functions, `PascalCase` components/types, `UPPER_SNAKE` module
+  constants, `kebab-case` filenames except React components (`CityIndicatorCard.tsx`).
+- Names say what/why, not how; prefer domain words that match CONTEXT.md.
+
+## Styling: tokens, not raw values
+
+- Style with the **OKLch design tokens** — **never raw hex**. Reuse the shadcn
+  primitives in `components/ui` and the recurring patterns. Read README.md before
+  building/restyling UI.
+- Keep client components thin: heavy fetch + KPI math on the server, client gets a
+  small view-model (ADR 0002).
+
+## Imports & structure
+
+- Order: React/Next, then third-party, then `@/…` aliases, then relative.
+- One screen = a route in `app/(app)/…` + a `lib/data/<domain>/` layer
+  (`types` · `repository` (mock/databricks switch) · `databricks` · `mock` ·
+  `compute`). Follow that shape for new screens.
+
+## Comments
+
+Match the surrounding density. Explain the **why** (business rule, warehouse
+quirk, ADR reference), not the obvious what. Keep the short, pointed comments this
+codebase favors.
+
+## Cross-refs
+
+- Data objects — verify against Databricks, degrade missing blocks to "sem acesso":
+  `databricks-first`.
+- Verifying UI + login/preview protocol: `verify-ui`.
+- Visual direction: `frontend-design`. React/Next performance:
+  `vercel-react-best-practices`.

@@ -15,6 +15,7 @@ function loadEnv() {
     const txt = readFileSync(join(__dirname, "..", ".env.local"), "utf8");
     for (const line of txt.split("\n")) {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+
       if (m && !line.trim().startsWith("#") && process.env[m[1]] === undefined) {
         process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
       }
@@ -31,8 +32,16 @@ const token = process.env.DATABRICKS_TOKEN;
 
 function connectionOptions() {
   if (clientId && clientSecret)
-    return { host, path, authType: "databricks-oauth", oauthClientId: clientId, oauthClientSecret: clientSecret };
+    return {
+      host,
+      path,
+      authType: "databricks-oauth",
+      oauthClientId: clientId,
+      oauthClientSecret: clientSecret,
+    };
+
   if (token) return { host, path, authType: "access-token", token };
+
   return { host, path, authType: "databricks-oauth", persistence: new FilePersistence() };
 }
 
@@ -64,28 +73,39 @@ async function main() {
     const op = await session.executeStatement(sql, { runAsync: true });
     const rows = await op.fetchAll();
     await op.close();
+
     return rows;
   };
   const tryQ = async (label, sql) => {
     try {
       const rows = await q(sql);
+
       return { label, ok: true, rows };
     } catch (e) {
-      return { label, ok: false, error: String(e?.message ?? e).split("\n")[0].slice(0, 160) };
+      return {
+        label,
+        ok: false,
+        error: String(e?.message ?? e)
+          .split("\n")[0]
+          .slice(0, 160),
+      };
     }
   };
 
   const argvTables = process.argv.slice(2);
+
   if (argvTables.length) {
     try {
       console.log("===== DESCRIBE (argv tables) =====");
       for (const full of argvTables) {
         const [c, s, t] = full.split(".");
         const d = await tryQ(full, `DESCRIBE TABLE \`${c}\`.\`${s}\`.\`${t}\``);
+
         if (!d.ok) {
           console.log(`\n## ${full}\n  NOT ACCESSIBLE — ${d.error}`);
           continue;
         }
+
         const cols = d.rows
           .filter((r) => r.col_name && !String(r.col_name).startsWith("#") && r.col_name !== "")
           .map((r) => `${r.col_name}:${r.data_type}`);
@@ -96,19 +116,24 @@ async function main() {
       await session.close();
       await client.close();
     }
+
     return;
   }
 
   try {
     console.log("===== CATALOGS =====");
     const cats = await tryQ("catalogs", "SHOW CATALOGS");
-    console.log(cats.ok ? cats.rows.map((r) => r.catalog ?? Object.values(r)[0]).join(", ") : `ERR: ${cats.error}`);
+    console.log(
+      cats.ok ? cats.rows.map((r) => r.catalog ?? Object.values(r)[0]).join(", ") : `ERR: ${cats.error}`,
+    );
 
     for (const c of [CAT, "gdb_brisanet_comercial"]) {
       console.log(`\n===== SCHEMAS in ${c} =====`);
       const sc = await tryQ("schemas", `SHOW SCHEMAS IN \`${c}\``);
       console.log(
-        sc.ok ? sc.rows.map((r) => r.databaseName ?? r.namespace ?? Object.values(r)[0]).join(", ") : `ERR: ${sc.error}`,
+        sc.ok
+          ? sc.rows.map((r) => r.databaseName ?? r.namespace ?? Object.values(r)[0]).join(", ")
+          : `ERR: ${sc.error}`,
       );
     }
 
@@ -126,10 +151,12 @@ async function main() {
     for (const full of CANDIDATE_TABLES) {
       const [c, s, t] = full.split(".");
       const d = await tryQ(full, `DESCRIBE TABLE \`${c}\`.\`${s}\`.\`${t}\``);
+
       if (!d.ok) {
         console.log(`\n## ${full}\n  NOT ACCESSIBLE — ${d.error}`);
         continue;
       }
+
       const cols = d.rows
         .filter((r) => r.col_name && !String(r.col_name).startsWith("#") && r.col_name !== "")
         .map((r) => `${r.col_name}:${r.data_type}`);

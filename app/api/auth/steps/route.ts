@@ -19,11 +19,13 @@ export async function GET(req: NextRequest) {
 
   try {
     const steps = await getSteps(maskCpf(login));
+
     return NextResponse.json(steps, {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (err) {
     const status = err instanceof SsoError ? err.status : 502;
+
     return NextResponse.json({ error: "Falha ao consultar o SSO" }, { status });
   }
 }

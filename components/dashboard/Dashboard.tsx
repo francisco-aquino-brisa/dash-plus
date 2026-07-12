@@ -20,13 +20,7 @@ import { IndicatorPicker } from "@/components/dashboard/IndicatorPicker";
 import { NegativeCitiesTable } from "@/components/dashboard/NegativeCitiesTable";
 import { QuartileChart } from "@/components/dashboard/QuartileChart";
 import { HistoryChart } from "@/components/dashboard/HistoryChart";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { DashboardView } from "@/lib/data/cities/compute";
 import type { IndicatorCardVM } from "@/lib/data/cities/indicator-blocks";
 import type { FilterOptions, Filters } from "@/lib/data/cities/types";
@@ -46,12 +40,19 @@ interface Props {
 
 function toQuery(f: Filters): string {
   const p = new URLSearchParams();
+
   if (f.competencia) p.set("mes", f.competencia);
+
   if (f.gerencia) p.set("gerencia", f.gerencia);
+
   if (f.coordenacao) p.set("coordenacao", f.coordenacao);
+
   if (f.tipoCidade) p.set("tipo", f.tipoCidade);
+
   if (f.cidade) p.set("cidade", f.cidade);
+
   if (f.tecnologia) p.set("tec", f.tecnologia);
+
   return p.toString();
 }
 
@@ -67,7 +68,7 @@ function Section({
   right?: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-card/40 p-5 shadow-elegant backdrop-blur">
+    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
       <header className="mb-4 flex items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-foreground">{title}</h2>
@@ -149,16 +150,21 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
   wmRef.current = watermark;
   useEffect(() => {
     if (!autoRefresh) return;
+
     const id = setInterval(async () => {
       try {
         const res = await fetch("/api/cities/freshness", { cache: "no-store" });
+
         if (!res.ok) return;
+
         const data = (await res.json()) as { watermark: string };
+
         if (data.watermark && data.watermark !== wmRef.current) router.refresh();
       } catch {
         /* best-effort */
       }
     }, cache.pollSeconds * 1000);
+
     return () => clearInterval(id);
   }, [autoRefresh, cache.pollSeconds, router]);
 
@@ -186,6 +192,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
   ) => {
     const options = vms.map((v) => ({ id: v.id, label: v.label, available: v.available }));
     const cards = vms.filter((v) => selection.includes(v.id));
+
     return (
       <Section
         title={title}
@@ -216,11 +223,11 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
       <header className="sticky top-10 z-40 border-b border-border bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-6 py-4">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-primary text-primary-foreground shadow-glow">
+            <span className="bg-gradient-primary shadow-glow grid h-10 w-10 place-items-center rounded-xl text-primary-foreground">
               <Activity className="h-5 w-5" />
             </span>
             <div>
-              <h1 className="text-xl font-bold leading-tight">
+              <h1 className="text-xl leading-tight font-bold">
                 Performance <span className="text-gradient">Cidades</span>
               </h1>
               <p className="text-xs text-muted-foreground">Dashboard executivo · Brisanet</p>
@@ -396,14 +403,17 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                 </div>
                 <div className="text-3xl font-bold">{formatNumber(k.resultado)}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  Meta {formatNumber(k.meta)} · Projeção{" "}
-                  {formatNumber(k.projecao)}
+                  Meta {formatNumber(k.meta)} · Projeção {formatNumber(k.projecao)}
                 </div>
                 <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
                   <div
                     className={cn(
                       "h-full rounded-full",
-                      k.atingimento >= 100 ? "bg-success" : k.atingimento >= 70 ? "bg-warning" : "bg-destructive",
+                      k.atingimento >= 100
+                        ? "bg-success"
+                        : k.atingimento >= 70
+                          ? "bg-warning"
+                          : "bg-destructive",
                     )}
                     style={{ width: `${Math.max(2, Math.min(100, k.atingimento))}%` }}
                   />
@@ -434,14 +444,18 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
             <QuartileChart buckets={quartis} />
           </Section>
           <Section title="Cobertura & Penetração" subtitle="Visão consolidada do escopo filtrado">
-            <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="mb-2 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
               Escopo principal: {kpis.scope} {kpis.scope === "Banda Larga" && "(FTTH + FWA)"}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <MiniStat label="Cidades no escopo" value={String(coverage.totalCidades)} />
               <MiniStat label={`Base Ativa ${kpis.scope}`} value={formatNumber(coverage.totalBase)} />
               <MiniStat label="Home Passed" value={formatNumber(coverage.totalHP)} />
-              <MiniStat label="Takeup Geral" value={formatPct(coverage.takeup, 1)} good={coverage.takeup >= 25} />
+              <MiniStat
+                label="Takeup Geral"
+                value={formatPct(coverage.takeup, 1)}
+                good={coverage.takeup >= 25}
+              />
               <MiniStat label="Bloqueados" value={formatNumber(kpis.bloqueados)} />
               <MiniStat
                 label="Reativação"
@@ -494,13 +508,12 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                   : ind.polarity === "down"
                     ? ind.atingimento <= 100
                     : ind.atingimento >= 100;
+
               return (
                 <>
                   <DialogHeader>
                     <DialogTitle>{ind.label} · Histórico Anual</DialogTitle>
-                    <DialogDescription>
-                      Evolução mensal do indicador no escopo filtrado.
-                    </DialogDescription>
+                    <DialogDescription>Evolução mensal do indicador no escopo filtrado.</DialogDescription>
                   </DialogHeader>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <MiniStat label="Atual" value={fmt(ind.value)} hint={formatMonth(filters.competencia)} />

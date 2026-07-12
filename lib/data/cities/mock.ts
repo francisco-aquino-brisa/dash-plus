@@ -8,13 +8,7 @@
 //   HÍBRIDA → FTTH + FWA + 5G
 
 import { mulberry32 } from "../_random";
-import type {
-  CityDataset,
-  CityIndicatorRecord,
-  CityMetaRecord,
-  Tecnologia,
-  TipoCidade,
-} from "./types";
+import type { CityDataset, CityIndicatorRecord, CityMetaRecord, Tecnologia, TipoCidade } from "./types";
 
 interface CityDef {
   nome: string;
@@ -33,7 +27,13 @@ const CITIES: CityDef[] = [
   { nome: "Nova Russas", uf: "CE", tipo: "ONLY", gerencia: "Ceará", coordenacao: "Ibiapaba" },
   { nome: "Natal", uf: "RN", tipo: "HÍBRIDA", gerencia: "Rio Grande do Norte", coordenacao: "RN Litoral" },
   { nome: "Mossoró", uf: "RN", tipo: "HÍBRIDA", gerencia: "Rio Grande do Norte", coordenacao: "RN Oeste" },
-  { nome: "Pau dos Ferros", uf: "RN", tipo: "ONLY", gerencia: "Rio Grande do Norte", coordenacao: "Alto Oeste" },
+  {
+    nome: "Pau dos Ferros",
+    uf: "RN",
+    tipo: "ONLY",
+    gerencia: "Rio Grande do Norte",
+    coordenacao: "Alto Oeste",
+  },
   { nome: "Macaíba", uf: "RN", tipo: "HÍBRIDA", gerencia: "Rio Grande do Norte", coordenacao: "RN Litoral" },
   { nome: "João Pessoa", uf: "PB", tipo: "HÍBRIDA", gerencia: "Paraíba", coordenacao: "Paraíba Litoral" },
   { nome: "Campina Grande", uf: "PB", tipo: "HÍBRIDA", gerencia: "Paraíba", coordenacao: "Paraíba Agreste" },
@@ -46,7 +46,13 @@ const CITIES: CityDef[] = [
   { nome: "Arapiraca", uf: "AL", tipo: "FTTH", gerencia: "Alagoas", coordenacao: "Alagoas" },
   { nome: "Aracaju", uf: "SE", tipo: "HÍBRIDA", gerencia: "Sergipe", coordenacao: "Sergipe" },
   { nome: "Tobias Barreto", uf: "SE", tipo: "FTTH", gerencia: "Sergipe", coordenacao: "Sergipe" },
-  { nome: "Canindé de São Francisco", uf: "SE", tipo: "HÍBRIDA", gerencia: "Sergipe", coordenacao: "Sergipe" },
+  {
+    nome: "Canindé de São Francisco",
+    uf: "SE",
+    tipo: "HÍBRIDA",
+    gerencia: "Sergipe",
+    coordenacao: "Sergipe",
+  },
   { nome: "Camaçari", uf: "BA", tipo: "FTTH", gerencia: "Bahia", coordenacao: "Bahia Litoral" },
   { nome: "Feira de Santana", uf: "BA", tipo: "HÍBRIDA", gerencia: "Bahia", coordenacao: "Bahia Litoral" },
   { nome: "Teresina", uf: "PI", tipo: "HÍBRIDA", gerencia: "Piauí", coordenacao: "Piauí" },
@@ -59,7 +65,9 @@ const CITIES: CityDef[] = [
 
 function techsFor(tipo: TipoCidade): Tecnologia[] {
   if (tipo === "FTTH") return ["FTTH"];
+
   if (tipo === "ONLY") return ["5G"];
+
   return ["FTTH", "FWA", "5G"]; // HÍBRIDA
 }
 
@@ -71,6 +79,7 @@ function lastNMonths(n: number): string[] {
     const m = new Date(d.getFullYear(), d.getMonth() - i, 1);
     out.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}-01`);
   }
+
   return out;
 }
 
@@ -151,6 +160,7 @@ function generate(months: string[]): CityIndicatorRecord[] {
       }
     }
   }
+
   return out;
 }
 
@@ -158,7 +168,8 @@ function generate(months: string[]): CityIndicatorRecord[] {
 function jitter(seed: string, spread = 0.12): number {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return 1 - spread + (mulberry32(h)() * 2 * spread);
+
+  return 1 - spread + mulberry32(h)() * 2 * spread;
 }
 
 /**
@@ -185,6 +196,7 @@ function buildMockMetas(records: CityIndicatorRecord[]): CityMetaRecord[] {
     specs: { id: string; value: number; percent?: boolean }[],
   ) => {
     if (rows.length === 0) return;
+
     const id_cidade = rows[0].id_cidade_src;
     for (const { id, value, percent } of specs) {
       const meta = percent ? value : Math.round(value);
@@ -204,6 +216,7 @@ function buildMockMetas(records: CityIndicatorRecord[]): CityMetaRecord[] {
       const efet = s(set, (r) => r.vendas_efetivadas);
       const inst = s(set, (r) => r.vendas_instaladas);
       const j = (id: string) => jitter(`${cidade}${competencia}${svc}${id}`);
+
       return [
         { id: "BA03", value: s(set, (r) => r.fechados) * j("BA03") },
         { id: "BA04", value: Math.max(50, Math.abs(s(set, (r) => r.crescimento)) * j("BA04")) },
@@ -230,6 +243,7 @@ function buildMockMetas(records: CityIndicatorRecord[]): CityMetaRecord[] {
       ]);
     }
   }
+
   return out;
 }
 
@@ -239,5 +253,6 @@ export function mockCityDataset(): CityDataset {
   const metaRecords = buildMockMetas(records);
   // Watermark is stable in mock mode (data does not change between requests).
   const watermark = `mock:${months[months.length - 1]}`;
+
   return { records, metaRecords, months, watermark };
 }

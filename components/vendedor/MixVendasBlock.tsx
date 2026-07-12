@@ -32,11 +32,13 @@ export function MixVendasBlock({ mix }: { mix: MixItem[] }) {
   );
 
   return (
-    <section className="rounded-2xl border border-border bg-card/40 p-5 shadow-elegant backdrop-blur">
+    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
       <header className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Mix de Vendas</h2>
-          <p className="text-sm text-muted-foreground">Distribuição por serviço · {filtered.length} linha(s)</p>
+          <p className="text-sm text-muted-foreground">
+            Distribuição por serviço · {filtered.length} linha(s)
+          </p>
         </div>
       </header>
 
@@ -63,6 +65,7 @@ export function MixVendasBlock({ mix }: { mix: MixItem[] }) {
         <div className="space-y-2">
           {filtered.map((m, i) => {
             const Icon = SERVICO_ICONS[m.servico] ?? Globe;
+
             return (
               <div
                 key={`${m.servico}-${m.status}-${i}`}
@@ -74,14 +77,23 @@ export function MixVendasBlock({ mix }: { mix: MixItem[] }) {
                   </span>
                   <div>
                     <div className="text-sm font-semibold text-foreground">{m.servico}</div>
-                    <span className={cn("mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium", STATUS_COLOR[m.status])}>
+                    <span
+                      className={cn(
+                        "mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
+                        STATUS_COLOR[m.status],
+                      )}
+                    >
                       {m.status}
                     </span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-lg font-bold leading-none text-foreground">{formatNumber(m.vendas)}</div>
-                  <div className="mt-1 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Vendas</div>
+                  <div className="text-lg leading-none font-bold text-foreground">
+                    {formatNumber(m.vendas)}
+                  </div>
+                  <div className="mt-1 text-[9px] font-medium tracking-wider text-muted-foreground uppercase">
+                    Vendas
+                  </div>
                 </div>
               </div>
             );
@@ -92,12 +104,20 @@ export function MixVendasBlock({ mix }: { mix: MixItem[] }) {
   );
 }
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        "rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-wider transition-colors",
+        "rounded-full border px-3 py-1 text-[10px] font-medium tracking-wider uppercase transition-colors",
         active
           ? "border-primary/40 bg-primary/15 text-primary"
           : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground",

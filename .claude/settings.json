@@ -41,9 +41,7 @@
       "Bash(databricks current-user *)",
       "Bash(grep -vE \"^$|Changelog|npm notice|To update\")"
     ],
-    "additionalDirectories": [
-      "/Users/franciscopessoa/Documents/dev/brisa/dash"
-    ]
+    "additionalDirectories": ["/Users/franciscopessoa/Documents/dev/brisa/dash"]
   },
   "hooks": {
     "PreToolUse": [

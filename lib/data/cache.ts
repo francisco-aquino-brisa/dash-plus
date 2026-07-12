@@ -34,9 +34,11 @@ export async function cachedByWatermark<T>(
   const ttlMs = getCacheConfig().ttlSeconds * 1000;
   const hit = store.get(key);
   const fresh = hit && hit.watermark === watermark && Date.now() - hit.storedAt < ttlMs;
+
   if (fresh) return hit!.value as T;
 
   const value = await producer();
   store.set(key, { watermark, value, storedAt: Date.now() });
+
   return value;
 }

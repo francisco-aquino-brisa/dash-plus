@@ -22,7 +22,9 @@ export function TamBlock({ available }: { available: boolean }) {
         <Lock className="h-4 w-4 text-muted-foreground" />
         <div>
           <h2 className="text-lg font-semibold text-foreground">TAM de Vendedores</h2>
-          <p className="text-sm text-muted-foreground">Distribuição da força de vendas por faixa de atingimento da meta</p>
+          <p className="text-sm text-muted-foreground">
+            Distribuição da força de vendas por faixa de atingimento da meta
+          </p>
         </div>
       </header>
 

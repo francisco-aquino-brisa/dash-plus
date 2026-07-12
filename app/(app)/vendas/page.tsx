@@ -13,6 +13,7 @@ function parseFilters(sp: SearchParams): SalesFilters {
   const periodo = get("periodo");
   const de = get("de");
   const ate = get("ate");
+
   return {
     period: periodo || (de || ate ? "custom" : "mes_atual"),
     from: de || undefined,
@@ -29,6 +30,7 @@ function parseFilters(sp: SearchParams): SalesFilters {
 
 export default async function VendasPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await getSession();
+
   if (!session) redirect("/login");
 
   const filters = parseFilters(searchParams);

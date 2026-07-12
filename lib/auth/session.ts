@@ -7,5 +7,6 @@ import { SESSION_COOKIE, verifySession, type SessionUser } from "./jwt";
  */
 export async function getSession(): Promise<SessionUser | null> {
   const token = cookies().get(SESSION_COOKIE)?.value;
+
   return verifySession(token);
 }

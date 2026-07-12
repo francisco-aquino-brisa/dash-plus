@@ -61,6 +61,7 @@ the query fails, render that block as **"Sem acesso aos dados"** / empty — it 
 mock. This is the same principle as the blocked indicator cards on Cities.
 
 Rules:
+
 - Isolate per block, not per screen — a missing PDU/portabilidade must not kill
   the funnel or the base cards next to it.
 - Failure of an **optional/possibly-absent** source → degrade to "sem acesso".
@@ -70,6 +71,7 @@ Rules:
   isolate each thunk.
 
 Pattern:
+
 ```ts
 async function pduSeries(...): Promise<PduPoint[]> {
   try {
@@ -81,6 +83,7 @@ async function pduSeries(...): Promise<PduPoint[]> {
   }
 }
 ```
+
 Already applied to: PDU (sales/produtividade/vendedor), 5G + metas reads on Cities.
 Apply the same to any new block that reads a source which may not exist.
 

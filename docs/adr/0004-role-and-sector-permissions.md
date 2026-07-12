@@ -1,19 +1,19 @@
 # Role/sector permissions and hierarchy-based data scope
 
 Supersedes the "authorization is binary, no roles" stance of ADR 0003 and extends
-the caching key of ADR 0002. The dashboard grows from *one maintainer + identical
-read-only viewers* to **viewers who see different components and different data
+the caching key of ADR 0002. The dashboard grows from _one maintainer + identical
+read-only viewers_ to **viewers who see different components and different data
 rows depending on their role, sector, and place in the org hierarchy.**
 
 ## Two independent permission axes
 
 Two questions were being conflated; they are modelled separately.
 
-- **Feature visibility** — *which* cards/charts/screens a viewer may see. Driven by
+- **Feature visibility** — _which_ cards/charts/screens a viewer may see. Driven by
   **nível** (hierarchical rank/role) and **setor** (functional area), never by
   individual user. A viewer's visible features = the union of what their nível and
   their setor are granted.
-- **Data scope** — *which rows* a viewer sees inside a component they can access
+- **Data scope** — _which rows_ a viewer sees inside a component they can access
   (e.g. a supervisor sees only their team's cities; a director sees all). Driven by
   the viewer's position in the **org hierarchy**.
 
@@ -32,7 +32,7 @@ do **not** use them for this, because:
    ever sees the service principal, not the viewer. Native row-level security would
    require switching to on-behalf-of-user auth — turning every viewer into a
    Databricks/UC principal, abandoning the SSO+SP model, breaking the shared cache
-   (ADR 0002), and *still* leaving the identity→hierarchy mapping problem below
+   (ADR 0002), and _still_ leaving the identity→hierarchy mapping problem below
    unsolved.
 
 Row scoping is therefore enforced **in the app** (the service principal reads the
@@ -88,7 +88,7 @@ appear as consultores.
 The cache key gains the `scopeKey`: `(datasetId, normalizedParams, sourceWatermark,
 scopeKey)`. Because scope is a small, bounded set (~225 classes, plus `all`),
 viewers who share a scope share a cache entry — the whole directorate (`all`) shares
-one. This partitions the cache by *scope*, not by *user*, so it does not explode.
+one. This partitions the cache by _scope_, not by _user_, so it does not explode.
 
 ## Consequences
 

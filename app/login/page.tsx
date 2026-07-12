@@ -11,9 +11,12 @@ import { cn } from "@/lib/utils";
 /** Actionable guidance per login failure, shown in the error tooltip. */
 function hintForStatus(status: number): string {
   if (status === 400) return "Preencha o CPF e a senha corretamente.";
+
   if (status === 401) return "Confira seu CPF, senha e o código (OTP), se solicitado.";
+
   if (status === 403)
     return "Seu acesso ainda não foi liberado. Peça ao time de dados para cadastrar e ativar seu CPF.";
+
   return "Instabilidade ao validar o acesso. Tente novamente em instantes; se persistir, avise o time de dados.";
 }
 
@@ -64,6 +67,7 @@ export default function LoginPage() {
   const [tagIndex, setTagIndex] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTagIndex((i) => (i + 1) % TAGLINES.length), TAGLINE_INTERVAL_MS);
+
     return () => clearInterval(id);
   }, []);
   const tag = TAGLINES[tagIndex];
@@ -80,21 +84,28 @@ export default function LoginPage() {
 
   useEffect(() => {
     const digits = onlyDigits(cpf);
+
     if (digits.length < 11 || !isValidCpf(digits)) {
       resetDiscovery();
+
       return;
     }
+
     if (digits === lastQueried.current) return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
+
     debounceRef.current = setTimeout(async () => {
       lastQueried.current = digits;
       setStepsLoading(true);
       setStepsError(null);
       setSteps(null);
+
       try {
         const res = await fetch(`/api/auth/steps?login=${encodeURIComponent(maskCpf(digits))}`);
+
         if (!res.ok) throw new Error("steps");
+
         setSteps((await res.json()) as Steps);
       } catch {
         setStepsError("Não foi possível identificar este CPF. Tente novamente.");
@@ -108,20 +119,23 @@ export default function LoginPage() {
     };
   }, [cpf, resetDiscovery]);
 
-  const canSubmit =
-    isValidCpf(cpf) && password.length > 0 && (!steps?.otp || otp.length > 0) && !submitting;
+  const canSubmit = isValidCpf(cpf) && password.length > 0 && (!steps?.otp || otp.length > 0) && !submitting;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
     if (!canSubmit) return;
+
     setSubmitting(true);
     setError(null);
+
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: maskCpf(cpf), password, otp: steps?.otp ? otp : undefined }),
       });
+
       if (!res.ok) {
         if (res.status >= 500) {
           // Unhandled/internal failure — don't surface server details to the user.
@@ -133,9 +147,12 @@ export default function LoginPage() {
           const data = await res.json().catch(() => ({}));
           setError({ message: data.error || "Não foi possível entrar.", hint: hintForStatus(res.status) });
         }
+
         setSubmitting(false);
+
         return;
       }
+
       // Hard navigation so middleware re-evaluates with the new session cookie.
       window.location.assign("/dashboard");
     } catch {
@@ -161,7 +178,7 @@ export default function LoginPage() {
         <div className="min-h-[180px]">
           {/* key forces the entrance animation to replay on each tagline change */}
           <div key={tagIndex} className="animate-tagline-in">
-            <h1 className="text-4xl font-bold leading-tight">{tag.title}</h1>
+            <h1 className="text-4xl leading-tight font-bold">{tag.title}</h1>
             <p className="mt-4 max-w-sm text-primary-foreground/80">{tag.subtitle}</p>
           </div>
           {/* progress dots */}
@@ -266,7 +283,10 @@ export default function LoginPage() {
                       <Info className="h-4 w-4" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[260px] whitespace-normal text-left leading-relaxed">
+                  <TooltipContent
+                    side="top"
+                    className="max-w-[260px] text-left leading-relaxed whitespace-normal"
+                  >
                     {error.hint}
                   </TooltipContent>
                 </Tooltip>

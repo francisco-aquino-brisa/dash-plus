@@ -54,7 +54,9 @@ export function QuartileChart({ buckets }: Props) {
           {active !== null ? `Cidades · ${buckets[active].label}` : "Selecione um quartil"}
         </h4>
         {active === null ? (
-          <p className="text-sm text-muted-foreground">Clique em uma faixa para ver as cidades correspondentes.</p>
+          <p className="text-sm text-muted-foreground">
+            Clique em uma faixa para ver as cidades correspondentes.
+          </p>
         ) : list.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sem cidades nesta faixa.</p>
         ) : (

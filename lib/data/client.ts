@@ -23,6 +23,7 @@ export function getDataClient(): DataClient {
 class LazyDatabricksClient implements DataClient {
   async query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]> {
     const { DatabricksDataClient } = await import("./databricks");
+
     return new DatabricksDataClient().query<T>(sql, params);
   }
 }

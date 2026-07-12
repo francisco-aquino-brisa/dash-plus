@@ -33,6 +33,7 @@ const str = (v: unknown): string => (v == null || v === "" ? "" : String(v));
 export async function databricksVendedorWatermark(): Promise<string> {
   try {
     const r = await q<{ wm: string }>(`SELECT CAST(MAX(data) AS STRING) wm FROM ${DH}`);
+
     return r[0]?.wm ?? "unknown";
   } catch {
     return "unknown";
@@ -51,7 +52,9 @@ async function fetchProfile(mat: number, from: string, to: string): Promise<Vend
     ORDER BY data DESC LIMIT 1
   `);
   const r = rows[0];
+
   if (!r) return null;
+
   return {
     matricula: num(r.MATRICULA),
     nome: str(r.NOME) || "—",
@@ -72,14 +75,21 @@ async function fetchProfile(mat: number, from: string, to: string): Promise<Vend
 }
 
 interface ServiceAgg {
-  cFtth: number; eFtth: number; iFtth: number;
-  cFwa: number; eFwa: number; iFwa: number;
-  cBl: number; eBl: number; iBl: number;
-  ativ5g: number; renov: number;
+  cFtth: number;
+  eFtth: number;
+  iFtth: number;
+  cFwa: number;
+  eFwa: number;
+  iFwa: number;
+  cBl: number;
+  eBl: number;
+  iBl: number;
+  ativ5g: number;
+  renov: number;
 }
 
 async function fetchServiceAgg(mat: number, from: string, to: string): Promise<ServiceAgg> {
-  const r = (await q(`
+  const rows = await q(`
     SELECT
       SUM(criado_ftth) c_ftth, SUM(efetivado_ftth) e_ftth, SUM(instalado_ftth) i_ftth,
       SUM(criado_fwa) c_fwa, SUM(efetivado_fwa) e_fwa, SUM(instalado_fwa) i_fwa,
@@ -87,18 +97,31 @@ async function fetchServiceAgg(mat: number, from: string, to: string): Promise<S
       SUM(\`5g_ativacao\`) ativ5g, SUM(total_renovacao) renov
     FROM ${DH}
     WHERE MATRICULA = ${mat} AND data BETWEEN DATE'${from}' AND DATE'${to}'
-  `))[0] ?? {};
+  `);
+  const r = rows[0] ?? {};
+
   return {
-    cFtth: num(r.c_ftth), eFtth: num(r.e_ftth), iFtth: num(r.i_ftth),
-    cFwa: num(r.c_fwa), eFwa: num(r.e_fwa), iFwa: num(r.i_fwa),
-    cBl: num(r.c_bl), eBl: num(r.e_bl), iBl: num(r.i_bl),
-    ativ5g: num(r.ativ5g), renov: num(r.renov),
+    cFtth: num(r.c_ftth),
+    eFtth: num(r.e_ftth),
+    iFtth: num(r.i_ftth),
+    cFwa: num(r.c_fwa),
+    eFwa: num(r.e_fwa),
+    iFwa: num(r.i_fwa),
+    cBl: num(r.c_bl),
+    eBl: num(r.e_bl),
+    iBl: num(r.i_bl),
+    ativ5g: num(r.ativ5g),
+    renov: num(r.renov),
   };
 }
 
 /** PDU + NDU per serviço from the official view (light: single matricula). */
-async function fetchPdu(mat: number, ym: string): Promise<Record<string, { pdu: number; ndu: number; realizado: number }>> {
+async function fetchPdu(
+  mat: number,
+  ym: string,
+): Promise<Record<string, { pdu: number; ndu: number; realizado: number }>> {
   const out: Record<string, { pdu: number; ndu: number; realizado: number }> = {};
+
   try {
     const rows = await q(`
       SELECT servico, MAX(dias_uteis_acumulado) ndu, SUM(total_realizado) realizado
@@ -115,10 +138,14 @@ async function fetchPdu(mat: number, ym: string): Promise<Record<string, { pdu: 
   } catch {
     /* view can time out — cards still render without PDU */
   }
+
   return out;
 }
 
-function buildServiceCards(agg: ServiceAgg, pdu: Record<string, { pdu: number; ndu: number }>): ServicoCard[] {
+function buildServiceCards(
+  agg: ServiceAgg,
+  pdu: Record<string, { pdu: number; ndu: number }>,
+): ServicoCard[] {
   const nduAny = pdu.FTTH?.ndu || pdu.FWA?.ndu || pdu["5G"]?.ndu || 0;
   const mk = (
     key: ServicoCard["key"],
@@ -166,10 +193,17 @@ function buildMix(agg: ServiceAgg): MixItem[] {
     { servico: "5G", status: "Instalado", vendas: agg.ativ5g },
     { servico: "Renovação", status: "Instalado", vendas: agg.renov },
   ];
+
   return items.filter((i) => i.vendas > 0);
 }
 
-async function fetchDiasZerados(mat: number, from: string, to: string, ym: string, hojeDia: number | null): Promise<DiasZeradosView> {
+async function fetchDiasZerados(
+  mat: number,
+  from: string,
+  to: string,
+  ym: string,
+  hojeDia: number | null,
+): Promise<DiasZeradosView> {
   const [y, m] = ym.split("-").map((s) => parseInt(s, 10));
   const rows = await q(`
     SELECT day(data) dia, MAX(feriado) feriado,
@@ -194,7 +228,9 @@ async function fetchDiasZerados(mat: number, from: string, to: string, ym: strin
   for (const r of rows) {
     const dia = num(r.dia);
     const feriado = str(r.feriado).toUpperCase() === "SIM";
+
     if (feriado) continue; // holidays are not "zerado"
+
     const vals: Record<string, number> = {
       Todos: num(r.r_tot),
       FTTH: num(r.r_ftth),
@@ -208,13 +244,18 @@ async function fetchDiasZerados(mat: number, from: string, to: string, ym: strin
     }
   }
 
-  const resumo = keys.map((k) => ({ servico: k, dias: zeradosPorServico[k].length })) as DiasZeradosView["resumo"];
+  const resumo = keys.map((k) => ({
+    servico: k,
+    dias: zeradosPorServico[k].length,
+  })) as DiasZeradosView["resumo"];
+
   return { ano: y, mes: m, hoje: hojeDia, resumo, zeradosPorServico, comVendaPorServico };
 }
 
 async function fetchRanking(mat: number, from: string, to: string): Promise<RankingView> {
   try {
-    const r = (await q(`
+    const r = (
+      await q(`
       WITH agg AS (
         SELECT MATRICULA,
           MAX(cidade_atuacao_jwas) cidade, MAX(COORDENACAO) coord, MAX(GERENCIA) ger,
@@ -238,15 +279,25 @@ async function fetchRanking(mat: number, from: string, to: string): Promise<Rank
       SELECT cidade, coord, ger, r_cidade, n_cidade, r_coord, n_coord,
         r_ger, n_ger, r_geral, n_geral
       FROM ranked WHERE MATRICULA = ${mat}
-    `))[0];
+    `)
+    )[0];
+
     if (!r) return { available: false, metrica: "Mix (BL + 5G) efetivado no período", escopos: [] };
+
     const esc = (
       escopo: RankingView["escopos"][number]["escopo"],
       label: string,
       contexto: string,
       pos: unknown,
       total: unknown,
-    ) => ({ escopo, label, contexto: contexto || "—", posicao: contexto ? num(pos) : null, total: num(total) });
+    ) => ({
+      escopo,
+      label,
+      contexto: contexto || "—",
+      posicao: contexto ? num(pos) : null,
+      total: num(total),
+    });
+
     return {
       available: true,
       metrica: "Mix (BL + 5G) no período",
@@ -254,7 +305,13 @@ async function fetchRanking(mat: number, from: string, to: string): Promise<Rank
         esc("cidade", "Cidade", str(r.cidade), r.r_cidade, r.n_cidade),
         esc("coordenacao", "Coordenação", str(r.coord), r.r_coord, r.n_coord),
         esc("gerencia", "Gerência", str(r.ger), r.r_ger, r.n_ger),
-        { escopo: "geral", label: "Geral", contexto: "Brisanet", posicao: num(r.r_geral), total: num(r.n_geral) },
+        {
+          escopo: "geral",
+          label: "Geral",
+          contexto: "Brisanet",
+          posicao: num(r.r_geral),
+          total: num(r.n_geral),
+        },
       ],
     };
   } catch {
@@ -273,15 +330,24 @@ export async function databricksVendedorView(filters: VendedorFilters): Promise<
     competenciaLabel: period.label,
     profile: null,
     servicos: [],
-    diasZerados: { ano: period.ano, mes: period.mes, hoje: period.hojeDia, resumo: [], zeradosPorServico: {}, comVendaPorServico: {} },
+    diasZerados: {
+      ano: period.ano,
+      mes: period.mes,
+      hoje: period.hojeDia,
+      resumo: [],
+      zeradosPorServico: {},
+      comVendaPorServico: {},
+    },
     ranking: { available: false, metrica: "", escopos: [] },
     mix: [],
     pendenciasAvailable: false,
     watermark,
   };
+
   if (!Number.isFinite(mat)) return empty;
 
   const profile = await fetchProfile(mat, period.from, period.to);
+
   if (!profile) return empty; // matricula not present in this competência
 
   const [agg, pdu, diasZerados, ranking] = await Promise.all([
@@ -316,19 +382,28 @@ export async function databricksVendedorFilterOptions(ym: string): Promise<Parti
           WHERE data BETWEEN DATE'${period.from}' AND DATE'${period.to}' AND NOME IS NOT NULL
           GROUP BY MATRICULA ORDER BY nome LIMIT 3000
         `);
-        return rows.map((r) => ({ matricula: num(r.MATRICULA), nome: str(r.nome), cidade: str(r.cidade) || "—" }));
+
+        return rows.map((r) => ({
+          matricula: num(r.MATRICULA),
+          nome: str(r.nome),
+          cidade: str(r.cidade) || "—",
+        }));
       } catch {
         return [];
       }
     })(),
     (async () => {
       try {
-        const rows = await q(`SELECT DISTINCT date_format(data, 'yyyy-MM') ym FROM ${DH} ORDER BY ym DESC LIMIT 24`);
+        const rows = await q(
+          `SELECT DISTINCT date_format(data, 'yyyy-MM') ym FROM ${DH} ORDER BY ym DESC LIMIT 24`,
+        );
+
         return rows.map((r) => str(r.ym)).filter(Boolean);
       } catch {
         return [];
       }
     })(),
   ]);
+
   return { vendedores, competencias };
 }

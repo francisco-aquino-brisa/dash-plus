@@ -13,6 +13,7 @@ function parseFilters(sp: SearchParams): ProdFilters {
   const get = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
   const def = defaultProdRange();
   const mode: ManagementMode = get("modo") === "canais" ? "canais" : "externas";
+
   return {
     from: get("de") || def.from,
     to: get("ate") || def.to,
@@ -28,6 +29,7 @@ function parseFilters(sp: SearchParams): ProdFilters {
 
 export default async function ProdutividadePage({ searchParams }: { searchParams: SearchParams }) {
   const session = await getSession();
+
   if (!session) redirect("/login");
 
   const filters = parseFilters(searchParams);

@@ -7,11 +7,11 @@ export default function VendedorLoading() {
     <div className="min-h-screen pb-12">
       <header className="border-b border-border bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-4 sm:px-6">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-primary text-primary-foreground shadow-glow">
+          <span className="bg-gradient-primary shadow-glow grid h-10 w-10 place-items-center rounded-xl text-primary-foreground">
             <UserRound className="h-5 w-5" />
           </span>
           <div>
-            <h1 className="text-xl font-bold leading-tight">
+            <h1 className="text-xl leading-tight font-bold">
               Dashboard <span className="text-gradient">Vendedor</span>
             </h1>
             <p className="text-xs text-muted-foreground">Carregando dados…</p>

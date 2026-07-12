@@ -22,34 +22,45 @@ const VW = `\`${CAT}\`.\`projeto_brisa_performance\`.\`vw_hc_zerado_vendedor\``;
 /** Mode-aware dimension WHERE for desempenho_hc. */
 function whereDH(f: ProdFilters, params: unknown[]): string {
   const cl: string[] = [];
+
   if (f.mode === "externas") {
     if (f.gerencia) (cl.push("GERENCIA = ?"), params.push(f.gerencia));
+
     if (f.coordenacao) (cl.push("COORDENACAO = ?"), params.push(f.coordenacao));
   } else {
     if (f.gerente) (cl.push("GERENTE_CANAL = ?"), params.push(f.gerente));
+
     if (f.nicho) (cl.push("nicho = ?"), params.push(f.nicho));
   }
+
   if (f.cidade) (cl.push("cidade_atuacao_jwas = ?"), params.push(f.cidade));
+
   return cl.length ? ` AND ${cl.join(" AND ")}` : "";
 }
 
 /** Mode-aware dimension WHERE for vw_hc_zerado_vendedor (PDU). */
 function whereVW(f: ProdFilters, params: unknown[]): string {
   const cl: string[] = [];
+
   if (f.mode === "externas") {
     if (f.gerencia) (cl.push("gerencia_cidade = ?"), params.push(f.gerencia));
+
     if (f.coordenacao) (cl.push("coordenacao = ?"), params.push(f.coordenacao));
   } else {
     if (f.gerente) (cl.push("gerente_cidade = ?"), params.push(f.gerente));
+
     if (f.nicho) (cl.push("nicho = ?"), params.push(f.nicho));
   }
+
   if (f.cidade) (cl.push("cidade_atuacao = ?"), params.push(f.cidade));
+
   return cl.length ? ` AND ${cl.join(" AND ")}` : "";
 }
 
 export async function databricksProdWatermark(): Promise<string> {
   try {
     const r = await getDataClient().query<{ wm: string }>(`SELECT CAST(MAX(data) AS STRING) wm FROM ${DH}`);
+
     return r[0]?.wm ?? "unknown";
   } catch {
     return "unknown";
@@ -75,13 +86,44 @@ async function indicadores(f: ProdFilters): Promise<KpiBlock[]> {
     WHERE data BETWEEN DATE'${p.prevFrom}' AND DATE'${p.to}'${whereDH(f, params)}
   `;
   const r = (await getDataClient().query<Record<string, unknown>>(sql, params))[0] ?? {};
-  const cri = num(r.cur_c), efe = num(r.cur_e), ins = num(r.cur_i), g5 = num(r.cur_g);
+  const cri = num(r.cur_c),
+    efe = num(r.cur_e),
+    ins = num(r.cur_i),
+    g5 = num(r.cur_g);
 
   return [
-    { label: "Vendas Criadas", value: cri, meta: 0, delta: pct(cri, num(r.prev_c)), available: true, helper: tag },
-    { label: "Vendas Efetivadas", value: efe, meta: 0, delta: pct(efe, num(r.prev_e)), available: true, helper: `Efetivados x Criados: ${ratio(efe, cri).toFixed(1).replace(".", ",")}%` },
-    { label: "Vendas Instaladas", value: ins, meta: 0, delta: pct(ins, num(r.prev_i)), available: true, helper: `Instalados x Efetivados: ${ratio(ins, efe).toFixed(1).replace(".", ",")}%` },
-    { label: "Vendas Ativadas 5G", value: g5, meta: 0, delta: pct(g5, num(r.prev_g)), available: true, helper: "Chip pago/grátis: sem acesso" },
+    {
+      label: "Vendas Criadas",
+      value: cri,
+      meta: 0,
+      delta: pct(cri, num(r.prev_c)),
+      available: true,
+      helper: tag,
+    },
+    {
+      label: "Vendas Efetivadas",
+      value: efe,
+      meta: 0,
+      delta: pct(efe, num(r.prev_e)),
+      available: true,
+      helper: `Efetivados x Criados: ${ratio(efe, cri).toFixed(1).replace(".", ",")}%`,
+    },
+    {
+      label: "Vendas Instaladas",
+      value: ins,
+      meta: 0,
+      delta: pct(ins, num(r.prev_i)),
+      available: true,
+      helper: `Instalados x Efetivados: ${ratio(ins, efe).toFixed(1).replace(".", ",")}%`,
+    },
+    {
+      label: "Vendas Ativadas 5G",
+      value: g5,
+      meta: 0,
+      delta: pct(g5, num(r.prev_g)),
+      available: true,
+      helper: "Chip pago/grátis: sem acesso",
+    },
     blocked("Ticket Médio Entrada"),
     blocked("Ticket Médio Entrada 5G"),
     blocked("Churn Safra"),
@@ -102,8 +144,12 @@ async function ranking(f: ProdFilters): Promise<VendedorRow[]> {
     ORDER BY efetivado DESC NULLS LAST LIMIT 15
   `;
   const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
+
   return rows.map((r) => {
-    const criado = num(r.criado), efetivado = num(r.efetivado), instalado = num(r.instalado);
+    const criado = num(r.criado),
+      efetivado = num(r.efetivado),
+      instalado = num(r.instalado);
+
     return {
       nome: String(r.nome ?? "—"),
       grupo: String(r.grupo ?? "—"),
@@ -122,8 +168,8 @@ async function pduSeries(f: ProdFilters): Promise<PduPoint[]> {
   // PDU source (vw_hc_zerado_vendedor) is absent from the warehouse — isolate so
   // it shows as unavailable instead of taking the screen down (not a mock fallback).
   try {
-  const params: unknown[] = [];
-  const sql = `
+    const params: unknown[] = [];
+    const sql = `
     SELECT date_format(data, 'yyyy-MM') ym, servico,
       SUM(total_realizado)
         / NULLIF(COUNT(DISTINCT CASE WHEN situacao_hc = 'ATIVO' THEN matricula END), 0)
@@ -133,21 +179,26 @@ async function pduSeries(f: ProdFilters): Promise<PduPoint[]> {
       AND data >= add_months(date_trunc('MM', current_date()), -11)${whereVW(f, params)}
     GROUP BY 1, 2 ORDER BY 1
   `;
-  const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
-  const byMonth = new Map<string, PduPoint>();
-  for (const r of rows) {
-    const ym = String(r.ym);
-    if (!byMonth.has(ym)) byMonth.set(ym, { mes: formatMonth(ym), FTTH: 0, FWA: 0, "5G": 0 });
-    const point = byMonth.get(ym)!;
-    const svc = String(r.servico);
-    const val = +num(r.pdu).toFixed(2);
-    if (svc === "FTTH") point.FTTH = val;
-    else if (svc === "FWA") point.FWA = val;
-    else if (svc === "5G") point["5G"] = val;
-  }
-  return Array.from(byMonth.values());
+    const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
+    const byMonth = new Map<string, PduPoint>();
+    for (const r of rows) {
+      const ym = String(r.ym);
+
+      if (!byMonth.has(ym)) byMonth.set(ym, { mes: formatMonth(ym), FTTH: 0, FWA: 0, "5G": 0 });
+
+      const point = byMonth.get(ym)!;
+      const svc = String(r.servico);
+      const val = +num(r.pdu).toFixed(2);
+
+      if (svc === "FTTH") point.FTTH = val;
+      else if (svc === "FWA") point.FWA = val;
+      else if (svc === "5G") point["5G"] = val;
+    }
+
+    return Array.from(byMonth.values());
   } catch (e) {
     console.warn("[produtividade] PDU indisponível (fonte ausente no Databricks):", (e as Error).message);
+
     return [];
   }
 }
@@ -159,6 +210,7 @@ export async function databricksProdView(filters: ProdFilters): Promise<ProdView
     pduSeries(filters),
     databricksProdWatermark(),
   ]);
+
   return {
     source: "databricks",
     filters,
@@ -177,6 +229,7 @@ export async function databricksProdFilterOptions(): Promise<Partial<ProdFilterO
       const rows = await getDataClient().query<Record<string, unknown>>(
         `SELECT DISTINCT ${col} v FROM ${DH} WHERE ${col} IS NOT NULL AND ${col} <> '' ORDER BY 1 LIMIT 200`,
       );
+
       return rows.map((r) => String(r.v)).filter(Boolean);
     } catch {
       return [];
@@ -189,5 +242,6 @@ export async function databricksProdFilterOptions(): Promise<Partial<ProdFilterO
     distinct("nicho"),
     distinct("cidade_atuacao_jwas"),
   ]);
+
   return { gerencias, coordenacoes, gerentes, nichos, cidades };
 }

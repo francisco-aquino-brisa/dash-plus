@@ -15,9 +15,13 @@ export function maskCpf(value: string): string {
   const digits = onlyDigits(value).slice(0, 11);
 
   let out = digits.slice(0, 3);
+
   if (digits.length > 3) out += "." + digits.slice(3, 6);
+
   if (digits.length > 6) out += "." + digits.slice(6, 9);
+
   if (digits.length > 9) out += "-" + digits.slice(9, 11);
+
   return out;
 }
 
@@ -27,6 +31,7 @@ export function maskCpf(value: string): string {
  */
 export function isValidCpf(value: string): boolean {
   const cpf = onlyDigits(value);
+
   if (cpf.length !== 11) return false;
 
   // Reject repeated sequences (e.g. 111.111.111-11), which pass the check-digit
@@ -39,6 +44,7 @@ export function isValidCpf(value: string): boolean {
       sum += parseInt(cpf[i], 10) * (length + 1 - i);
     }
     const rest = (sum * 10) % 11;
+
     return rest === 10 ? 0 : rest;
   };
 

@@ -9,8 +9,18 @@ import type { DiasZeradosView } from "@/lib/data/vendedor/types";
 const FILTROS = ["Todos", "FTTH", "FWA", "5G", "Banda"] as const;
 const SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"];
 const MESES_LONG = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
 ];
 
 export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
@@ -30,14 +40,14 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button className="w-full rounded-2xl border border-warning/30 bg-warning/5 p-4 text-left shadow-elegant transition-colors hover:border-warning/50">
+        <button className="shadow-elegant w-full rounded-2xl border border-warning/30 bg-warning/5 p-4 text-left transition-colors hover:border-warning/50">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="grid h-8 w-8 place-items-center rounded-lg bg-warning/15 text-warning">
                 <AlertTriangle className="h-4 w-4" />
               </span>
               <div>
-                <h2 className="text-sm font-bold uppercase tracking-wide text-foreground">Dias Zerados</h2>
+                <h2 className="text-sm font-bold tracking-wide text-foreground uppercase">Dias Zerados</h2>
                 <p className="text-[11px] text-muted-foreground">{totalTodos} dia(s) sem venda no mês</p>
               </div>
             </div>
@@ -46,8 +56,8 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
           <div className="grid grid-cols-4 gap-2">
             {porServico.map((s) => (
               <div key={s.servico} className="rounded-lg border border-border bg-card px-1 py-2 text-center">
-                <div className="text-base font-bold leading-none text-foreground">{s.dias}</div>
-                <div className="mt-1 truncate text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                <div className="text-base leading-none font-bold text-foreground">{s.dias}</div>
+                <div className="mt-1 truncate text-[9px] font-medium tracking-wider text-muted-foreground uppercase">
                   {s.servico}
                 </div>
               </div>
@@ -69,7 +79,7 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
               key={f}
               onClick={() => setFiltro(f)}
               className={cn(
-                "rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-wider transition-colors",
+                "rounded-full border px-3 py-1 text-[10px] font-medium tracking-wider uppercase transition-colors",
                 filtro === f
                   ? "border-primary/40 bg-primary/15 text-primary"
                   : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground",
@@ -81,7 +91,7 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
         </div>
 
         <div className="rounded-xl border border-border bg-card p-4">
-          <h3 className="mb-4 text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <h3 className="mb-4 text-center text-xs font-bold tracking-wider text-muted-foreground uppercase">
             {MESES_LONG[dias.mes - 1]} {dias.ano}
           </h3>
           <div className="grid grid-cols-7 gap-1.5 text-center">
@@ -99,6 +109,7 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
               const isZerado = zerados.has(day);
               const hasVenda = comVenda.has(day);
               const isToday = dias.hoje === day;
+
               return (
                 <div
                   key={day}

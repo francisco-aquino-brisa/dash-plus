@@ -14,6 +14,7 @@ function iso(d: Date): string {
 function addDays(d: Date, n: number): Date {
   const x = new Date(d);
   x.setDate(x.getDate() + n);
+
   return x;
 }
 
@@ -64,5 +65,6 @@ export function resolvePeriod(f: SalesFilters): ResolvedPeriod {
   const lengthMs = Math.max(0, +to - +from);
   const prevTo = addDays(from, -1);
   const prevFrom = new Date(+prevTo - lengthMs);
+
   return { from: iso(from), to: iso(to), prevFrom: iso(prevFrom), prevTo: iso(prevTo), label };
 }

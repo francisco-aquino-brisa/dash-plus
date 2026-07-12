@@ -27,24 +27,35 @@ const GROUPS: { title: string; keys: (keyof Visibility)[]; labels: Record<string
   },
 ];
 
-export function VisibilityFilter({ value, onChange }: { value: Visibility; onChange: (v: Visibility) => void }) {
+export function VisibilityFilter({
+  value,
+  onChange,
+}: {
+  value: Visibility;
+  onChange: (v: Visibility) => void;
+}) {
   const toggle = (k: keyof Visibility) => onChange({ ...value, [k]: !value[k] });
+
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border bg-card/60 text-muted-foreground shadow-elegant backdrop-blur transition-colors hover:border-primary/40 hover:text-foreground"
+          className="shadow-elegant grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border bg-card/60 text-muted-foreground backdrop-blur transition-colors hover:border-primary/40 hover:text-foreground"
           aria-label="Filtrar visualização"
         >
           <SlidersHorizontal className="h-4 w-4" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56" align="end">
-        <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Exibir na tela</p>
+        <p className="mb-2 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+          Exibir na tela
+        </p>
         <div className="space-y-3">
           {GROUPS.map((g) => (
             <div key={g.title}>
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">{g.title}</div>
+              <div className="mb-1 text-[10px] font-semibold tracking-wider text-muted-foreground/70 uppercase">
+                {g.title}
+              </div>
               <div className="space-y-1">
                 {g.keys.map((k) => (
                   <button
@@ -55,12 +66,16 @@ export function VisibilityFilter({ value, onChange }: { value: Visibility; onCha
                     <span
                       className={cn(
                         "grid h-4 w-4 shrink-0 place-items-center rounded border",
-                        value[k] ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card",
+                        value[k]
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card",
                       )}
                     >
                       {value[k] && <Check className="h-3 w-3" />}
                     </span>
-                    <span className={cn(value[k] ? "text-foreground" : "text-muted-foreground")}>{g.labels[k]}</span>
+                    <span className={cn(value[k] ? "text-foreground" : "text-muted-foreground")}>
+                      {g.labels[k]}
+                    </span>
                   </button>
                 ))}
               </div>

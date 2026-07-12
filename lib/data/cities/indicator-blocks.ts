@@ -52,7 +52,9 @@ export interface IndicatorCardVM {
 
 function fmtUnit(unit: IndicatorUnit, v: number): string {
   if (unit === "currency") return `R$ ${v.toFixed(1).replace(".", ",")}`;
+
   if (unit === "percent") return formatPct(v);
+
   return formatNumber(v);
 }
 
@@ -61,6 +63,7 @@ function sumFields(rows: CityIndicatorRecord[], fields: NumFieldish): number {
   const list = Array.isArray(fields) ? fields : [fields];
   let total = 0;
   for (const r of rows) for (const f of list) total += Number(r[f]) || 0;
+
   return total;
 }
 type NumFieldish = keyof CityIndicatorRecord | (keyof CityIndicatorRecord)[];
@@ -68,16 +71,22 @@ type NumFieldish = keyof CityIndicatorRecord | (keyof CityIndicatorRecord)[];
 /** Technologies in scope for a block, honoring the Tecnologia filter (BL only). */
 function techScope(block: IndicatorBlock, tecnologia: string): CityIndicatorRecord["tecnologia"][] {
   if (block === "5g") return ["5G"];
+
   if (tecnologia === "FTTH") return ["FTTH"];
+
   if (tecnologia === "FWA") return ["FWA"];
+
   return ["FTTH", "FWA"];
 }
 
 /** metas_cidades.servico to join against, given the block + active Tec filter. */
 function metaServicoFor(block: IndicatorBlock, tecnologia: string): string {
   if (block === "5g") return "5G";
+
   if (tecnologia === "FTTH") return "FTTH";
+
   if (tecnologia === "FWA") return "FWA";
+
   return "Banda Larga";
 }
 
@@ -91,6 +100,7 @@ function scopedRows(
   const techs = new Set(techScope(block, filters.tecnologia));
   // Ignore the Tecnologia filter in applyFilters — the block controls tech itself.
   const base = applyFilters(records, { ...filters, competencia, tecnologia: "" });
+
   return base.filter((r) => techs.has(r.tecnologia));
 }
 
@@ -100,14 +110,19 @@ function computeValue(
   prevRows: CityIndicatorRecord[],
 ): number {
   if (!c) return 0;
+
   if (c.kind === "sum") return sum(rows, (r) => r[c.field] as number);
+
   if (c.kind === "ratio") {
     const den = sumFields(rows, c.den);
+
     return den === 0 ? 0 : (sumFields(rows, c.num) / den) * 100;
   }
+
   // growthBase
   const cur = sum(rows, (r) => r.base_ativa) + sum(rows, (r) => r.fechados);
   const prev = sum(prevRows, (r) => r.base_ativa) + sum(prevRows, (r) => r.fechados);
+
   return cur - prev;
 }
 
@@ -120,10 +135,13 @@ function aggregateMeta(
   servico: string,
 ): number | null {
   if (!def.metaId) return null;
+
   const metas = metaRows.filter(
     (m) => m.id_indicador === def.metaId && m.servico === servico && m.competencia === competencia,
   );
+
   if (metas.length === 0) return null;
+
   // Join to the realizado by raw source id_cidade (month-prefixed), per the
   // data team: metas_cidades links on (id_cidade, id_indicador, servico).
   const metaById = new Map(metas.map((m) => [m.id_cidade, m.meta]));
@@ -138,19 +156,26 @@ function aggregateMeta(
     let weighted = 0;
     let weight = 0;
     const denById = new Map<string, number>();
-    for (const r of rows) denById.set(r.id_cidade_src, (denById.get(r.id_cidade_src) ?? 0) + sumFields([r], denFields));
+    for (const r of rows)
+      denById.set(r.id_cidade_src, (denById.get(r.id_cidade_src) ?? 0) + sumFields([r], denFields));
     for (const [id, meta] of metaById) {
       const den = denById.get(id);
+
       if (den === undefined) continue;
+
       weighted += meta * den;
       weight += den;
     }
+
     if (weight === 0) {
       // No denominator in scope → fall back to the simple mean of in-scope metas.
       const inScope = [...metaById].filter(([id]) => denById.has(id)).map(([, m]) => m);
+
       if (inScope.length === 0) return null;
+
       return (inScope.reduce((a, b) => a + b, 0) / inScope.length) * factor;
     }
+
     return (weighted / weight) * factor;
   }
 
@@ -160,9 +185,11 @@ function aggregateMeta(
   let matched = 0;
   for (const [id, meta] of metaById) {
     if (!idsInScope.has(id)) continue;
+
     total += meta;
     matched++;
   }
+
   return matched === 0 ? null : total * factor;
 }
 
@@ -182,22 +209,35 @@ interface FooterCtx {
 function resolveFooter(def: IndicatorDef, ctx: FooterCtx): FooterStatVM[] {
   const slots: FooterSlot[] = def.footer ?? DEFAULT_FOOTER;
   const inverse = def.polarity === "down";
+
   return slots.map((slot): FooterStatVM => {
     if (slot === "meta") {
       const metaUnit = def.metaCompare ? def.metaCompare.unit : def.unit;
-      return { label: "Meta", display: ctx.meta === null ? "—" : fmtUnit(metaUnit, ctx.meta), tone: "default" };
+
+      return {
+        label: "Meta",
+        display: ctx.meta === null ? "—" : fmtUnit(metaUnit, ctx.meta),
+        tone: "default",
+      };
     }
+
     if (slot === "projecao") {
       return { label: "Projeção", display: fmtUnit(def.unit, ctx.projecao), tone: "default" };
     }
+
     if (slot === "atingimento") {
       const a = ctx.atingimento;
+
       if (a === null) return { label: "Ating.", display: "—", tone: "default" };
+
       const good = inverse ? a <= 100 : a >= 100;
       const warn = inverse ? a > 100 && a <= 130 : a >= 70 && a < 100;
+
       return { label: "Ating.", display: formatPct(a, 0), tone: good ? "good" : warn ? "warn" : "bad" };
     }
+
     const v = computeValue(slot.compute, ctx.curRows, ctx.prevRows);
+
     return { label: slot.label, display: fmtUnit(slot.unit ?? "qtd", v), tone: "default" };
   });
 }
@@ -222,10 +262,21 @@ export function computeIndicatorBlock(
   return indicatorsForBlock(block).map((def): IndicatorCardVM => {
     if (!def.available) {
       return {
-        id: def.id, block: def.block, label: def.label, unit: def.unit, polarity: def.polarity,
-        available: false, value: 0, meta: null, metaUnit: def.metaCompare?.unit ?? def.unit,
-        atingimento: null, delta: 0,
-        description: def.description, footer: [], series: [], media: 0,
+        id: def.id,
+        block: def.block,
+        label: def.label,
+        unit: def.unit,
+        polarity: def.polarity,
+        available: false,
+        value: 0,
+        meta: null,
+        metaUnit: def.metaCompare?.unit ?? def.unit,
+        atingimento: null,
+        delta: 0,
+        description: def.description,
+        footer: [],
+        series: [],
+        media: 0,
       };
     }
 
@@ -242,15 +293,27 @@ export function computeIndicatorBlock(
     const series = months.map((m, i) => {
       const rows = rowsByMonth.get(m) ?? [];
       const pr = i > 0 ? (rowsByMonth.get(months[i - 1]) ?? []) : [];
+
       return { mes: m, valor: computeValue(def.compute, rows, pr) };
     });
     const media = series.reduce((a, s) => a + s.valor, 0) / (series.length || 1);
 
     return {
-      id: def.id, block: def.block, label: def.label, unit: def.unit, polarity: def.polarity,
-      available: true, value, meta, metaUnit: def.metaCompare?.unit ?? def.unit,
-      atingimento, delta: relDelta(value, prevValue),
-      description: def.description, footer, series, media,
+      id: def.id,
+      block: def.block,
+      label: def.label,
+      unit: def.unit,
+      polarity: def.polarity,
+      available: true,
+      value,
+      meta,
+      metaUnit: def.metaCompare?.unit ?? def.unit,
+      atingimento,
+      delta: relDelta(value, prevValue),
+      description: def.description,
+      footer,
+      series,
+      media,
     };
   });
 }

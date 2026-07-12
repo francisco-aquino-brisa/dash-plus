@@ -13,19 +13,24 @@ const CACHE_KEY = "cities:dataset:v1";
 export async function getCitiesWatermark(): Promise<string> {
   if (isDatabricks()) {
     const { databricksWatermark } = await import("./databricks");
+
     return databricksWatermark();
   }
+
   return mockCityDataset().watermark;
 }
 
 /** The full per-city/month dataset, cached until the source watermark advances. */
 export async function getCityDataset(): Promise<CityDataset> {
   const watermark = await getCitiesWatermark();
+
   return cachedByWatermark<CityDataset>(CACHE_KEY, watermark, async () => {
     if (isDatabricks()) {
       const { databricksCityDataset } = await import("./databricks");
+
       return databricksCityDataset();
     }
+
     return mockCityDataset();
   });
 }
@@ -36,7 +41,10 @@ export function buildFilterOptions(dataset: CityDataset): FilterOptions {
   // totals, but must not pollute the drill-down dropdowns.
   const PLACEHOLDER = new Set(["-", "NAO REGISTRADO", "NÃO REGISTRADO"]);
   const uniq = (xs: string[]) =>
-    Array.from(new Set(xs)).filter((v) => v && !PLACEHOLDER.has(v.toUpperCase())).sort();
+    Array.from(new Set(xs))
+      .filter((v) => v && !PLACEHOLDER.has(v.toUpperCase()))
+      .sort();
+
   return {
     meses: dataset.months,
     gerencias: uniq(dataset.records.map((r) => r.gerencia)),

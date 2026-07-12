@@ -14,9 +14,13 @@ import type { ProdFilters, ProdFilterOptions, ProdView } from "@/lib/data/produt
 
 function toQuery(f: ProdFilters): string {
   const p = new URLSearchParams();
+
   if (f.from) p.set("de", f.from);
+
   if (f.to) p.set("ate", f.to);
+
   if (f.mode && f.mode !== "externas") p.set("modo", f.mode);
+
   for (const [k, key] of [
     ["servico", "servico"],
     ["gerencia", "gerencia"],
@@ -26,12 +30,22 @@ function toQuery(f: ProdFilters): string {
     ["cidade", "cidade"],
   ] as const) {
     const v = f[k];
+
     if (v) p.set(key, v);
   }
+
   return p.toString();
 }
 
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function Section({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
   return (
     <section>
       <div className="mb-3">
@@ -75,11 +89,11 @@ export function ProdDashboard({
       <header className="border-b border-border bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-6 py-4">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-primary text-primary-foreground shadow-glow">
+            <span className="bg-gradient-primary shadow-glow grid h-10 w-10 place-items-center rounded-xl text-primary-foreground">
               <Users className="h-5 w-5" />
             </span>
             <div>
-              <h1 className="text-xl font-bold leading-tight">
+              <h1 className="text-xl leading-tight font-bold">
                 Produtividade <span className="text-gradient">Comercial</span>
               </h1>
               <p className="text-xs text-muted-foreground">Performance da força de vendas · {periodLabel}</p>

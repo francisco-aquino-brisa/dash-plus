@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // streams this immediately on navigation, so the page switch feels instant).
 function KpiCardSkeleton() {
   return (
-    <div className="rounded-xl border border-border bg-gradient-card p-5 shadow-elegant">
+    <div className="bg-gradient-card shadow-elegant rounded-xl border border-border p-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Skeleton className="h-8 w-8 rounded-lg" />
@@ -26,7 +26,7 @@ function KpiCardSkeleton() {
 
 function SectionSkeleton({ height = "h-48" }: { height?: string }) {
   return (
-    <section className="rounded-2xl border border-border bg-card/40 p-5 shadow-elegant backdrop-blur">
+    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
       <Skeleton className="mb-1 h-5 w-56" />
       <Skeleton className="mb-4 h-3.5 w-72" />
       <Skeleton className={`w-full ${height} rounded-lg`} />
@@ -40,11 +40,11 @@ export default function DashboardLoading() {
       <header className="sticky top-10 z-40 border-b border-border bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-6 py-4">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-primary text-primary-foreground shadow-glow">
+            <span className="bg-gradient-primary shadow-glow grid h-10 w-10 place-items-center rounded-xl text-primary-foreground">
               <Activity className="h-5 w-5" />
             </span>
             <div>
-              <h1 className="text-xl font-bold leading-tight">
+              <h1 className="text-xl leading-tight font-bold">
                 Performance <span className="text-gradient">Cidades</span>
               </h1>
               <p className="text-xs text-muted-foreground">Carregando dados…</p>

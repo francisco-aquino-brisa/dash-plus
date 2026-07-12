@@ -37,7 +37,7 @@ export function SelecaoLivre({
   const selectedDef = getIndicatorDef(selected);
 
   return (
-    <section className="rounded-2xl border border-border bg-card/40 p-5 shadow-elegant backdrop-blur">
+    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
       <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Seleção Livre de Indicadores</h2>
@@ -65,7 +65,9 @@ export function SelecaoLivre({
                 onClick={() => setKind(k)}
                 className={cn(
                   "cursor-pointer rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors",
-                  kind === k ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  kind === k
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {k}
@@ -79,7 +81,9 @@ export function SelecaoLivre({
         <div className="grid h-[300px] place-items-center rounded-lg border border-dashed border-border bg-secondary/20 text-center">
           <div>
             <Lock className="mx-auto h-6 w-6 text-muted-foreground" />
-            <p className="mt-2 text-sm font-medium text-muted-foreground">Sem acesso aos dados deste indicador</p>
+            <p className="mt-2 text-sm font-medium text-muted-foreground">
+              Sem acesso aos dados deste indicador
+            </p>
             <p className="text-[11px] text-muted-foreground">Aguardando liberação do time de dados.</p>
           </div>
         </div>
@@ -89,21 +93,68 @@ export function SelecaoLivre({
             {kind === "linha" ? (
               <LineChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="mes" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} width={48} />
-                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                <XAxis
+                  dataKey="mes"
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={48}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                />
                 <Line type="monotone" dataKey="valor" stroke="var(--primary)" strokeWidth={2} dot={false}>
-                  <LabelList dataKey="valor" position="top" offset={8} formatter={(v: number) => formatChartLabel(v)} style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }} />
+                  <LabelList
+                    dataKey="valor"
+                    position="top"
+                    offset={8}
+                    formatter={(v: number) => formatChartLabel(v)}
+                    style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }}
+                  />
                 </Line>
               </LineChart>
             ) : (
               <BarChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="mes" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} width={48} />
-                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} cursor={{ fill: "var(--secondary)" }} />
+                <XAxis
+                  dataKey="mes"
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={48}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                  cursor={{ fill: "var(--secondary)" }}
+                />
                 <Bar dataKey="valor" fill="var(--primary)" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="valor" position="top" offset={6} formatter={(v: number) => formatChartLabel(v)} style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }} />
+                  <LabelList
+                    dataKey="valor"
+                    position="top"
+                    offset={6}
+                    formatter={(v: number) => formatChartLabel(v)}
+                    style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }}
+                  />
                 </Bar>
               </BarChart>
             )}

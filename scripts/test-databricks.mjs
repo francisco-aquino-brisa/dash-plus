@@ -18,6 +18,7 @@ function loadEnv() {
     const txt = readFileSync(join(__dirname, "..", ".env.local"), "utf8");
     for (const line of txt.split("\n")) {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+
       if (m && !line.trim().startsWith("#") && process.env[m[1]] === undefined) {
         process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
       }
@@ -44,7 +45,9 @@ function fail(msg) {
 const u2m = process.env.DATABRICKS_AUTH === "oauth-u2m";
 
 if (!host) fail("DATABRICKS_HOST is not set in .env.local");
+
 if (!path) fail("DATABRICKS_HTTP_PATH is not set (SQL Warehouse → Connection details → HTTP path)");
+
 if (!token && !(clientId && clientSecret) && !u2m)
   fail(
     "No auth: set DATABRICKS_SP_CLIENT_ID + DATABRICKS_SP_CLIENT_SECRET (M2M), or DATABRICKS_AUTH=oauth-u2m (browser login)",
@@ -52,11 +55,19 @@ if (!token && !(clientId && clientSecret) && !u2m)
 
 function connectionOptions() {
   if (clientId && clientSecret) {
-    return { host, path, authType: "databricks-oauth", oauthClientId: clientId, oauthClientSecret: clientSecret };
+    return {
+      host,
+      path,
+      authType: "databricks-oauth",
+      oauthClientId: clientId,
+      oauthClientSecret: clientSecret,
+    };
   }
+
   if (token) {
     return { host, path, authType: "access-token", token };
   }
+
   // U2M: interactive browser login as the current user (token cached to file).
   return { host, path, authType: "databricks-oauth", persistence: new FilePersistence() };
 }
@@ -69,6 +80,7 @@ async function main() {
   console.log(
     `  auth: ${clientId && clientSecret ? "OAuth M2M (service principal)" : token ? "PAT" : "OAuth U2M (browser login)"}`,
   );
+
   if (u2m) console.log("  (a browser window will open for you to sign in)");
 
   const client = new DBSQLClient();
@@ -80,6 +92,7 @@ async function main() {
     const rows = await op.fetchAll();
     await op.close();
     console.log(`\n✓ ${label}`);
+
     return rows;
   };
 

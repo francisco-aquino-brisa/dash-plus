@@ -16,9 +16,13 @@ export async function getProdView(filters: ProdFilters): Promise<ProdView> {
   if (isDatabricks()) {
     const { databricksProdWatermark, databricksProdView } = await import("./databricks");
     const watermark = await databricksProdWatermark();
+
     return cachedByWatermark<ProdView>(cacheKey(filters), watermark, () => databricksProdView(filters));
   }
-  return cachedByWatermark<ProdView>(cacheKey(filters), "mock:produtividade", async () => mockProdView(filters));
+
+  return cachedByWatermark<ProdView>(cacheKey(filters), "mock:produtividade", async () =>
+    mockProdView(filters),
+  );
 }
 
 export async function buildProdFilterOptions(): Promise<ProdFilterOptions> {
@@ -31,10 +35,13 @@ export async function buildProdFilterOptions(): Promise<ProdFilterOptions> {
     nichos: NICHOS,
     cidades: CIDADES,
   };
+
   if (!isDatabricks()) return base;
+
   try {
     const { databricksProdFilterOptions } = await import("./databricks");
     const real = await databricksProdFilterOptions();
+
     return {
       ...base,
       gerencias: real.gerencias?.length ? real.gerencias : base.gerencias,

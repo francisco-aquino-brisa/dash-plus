@@ -14,7 +14,13 @@ import { DiasZeradosBlock } from "./DiasZeradosBlock";
 import { RankingsBlock } from "./RankingsBlock";
 import { MixVendasBlock } from "./MixVendasBlock";
 import { RaioXModal } from "./RaioXModal";
-import { SERVICOS, type ServicoKey, type VendedorFilterOptions, type VendedorFilters, type VendedorView } from "@/lib/data/vendedor/types";
+import {
+  SERVICOS,
+  type ServicoKey,
+  type VendedorFilterOptions,
+  type VendedorFilters,
+  type VendedorView,
+} from "@/lib/data/vendedor/types";
 
 const CHART_VAR: Record<ServicoKey, string> = {
   FTTH: "var(--chart-1)",
@@ -23,7 +29,15 @@ const CHART_VAR: Record<ServicoKey, string> = {
   Banda: "var(--chart-4)",
 };
 
-const INITIAL_VIS: Visibility = { FTTH: true, FWA: true, "5G": true, Banda: true, diasZerados: true, rankings: true, mix: true };
+const INITIAL_VIS: Visibility = {
+  FTTH: true,
+  FWA: true,
+  "5G": true,
+  Banda: true,
+  diasZerados: true,
+  rankings: true,
+  mix: true,
+};
 
 type Tab = "resultados" | "pendencias";
 
@@ -47,8 +61,11 @@ export function VendedorDashboard({
   const navigate = useCallback(
     (next: VendedorFilters) => {
       const p = new URLSearchParams();
+
       if (next.matricula) p.set("matricula", next.matricula);
+
       if (next.competencia) p.set("competencia", next.competencia);
+
       const qs = p.toString();
       startTransition(() => router.push(qs ? `/vendedor?${qs}` : "/vendedor", { scroll: false }));
     },
@@ -63,11 +80,11 @@ export function VendedorDashboard({
       <header className="border-b border-border bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-primary text-primary-foreground shadow-glow">
+            <span className="bg-gradient-primary shadow-glow grid h-10 w-10 place-items-center rounded-xl text-primary-foreground">
               <UserRound className="h-5 w-5" />
             </span>
             <div>
-              <h1 className="text-xl font-bold leading-tight">
+              <h1 className="text-xl leading-tight font-bold">
                 Dashboard <span className="text-gradient">Vendedor</span>
               </h1>
               <p className="text-xs text-muted-foreground">Raio-X individual · {competenciaLabel}</p>
@@ -90,7 +107,10 @@ export function VendedorDashboard({
             value={filters.matricula}
             onSelect={(m) => navigate({ ...filters, matricula: m })}
           />
-          <CompetenciaPicker value={filters.competencia} onChange={(ym) => navigate({ ...filters, competencia: ym })} />
+          <CompetenciaPicker
+            value={filters.competencia}
+            onChange={(ym) => navigate({ ...filters, competencia: ym })}
+          />
           <div className="ml-auto">
             <VisibilityFilter value={vis} onChange={setVis} />
           </div>
@@ -126,16 +146,34 @@ export function VendedorDashboard({
           <PendenciasTab />
         )}
 
-        <footer className="pt-6 text-center text-xs text-muted-foreground">Brisanet · Dashboard Vendedor · v1</footer>
+        <footer className="pt-6 text-center text-xs text-muted-foreground">
+          Brisanet · Dashboard Vendedor · v1
+        </footer>
       </main>
 
       {/* Mobile bottom-nav (faithful to the prototype) */}
       <nav className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-border bg-card/95 px-6 py-2 backdrop-blur lg:hidden">
-        <BottomTab icon={BarChart3} label="Resultados" active={tab === "resultados"} onClick={() => setTab("resultados")} />
-        <BottomTab icon={ClipboardList} label="Pendências" active={tab === "pendencias"} onClick={() => setTab("pendencias")} />
+        <BottomTab
+          icon={BarChart3}
+          label="Resultados"
+          active={tab === "resultados"}
+          onClick={() => setTab("resultados")}
+        />
+        <BottomTab
+          icon={ClipboardList}
+          label="Pendências"
+          active={tab === "pendencias"}
+          onClick={() => setTab("pendencias")}
+        />
       </nav>
 
-      <RaioXModal card={raioXCard} ano={diasZerados.ano} mes={diasZerados.mes} isCurrentMonth={isCurrentMonth} onClose={() => setRaioX(null)} />
+      <RaioXModal
+        card={raioXCard}
+        ano={diasZerados.ano}
+        mes={diasZerados.mes}
+        isCurrentMonth={isCurrentMonth}
+        onClose={() => setRaioX(null)}
+      />
     </div>
   );
 }
@@ -149,7 +187,9 @@ function TabSwitch({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) 
           onClick={() => onChange(t)}
           className={cn(
             "rounded-md px-4 py-1.5 text-sm font-medium capitalize transition-colors",
-            tab === t ? "bg-card text-foreground shadow-elegant" : "text-muted-foreground hover:text-foreground",
+            tab === t
+              ? "shadow-elegant bg-card text-foreground"
+              : "text-muted-foreground hover:text-foreground",
           )}
         >
           {t === "resultados" ? "Resultados" : "Pendências"}
@@ -159,14 +199,27 @@ function TabSwitch({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) 
   );
 }
 
-function BottomTab({ icon: Icon, label, active, onClick }: { icon: React.ElementType; label: string; active: boolean; onClick: () => void }) {
+function BottomTab({
+  icon: Icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ElementType;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
-      className={cn("flex flex-col items-center gap-1 py-1 transition-colors", active ? "text-primary" : "text-muted-foreground")}
+      className={cn(
+        "flex flex-col items-center gap-1 py-1 transition-colors",
+        active ? "text-primary" : "text-muted-foreground",
+      )}
     >
       <Icon className={cn("h-5 w-5", active && "stroke-[2.5px]")} />
-      <span className="text-[10px] font-medium uppercase tracking-wider">{label}</span>
+      <span className="text-[10px] font-medium tracking-wider uppercase">{label}</span>
     </button>
   );
 }
@@ -193,8 +246,8 @@ function PendenciasTab() {
       </span>
       <h2 className="text-lg font-semibold text-foreground">Orçamentos Pendentes</h2>
       <p className="max-w-md text-sm text-muted-foreground">
-        Aguardando fonte atualizada de orçamentos. A base disponível de orçamentos por cliente está
-        congelada em 2025 — o bloco acende automaticamente quando o time de dados liberar a fonte atual.
+        Aguardando fonte atualizada de orçamentos. A base disponível de orçamentos por cliente está congelada
+        em 2025 — o bloco acende automaticamente quando o time de dados liberar a fonte atual.
       </p>
     </div>
   );

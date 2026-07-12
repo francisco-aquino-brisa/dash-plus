@@ -27,8 +27,10 @@ export function IndicatorPicker({
   const selectedSet = new Set(selected);
   const toggle = (id: string) => {
     const next = new Set(selectedSet);
+
     if (next.has(id)) next.delete(id);
     else next.add(id);
+
     // Preserve catalog order for stable card layout.
     onChange(options.filter((o) => next.has(o.id)).map((o) => o.id));
   };
@@ -45,11 +47,12 @@ export function IndicatorPicker({
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="max-h-[360px] w-72 overflow-y-auto p-1.5">
-        <div className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="px-2 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
           Selecione os indicadores
         </div>
         {options.map((o) => {
           const on = selectedSet.has(o.id);
+
           return (
             <button
               key={o.id}

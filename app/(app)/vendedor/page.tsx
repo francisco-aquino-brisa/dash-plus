@@ -11,6 +11,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 
 function parseFilters(sp: SearchParams): VendedorFilters {
   const get = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
+
   return {
     matricula: get("matricula"),
     competencia: get("competencia") || defaultCompetencia(),
@@ -19,6 +20,7 @@ function parseFilters(sp: SearchParams): VendedorFilters {
 
 export default async function VendedorPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await getSession();
+
   if (!session) redirect("/login");
 
   const filters = parseFilters(searchParams);

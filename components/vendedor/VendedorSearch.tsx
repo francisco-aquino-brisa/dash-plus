@@ -20,14 +20,13 @@ export function VendedorSearch({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const selected = useMemo(
-    () => options.find((o) => String(o.matricula) === value),
-    [options, value],
-  );
+  const selected = useMemo(() => options.find((o) => String(o.matricula) === value), [options, value]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+
     if (!q) return options.slice(0, 60);
+
     return options
       .filter((o) => o.nome.toLowerCase().includes(q) || String(o.matricula).includes(q))
       .slice(0, 60);
@@ -38,19 +37,22 @@ export function VendedorSearch({
       open={open}
       onOpenChange={(o) => {
         setOpen(o);
+
         if (o) setQuery("");
       }}
     >
       <PopoverTrigger asChild>
         <button
-          className="flex w-full items-center gap-2 rounded-xl border border-border bg-card/60 px-3 py-2.5 text-left text-sm shadow-elegant backdrop-blur transition-colors hover:border-primary/40 sm:w-80"
+          className="shadow-elegant flex w-full items-center gap-2 rounded-xl border border-border bg-card/60 px-3 py-2.5 text-left text-sm backdrop-blur transition-colors hover:border-primary/40 sm:w-80"
           aria-label="Selecionar vendedor"
         >
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
             <UserRound className="h-4 w-4" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Vendedor</span>
+            <span className="block text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+              Vendedor
+            </span>
             <span className="block truncate font-medium text-foreground">
               {selected ? selected.nome : "Buscar vendedor…"}
             </span>
@@ -75,6 +77,7 @@ export function VendedorSearch({
           )}
           {filtered.map((o) => {
             const isSel = String(o.matricula) === value;
+
             return (
               <button
                 key={o.matricula}

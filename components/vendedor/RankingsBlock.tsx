@@ -13,7 +13,7 @@ const ICONS: Record<RankingEscopo["escopo"], React.ElementType> = {
 
 export function RankingsBlock({ ranking }: { ranking: RankingView }) {
   return (
-    <section className="rounded-2xl border border-border bg-card/40 p-5 shadow-elegant backdrop-blur">
+    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
       <header className="mb-4 flex items-center gap-2">
         <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/15 text-primary">
           <Trophy className="h-4 w-4" />
@@ -32,12 +32,16 @@ export function RankingsBlock({ ranking }: { ranking: RankingView }) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {ranking.escopos.map((e) => {
             const Icon = ICONS[e.escopo];
+
             return (
-              <div key={e.escopo} className="flex items-center justify-between rounded-xl border border-border bg-secondary/30 p-3">
+              <div
+                key={e.escopo}
+                className="flex items-center justify-between rounded-xl border border-border bg-secondary/30 p-3"
+              >
                 <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
                   <Icon className="h-4 w-4 shrink-0" />
                   <div className="min-w-0">
-                    <div className="text-[11px] font-medium uppercase tracking-wider">{e.label}</div>
+                    <div className="text-[11px] font-medium tracking-wider uppercase">{e.label}</div>
                     <div className="truncate text-[11px] text-muted-foreground/80" title={e.contexto}>
                       {e.contexto}
                     </div>

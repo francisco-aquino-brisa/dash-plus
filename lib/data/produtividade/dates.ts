@@ -14,12 +14,14 @@ function iso(d: Date): string {
 function addDays(d: Date, n: number): Date {
   const x = new Date(d);
   x.setDate(x.getDate() + n);
+
   return x;
 }
 
 const MES_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 function fmtBr(s: string): string {
   const [y, m, d] = s.split("-");
+
   return `${d} ${MES_ABBR[parseInt(m, 10) - 1]} ${y}`;
 }
 
@@ -37,5 +39,6 @@ export function resolveProdPeriod(f: ProdFilters): ResolvedProdPeriod {
   const lengthMs = Math.max(0, +new Date(to) - +new Date(from));
   const prevTo = addDays(new Date(from), -1);
   const prevFrom = new Date(+prevTo - lengthMs);
+
   return { from, to, prevFrom: iso(prevFrom), prevTo: iso(prevTo), label: `${fmtBr(from)} – ${fmtBr(to)}` };
 }

@@ -25,7 +25,9 @@ export function FilterSelect({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</label>
+      <label className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+        {label}
+      </label>
       <Select value={value || ALL} onValueChange={(v) => onChange(v === ALL ? "" : v)}>
         <SelectTrigger className={cn("h-9 min-w-[130px] bg-secondary/60 text-sm", triggerClassName)}>
           <SelectValue />

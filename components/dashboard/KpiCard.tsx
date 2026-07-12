@@ -35,7 +35,7 @@ export function KpiCard({ title, icon: Icon, kpi, highlight, onClick }: Props) {
       type="button"
       onClick={onClick}
       className={cn(
-        "group relative w-full overflow-hidden rounded-xl border border-border bg-gradient-card p-5 text-left shadow-elegant transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+        "group bg-gradient-card shadow-elegant hover:shadow-glow relative w-full overflow-hidden rounded-xl border border-border p-5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
         highlight && "ring-1 ring-primary/30",
       )}
     >

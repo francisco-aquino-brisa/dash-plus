@@ -17,6 +17,7 @@ export interface CacheConfig {
 function intEnv(name: string, fallback: number, min = 1): number {
   const raw = process.env[name];
   const parsed = raw ? parseInt(raw, 10) : NaN;
+
   return Number.isFinite(parsed) && parsed >= min ? parsed : fallback;
 }
 

@@ -22,7 +22,8 @@ export const INDICATOR_DEFINITIONS: Record<string, IndicatorDef> = {
     formula: "Soma de clientes fechados no mês (Soma[fechados]). Menor é melhor.",
   },
   "Reativação Bloqueados": {
-    formula: "Reativações de bloqueados ÷ total de bloqueados (Soma[reativacoes_bloqueados] / Soma[bloqueados]).",
+    formula:
+      "Reativações de bloqueados ÷ total de bloqueados (Soma[reativacoes_bloqueados] / Soma[bloqueados]).",
   },
   "Churn Rate": {
     formula: "Cancelamentos do mês ÷ (Base Ativa + Fechados do mês anterior) × 100. Menor é melhor.",
@@ -53,7 +54,8 @@ export const INDICATOR_DEFINITIONS: Record<string, IndicatorDef> = {
     formula: "Contagem distinta de ativações 5G no mês (single + combos a partir do 2º chip + migração).",
   },
   "Vendas Ativadas 5G": {
-    formula: "Contagem distinta de ativações 5G (combo FTTH+5G = NÃO, mais chips do 2º em diante e migração).",
+    formula:
+      "Contagem distinta de ativações 5G (combo FTTH+5G = NÃO, mais chips do 2º em diante e migração).",
   },
   "Churn Rate 5G": {
     formula: "Cancelamentos 5G do mês ÷ base ativa do mês anterior × 100. Menor é melhor.",
@@ -61,10 +63,12 @@ export const INDICATOR_DEFINITIONS: Record<string, IndicatorDef> = {
 
   // ── Receita / Ticket (Tela 3) ───────────────────────────────────────────────
   "Ticket de Entrada": {
-    formula: "Média do valor com desconto das vendas BL instaladas (corporativo = NÃO; serviço INTERNET/FWA).",
+    formula:
+      "Média do valor com desconto das vendas BL instaladas (corporativo = NÃO; serviço INTERNET/FWA).",
   },
   "Ticket Médio Entrada": {
-    formula: "Média do valor com desconto das vendas BL instaladas (corporativo = NÃO; serviço INTERNET/FWA).",
+    formula:
+      "Média do valor com desconto das vendas BL instaladas (corporativo = NÃO; serviço INTERNET/FWA).",
   },
   "Ticket Médio Entrada 5G": {
     formula: "Média do preço promocional das vendas 5G instaladas (sem pedidos duplicados).",
@@ -110,7 +114,9 @@ export const INDICATOR_DEFINITIONS: Record<string, IndicatorDef> = {
 /** Lookup by card label, tolerant of a few known label variants. */
 export function getIndicatorDef(label: string): IndicatorDef | undefined {
   if (INDICATOR_DEFINITIONS[label]) return INDICATOR_DEFINITIONS[label];
+
   // Funnel labels sometimes carry a scope suffix (e.g. "Vendas Criadas - FTTH").
   const base = label.split(" - ")[0].trim();
+
   return INDICATOR_DEFINITIONS[base];
 }

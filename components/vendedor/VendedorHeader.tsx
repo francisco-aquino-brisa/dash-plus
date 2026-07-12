@@ -7,7 +7,7 @@ import type { VendedorProfile } from "@/lib/data/vendedor/types";
 function Field({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border bg-secondary/30 p-3">
-      <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
         <Icon className="h-3.5 w-3.5" /> {label}
       </div>
       <div className="mt-1 truncate text-sm font-semibold text-foreground" title={value}>
@@ -19,15 +19,16 @@ function Field({ icon: Icon, label, value }: { icon: React.ElementType; label: s
 
 export function VendedorHeader({ profile }: { profile: VendedorProfile }) {
   const ativo = profile.situacao.toUpperCase() === "ATIVO";
+
   return (
-    <section className="rounded-2xl border border-border bg-card/40 p-5 shadow-elegant backdrop-blur">
+    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-primary text-primary-foreground shadow-glow">
+          <span className="bg-gradient-primary shadow-glow grid h-12 w-12 shrink-0 place-items-center rounded-xl text-primary-foreground">
             <UserRound className="h-6 w-6" />
           </span>
           <div className="min-w-0">
-            <h2 className="text-lg font-bold leading-tight text-foreground">{profile.nome}</h2>
+            <h2 className="text-lg leading-tight font-bold text-foreground">{profile.nome}</h2>
             <p className="text-xs text-muted-foreground">
               Matrícula {profile.matricula} · {profile.nivel}
             </p>

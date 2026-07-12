@@ -18,6 +18,7 @@ function parseFilters(sp: SearchParams, months: string[]): Filters {
   const get = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
   const latest = months[months.length - 1] ?? "";
   const mes = get("mes");
+
   return {
     competencia: mes && months.includes(mes) ? mes : latest,
     gerencia: get("gerencia"),
@@ -30,6 +31,7 @@ function parseFilters(sp: SearchParams, months: string[]): Filters {
 
 export default async function DashboardPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await getSession();
+
   if (!session) redirect("/login");
 
   const dataset = await getCityDataset();

@@ -19,8 +19,10 @@ export async function getSalesView(filters: SalesFilters): Promise<SalesView> {
   if (isDatabricks()) {
     const { databricksSalesWatermark, databricksSalesView } = await import("./databricks");
     const watermark = await databricksSalesWatermark();
+
     return cachedByWatermark<SalesView>(cacheKey(filters), watermark, () => databricksSalesView(filters));
   }
+
   return cachedByWatermark<SalesView>(cacheKey(filters), "mock:vendas", async () => mockSalesView(filters));
 }
 
@@ -28,7 +30,7 @@ export async function buildSalesFilterOptions(): Promise<SalesFilterOptions> {
   const { GERENTES, CANAIS, NICHOS, UFS, CIDADES, TIPOS } = SALES_FILTER_LISTS;
   // Mock UF→cidades: assign each city to one UF so the cascade is demonstrable.
   const mockCidadesByUf: Record<string, string[]> = {};
-  CIDADES.forEach((c, i) => ((mockCidadesByUf[UFS[i % UFS.length]] ??= []).push(c)));
+  CIDADES.forEach((c, i) => (mockCidadesByUf[UFS[i % UFS.length]] ??= []).push(c));
   const base: SalesFilterOptions = {
     periods: PERIODS,
     servicos: ["INTERNET", "FWA", "Banda Larga", "5G"],
@@ -40,10 +42,13 @@ export async function buildSalesFilterOptions(): Promise<SalesFilterOptions> {
     cidadesByUf: mockCidadesByUf,
     tipos: TIPOS,
   };
+
   if (!isDatabricks()) return base;
+
   try {
     const { databricksSalesFilterOptions } = await import("./databricks");
     const real = await databricksSalesFilterOptions();
+
     return {
       ...base,
       gerentes: real.gerentes?.length ? real.gerentes : base.gerentes,
@@ -51,7 +56,8 @@ export async function buildSalesFilterOptions(): Promise<SalesFilterOptions> {
       nichos: real.nichos?.length ? real.nichos : base.nichos,
       ufs: real.ufs?.length ? real.ufs : base.ufs,
       cidades: real.cidades?.length ? real.cidades : base.cidades,
-      cidadesByUf: real.cidadesByUf && Object.keys(real.cidadesByUf).length ? real.cidadesByUf : base.cidadesByUf,
+      cidadesByUf:
+        real.cidadesByUf && Object.keys(real.cidadesByUf).length ? real.cidadesByUf : base.cidadesByUf,
       tipos: real.tipos?.length ? real.tipos : base.tipos,
     };
   } catch {

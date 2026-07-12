@@ -15,6 +15,7 @@ function loadEnv() {
     const txt = readFileSync(join(__dirname, "..", ".env.local"), "utf8");
     for (const line of txt.split("\n")) {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+
       if (m && !line.trim().startsWith("#") && process.env[m[1]] === undefined) {
         process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
       }
@@ -33,8 +34,16 @@ const schema = process.env.DATABRICKS_CITIES_SCHEMA ?? "projeto_brisa_performanc
 
 function connectionOptions() {
   if (clientId && clientSecret)
-    return { host, path, authType: "databricks-oauth", oauthClientId: clientId, oauthClientSecret: clientSecret };
+    return {
+      host,
+      path,
+      authType: "databricks-oauth",
+      oauthClientId: clientId,
+      oauthClientSecret: clientSecret,
+    };
+
   if (token) return { host, path, authType: "access-token", token };
+
   return { host, path, authType: "databricks-oauth", persistence: new FilePersistence() }; // U2M
 }
 
@@ -51,6 +60,7 @@ async function main() {
     const op = await session.executeStatement(sql, { runAsync: true });
     const rows = await op.fetchAll();
     await op.close();
+
     return rows;
   };
 
@@ -59,7 +69,9 @@ async function main() {
       const fqn = `\`${catalog}\`.\`${schema}\`.\`${obj}\``;
       console.log(`\n================ ${obj} ================`);
       const cols = await q(`DESCRIBE TABLE ${fqn}`);
-      const clean = cols.filter((c) => c.col_name && !String(c.col_name).startsWith("#") && c.col_name !== "");
+      const clean = cols.filter(
+        (c) => c.col_name && !String(c.col_name).startsWith("#") && c.col_name !== "",
+      );
       console.log("COLUMNS:");
       for (const c of clean) console.log(`  ${c.col_name}\t${c.data_type}`);
       const sample = await q(`SELECT * FROM ${fqn} LIMIT 2`);

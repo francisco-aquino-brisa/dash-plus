@@ -135,7 +135,6 @@
   }
 }
 
-
 @layer utilities {
   .bg-gradient-primary {
     background-image: var(--gradient-primary);

@@ -10,14 +10,14 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 
 ## Verification status (last audited via warehouse queries)
 
-| Object | Schema | Type | Exists | Columns used by code |
-| --- | --- | --- | --- | --- |
-| `indicadores_cidades` | `projeto_brisa_performance` | VIEW | ✅ | all present ✅ |
-| `indicadores_cidades_5g` | `projeto_brisa_performance` | VIEW | ✅ | all present ✅ |
-| `metas_cidades` | `projeto_brisa_performance` | VIEW | ✅ | all present ✅ |
-| `cadastro_usuario` | `projeto_brisa_performance` | MANAGED | ✅ | all present ✅ |
-| `desempenho_hc` | `diego_barros_inteligencia_comercial_e_mercado` | MANAGED | ✅ | all present ✅ |
-| **`vw_hc_zerado_vendedor`** | (referenced as `projeto_brisa_performance`) | — | ❌ **absent** | — |
+| Object                      | Schema                                          | Type    | Exists        | Columns used by code |
+| --------------------------- | ----------------------------------------------- | ------- | ------------- | -------------------- |
+| `indicadores_cidades`       | `projeto_brisa_performance`                     | VIEW    | ✅            | all present ✅       |
+| `indicadores_cidades_5g`    | `projeto_brisa_performance`                     | VIEW    | ✅            | all present ✅       |
+| `metas_cidades`             | `projeto_brisa_performance`                     | VIEW    | ✅            | all present ✅       |
+| `cadastro_usuario`          | `projeto_brisa_performance`                     | MANAGED | ✅            | all present ✅       |
+| `desempenho_hc`             | `diego_barros_inteligencia_comercial_e_mercado` | MANAGED | ✅            | all present ✅       |
+| **`vw_hc_zerado_vendedor`** | (referenced as `projeto_brisa_performance`)     | —       | ❌ **absent** | —                    |
 
 > **`vw_hc_zerado_vendedor` does not exist in ANY accessible catalog**, and the
 > column it relies on — **`total_realizado`** — does not exist anywhere either
@@ -28,13 +28,13 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 
 **Not every screen reads from `projeto_brisa_performance`.** Only Cities does.
 
-| Screen (route) | Primary schema | Tables (verified) |
-| --- | --- | --- |
-| **Performance Cidades** (`/dashboard`) | `projeto_brisa_performance` | `indicadores_cidades`, `indicadores_cidades_5g`, `metas_cidades` — all ✅ |
-| **Vendas · Canais** (`/vendas`) | `diego_barros_inteligencia_comercial_e_mercado` | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU) |
-| **Produtividade** (`/produtividade`) | `diego_barros_inteligencia_comercial_e_mercado` | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU) |
-| **Vendedor** (`/vendedor`) | `diego_barros_inteligencia_comercial_e_mercado` | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU) |
-| Auth (all screens) | `projeto_brisa_performance` | `cadastro_usuario` ✅ |
+| Screen (route)                         | Primary schema                                  | Tables (verified)                                                         |
+| -------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------- |
+| **Performance Cidades** (`/dashboard`) | `projeto_brisa_performance`                     | `indicadores_cidades`, `indicadores_cidades_5g`, `metas_cidades` — all ✅ |
+| **Vendas · Canais** (`/vendas`)        | `diego_barros_inteligencia_comercial_e_mercado` | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU)                     |
+| **Produtividade** (`/produtividade`)   | `diego_barros_inteligencia_comercial_e_mercado` | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU)                     |
+| **Vendedor** (`/vendedor`)             | `diego_barros_inteligencia_comercial_e_mercado` | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU)                     |
+| Auth (all screens)                     | `projeto_brisa_performance`                     | `cadastro_usuario` ✅                                                     |
 
 Schemas overridable via env: `DATABRICKS_CITIES_SCHEMA` (Cities + auth) and
 `DATABRICKS_SALES_SCHEMA` (the other three). All within catalog
@@ -57,16 +57,20 @@ Schemas overridable via env: `DATABRICKS_CITIES_SCHEMA` (Cities + auth) and
 ## The three Cities views (verified)
 
 ### `indicadores_cidades` — Banda Larga (FTTH + FWA) · VIEW
+
 Monthly realizado per city × technology. **Wide** (one column per metric).
+
 - **Keys:** `data`, `id_cidade`, `cidade`, `tecnologia`, `gerencia`, `coordenacao`, `tipo_cidade`, `gestao`
 - **Base/growth:** `base_ativa`, `crescimento`, `fechados`, `fechado_problema_tecnico`, `bloqueados`, `reativacoes_bloqueados`, `reativacoes_total`
 - **Deactivation:** `desativado_auto`, `desativado_s`, `cancelamentos`, `cancelamentos_voluntarios`/`_involuntarios`
 - **Funnel:** `orcamentos` (criadas), `orcamentos_efetivados` (efetivadas), `instalacoes` (instaladas)
 - **Cohort/coverage:** `instalados_4_mes`, `cancelados_4_mes`, `total_de_hp`
-- **Embedded metas:** `meta_crescimento`, `meta_orcamento`, `meta_orcamentos_efetivados`, `meta_instalacao` (present, but *not used* — meta comes from `metas_cidades`)
+- **Embedded metas:** `meta_crescimento`, `meta_orcamento`, `meta_orcamentos_efetivados`, `meta_instalacao` (present, but _not used_ — meta comes from `metas_cidades`)
 
 ### `indicadores_cidades_5g` — 5G · VIEW
+
 Monthly 5G realizado per city. Wide, much narrower.
+
 - **Keys:** `data`, `id_cidade`, `cidade`, `empresa`, `gerencia`, `gerente`, `coordenacao`, `coordenador`, `tipo_cidade`
 - **Base:** `base_ativa`, `base_ativa_anterior`, `crescimento`
 - **Churn:** `cancelamento_mes`, `cancel_com_consumo`, `cancel_sem_consumo`, `cancelamentos_4_mes`, `instalacoes_4_mes`
@@ -74,21 +78,22 @@ Monthly 5G realizado per city. Wide, much narrower.
 - **Absent** (→ "Sem acesso aos dados"): portabilidade, ticket, faturamento, avulso.
 
 ### `metas_cidades` — metas + indicator catalog · VIEW
+
 **Long** format: one row per (city × indicator × service × month). Also the
 indicator catalog.
 
-| Column | Purpose |
-| --- | --- |
-| `id_cidade` | Join key to the realizado (month-prefixed, e.g. `052026FORTALEZACE`) |
-| `id_indicador` | Indicator code (`BA01`, `VE01`, `CA03`, …) |
-| `servico` | `Banda Larga` · `FTTH` · `FWA` · `5G` |
-| `meta` | Target — **may be a quantity OR a fraction/rate** (see gotchas) |
-| `indicador` / `indicador_geral` | Human label |
-| `formato_dado` | `Qtd` / `%` — **not always reliable** (BA03 says Qtd but is a rate) |
-| `polaridade` | "Maior melhor" / "Menor melhor" |
-| `categoria` | `base` / `venda` / `cancelamento` |
-| `descricao_indicador`, `metrica`, `colunas`, `tabela` | Formula docs + real origin |
-| `stutus` | Filter on `Ativo` (sic) |
+| Column                                                | Purpose                                                              |
+| ----------------------------------------------------- | -------------------------------------------------------------------- |
+| `id_cidade`                                           | Join key to the realizado (month-prefixed, e.g. `052026FORTALEZACE`) |
+| `id_indicador`                                        | Indicator code (`BA01`, `VE01`, `CA03`, …)                           |
+| `servico`                                             | `Banda Larga` · `FTTH` · `FWA` · `5G`                                |
+| `meta`                                                | Target — **may be a quantity OR a fraction/rate** (see gotchas)      |
+| `indicador` / `indicador_geral`                       | Human label                                                          |
+| `formato_dado`                                        | `Qtd` / `%` — **not always reliable** (BA03 says Qtd but is a rate)  |
+| `polaridade`                                          | "Maior melhor" / "Menor melhor"                                      |
+| `categoria`                                           | `base` / `venda` / `cancelamento`                                    |
+| `descricao_indicador`, `metrica`, `colunas`, `tabela` | Formula docs + real origin                                           |
+| `stutus`                                              | Filter on `Ativo` (sic)                                              |
 
 ## How realizado meets meta (Cities)
 
@@ -117,11 +122,11 @@ month, so it matches 1:1 (validated 161/161 cities on Banda Larga, May/2026).
 
 ## Other tables (verified)
 
-| Table | Use |
-| --- | --- |
+| Table                        | Use                                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `cadastro_usuario` (MANAGED) | Access control: login checks an active `cpf` (`usuario_ativo`), pulls `email`/`permissao`. Queried on Databricks regardless of mode. Columns verified. |
-| `desempenho_hc` (MANAGED) | Sales/HC fact for Vendas · Canais, Produtividade, Vendedor. Every column the code uses is present. |
-| `vw_hc_zerado_vendedor` ❌ | PDU source referenced in code — **does not exist**. Column `total_realizado` exists nowhere. Needs a new source. |
+| `desempenho_hc` (MANAGED)    | Sales/HC fact for Vendas · Canais, Produtividade, Vendedor. Every column the code uses is present.                                                     |
+| `vw_hc_zerado_vendedor` ❌   | PDU source referenced in code — **does not exist**. Column `total_realizado` exists nowhere. Needs a new source.                                       |
 
 ## Source of truth
 

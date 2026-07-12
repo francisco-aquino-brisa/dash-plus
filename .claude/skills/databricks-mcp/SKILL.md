@@ -19,6 +19,7 @@ Only these statement forms are permitted: `SELECT`, `WITH … SELECT`, `SHOW`,
 `DESCRIBE`/`DESC`, `EXPLAIN`, `VALUES`, `TABLE`, `USE`.
 
 This is enforced three ways (defense in depth):
+
 1. A `PreToolUse` hook (`.claude/hooks/databricks-readonly-guard.mjs`) that
    **deterministically blocks** any non-read statement before it reaches the MCP.
 2. The credential (`~/.databrickscfg` profile `brisa`) should have **only read
@@ -37,7 +38,7 @@ classified as a write — rewrite it as a read.
 - `mcp__databricks__get_table` — `{ full_name: "catalog.schema.table" }` → full
   schema + properties for one table. Prefer this to inspect a single table.
 - `mcp__databricks__execute_sql` — `{ statement, max_rows?, warehouse_id?,
-  execution_timeout_seconds? }` → `{ columns, rows }`. Read-only (guarded).
+execution_timeout_seconds? }` → `{ columns, rows }`. Read-only (guarded).
 - `mcp__databricks__list_warehouses` — only if you must target a specific warehouse.
 
 ## How to work efficiently (and cheaply)

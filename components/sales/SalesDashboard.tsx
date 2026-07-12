@@ -14,9 +14,13 @@ import type { SalesFilters, SalesFilterOptions, SalesView } from "@/lib/data/sal
 
 function toQuery(f: SalesFilters): string {
   const p = new URLSearchParams();
+
   if (f.period && f.period !== "mes_atual") p.set("periodo", f.period);
+
   if (f.from) p.set("de", f.from);
+
   if (f.to) p.set("ate", f.to);
+
   for (const [k, key] of [
     ["servico", "servico"],
     ["gerente", "gerente"],
@@ -27,14 +31,24 @@ function toQuery(f: SalesFilters): string {
     ["tipo", "tipo"],
   ] as const) {
     const v = f[k];
+
     if (v) p.set(key, v);
   }
+
   return p.toString();
 }
 
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function Section({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="rounded-2xl border border-border bg-card/40 p-5 shadow-elegant backdrop-blur">
+    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
       <header className="mb-4">
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
         {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
@@ -71,11 +85,11 @@ export function SalesDashboard({
       <header className="border-b border-border bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-6 py-4">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-primary text-primary-foreground shadow-glow">
+            <span className="bg-gradient-primary shadow-glow grid h-10 w-10 place-items-center rounded-xl text-primary-foreground">
               <ShoppingCart className="h-5 w-5" />
             </span>
             <div>
-              <h1 className="text-xl font-bold leading-tight">
+              <h1 className="text-xl leading-tight font-bold">
                 Vendas · <span className="text-gradient">Canais</span>
               </h1>
               <p className="text-xs text-muted-foreground">Acompanhamento de canais · Brisanet</p>

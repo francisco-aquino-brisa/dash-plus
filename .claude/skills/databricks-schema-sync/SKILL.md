@@ -74,7 +74,7 @@ files are parallel:
 - `npx tsc --noEmit` and `npm run build` must stay clean.
 - Sanity-check both modes: the screen must render under `DATA_SOURCE=mock` and
   under `DATA_SOURCE=databricks` (the real adapter falls back to mock on error,
-  so confirm it isn't *silently* falling back — check the server log for
+  so confirm it isn't _silently_ falling back — check the server log for
   `[…] databricks failed, falling back to mock`).
 - Keep every validation query bounded (`LIMIT`, small `max_rows`, filter by
   competência) — the warehouse is metered.

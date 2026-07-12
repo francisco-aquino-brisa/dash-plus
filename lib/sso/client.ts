@@ -11,6 +11,7 @@
 
 function ssoBaseUrl(): string {
   const base = process.env.SSO_BASE_URL ?? "https://revan.brisanet.net.br/sso/v1";
+
   return base.replace(/\/+$/, "");
 }
 
@@ -41,6 +42,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } finally {
@@ -65,6 +67,7 @@ export async function getSteps(loginCpf: string): Promise<SsoSteps> {
   }
 
   const data = (await res.json()) as Partial<SsoSteps>;
+
   return {
     name: typeof data.name === "string" ? data.name : "",
     picture: typeof data.picture === "string" ? data.picture : "",
@@ -84,6 +87,7 @@ export async function login(input: SsoLoginInput): Promise<SsoLoginResult> {
     username: input.username,
     password: input.password,
   };
+
   // Only send otp when there is a value.
   if (input.otp) body.otp = input.otp;
 
@@ -98,6 +102,7 @@ export async function login(input: SsoLoginInput): Promise<SsoLoginResult> {
   });
 
   let data: Record<string, unknown> = {};
+
   try {
     data = (await res.json()) as Record<string, unknown>;
   } catch {
@@ -112,11 +117,7 @@ export async function login(input: SsoLoginInput): Promise<SsoLoginResult> {
     throw new SsoError(message, res.status);
   }
 
-  if (
-    typeof data.id !== "number" ||
-    typeof data.username !== "string" ||
-    typeof data.name !== "string"
-  ) {
+  if (typeof data.id !== "number" || typeof data.username !== "string" || typeof data.name !== "string") {
     throw new SsoError("Resposta de login inesperada do SSO", 502);
   }
 

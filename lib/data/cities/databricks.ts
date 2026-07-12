@@ -21,13 +21,7 @@
 
 import { getDataClient } from "../client";
 import { num } from "../_shared";
-import type {
-  CityDataset,
-  CityIndicatorRecord,
-  CityMetaRecord,
-  Tecnologia,
-  TipoCidade,
-} from "./types";
+import type { CityDataset, CityIndicatorRecord, CityMetaRecord, Tecnologia, TipoCidade } from "./types";
 
 const CATALOG = process.env.DATABRICKS_CITIES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const SCHEMA = process.env.DATABRICKS_CITIES_SCHEMA ?? "projeto_brisa_performance";
@@ -40,12 +34,16 @@ function str(v: unknown): string {
 }
 function ufFrom(cidade: string): string {
   const parts = cidade.split("/");
+
   return parts.length > 1 ? parts[parts.length - 1].trim() : "";
 }
 function normTipo(v: unknown): TipoCidade {
   const s = str(v).toUpperCase();
+
   if (s.includes("ONLY") || s === "5G") return "ONLY";
+
   if (s.includes("HIB") || s.includes("HÍB")) return "HÍBRIDA";
+
   return "FTTH";
 }
 
@@ -54,6 +52,7 @@ export async function databricksWatermark(): Promise<string> {
   const rows = await getDataClient().query<{ wm: string }>(
     `SELECT CAST(MAX(data) AS STRING) AS wm FROM ${FQ("indicadores_cidades")}`,
   );
+
   return rows[0]?.wm ?? "unknown";
 }
 
@@ -77,10 +76,12 @@ async function fetchCitiesFTTHFWA(): Promise<CityIndicatorRecord[]> {
   // NOTE: cities with no gerência ('-') are kept — the official panel counts them
   // when no filter is applied. The Gerência dropdown filters '-' out separately.
   const raw = await getDataClient().query<Record<string, unknown>>(sql);
+
   return raw.map((r) => {
     const cidade = str(r.cidade);
     const tec = str(r.tecnologia).toUpperCase() as Tecnologia;
     const baseAtiva = num(r.base_ativa);
+
     return {
       competencia: str(r.competencia),
       id_cidade: `${str(r.competencia)}|${cidade}`,
@@ -138,9 +139,11 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
   `;
   // Cities with no gerência are kept (counted when no filter is applied).
   const raw = await getDataClient().query<Record<string, unknown>>(sql);
+
   return raw.map((r) => {
     const cidade = str(r.cidade);
     const canc = num(r.cancelamento_mes);
+
     return {
       competencia: str(r.competencia),
       id_cidade: `${str(r.competencia)}|${cidade}|5G`,
@@ -201,6 +204,7 @@ async function fetchMetas(): Promise<CityMetaRecord[]> {
       AND coalesce(id_cidade, '') <> ''
   `;
   const raw = await getDataClient().query<Record<string, unknown>>(sql);
+
   return raw.map((r) => ({
     competencia: str(r.competencia),
     cidade: str(r.cidade),
@@ -220,10 +224,12 @@ export async function databricksCityDataset(): Promise<CityDataset> {
     fetchCitiesFTTHFWA(),
     fetch5G().catch((e) => {
       console.warn("[cities] 5G indisponível (fonte ausente no Databricks):", (e as Error).message);
+
       return [] as CityIndicatorRecord[];
     }),
     fetchMetas().catch((e) => {
       console.warn("[cities] metas indisponíveis (fonte ausente no Databricks):", (e as Error).message);
+
       return [] as CityMetaRecord[];
     }),
   ]);
@@ -231,5 +237,6 @@ export async function databricksCityDataset(): Promise<CityDataset> {
   const months = Array.from(new Set(records.map((r) => r.competencia)))
     .filter(Boolean)
     .sort();
+
   return { records, metaRecords, months, watermark };
 }
