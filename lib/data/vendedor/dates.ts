@@ -59,8 +59,10 @@ export function resolveCompetencia(ym: string, today = new Date()): ResolvedComp
 /** Last N competências (yyyy-MM), newest first — for the period picker fallback. */
 export function lastCompetencias(n: number, today = new Date()): string[] {
   const out: string[] = [];
+
   for (let i = 0; i < n; i++) {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+
     out.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`);
   }
 

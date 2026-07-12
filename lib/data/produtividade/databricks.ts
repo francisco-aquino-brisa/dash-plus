@@ -181,6 +181,7 @@ async function pduSeries(f: ProdFilters): Promise<PduPoint[]> {
   `;
     const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
     const byMonth = new Map<string, PduPoint>();
+
     for (const r of rows) {
       const ym = String(r.ym);
 
@@ -235,6 +236,7 @@ export async function databricksProdFilterOptions(): Promise<Partial<ProdFilterO
       return [];
     }
   };
+
   const [gerencias, coordenacoes, gerentes, nichos, cidades] = await Promise.all([
     distinct("GERENCIA"),
     distinct("COORDENACAO"),

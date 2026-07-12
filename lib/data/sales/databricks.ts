@@ -173,6 +173,7 @@ async function pduSeries(f: SalesFilters): Promise<PduPoint[]> {
     `;
     const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
     const byMonth = new Map<string, PduPoint>();
+
     for (const r of rows) {
       const ym = String(r.ym);
 
@@ -281,9 +282,12 @@ async function freeData(
   `;
   const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
   const series: Record<string, { mes: string; valor: number }[]> = {};
+
   for (const nome of available) series[nome] = [];
+
   for (const r of rows) {
     const mes = formatMonth(String(r.ym));
+
     for (const nome of available) series[nome].push({ mes, valor: num(r[nome]) });
   }
 
@@ -332,6 +336,7 @@ export async function databricksSalesFilterOptions(): Promise<Partial<SalesFilte
       return [];
     }
   };
+
   const cidadesByUfQuery = async (): Promise<Record<string, string[]>> => {
     try {
       const rows = await getDataClient().query<{ uf: unknown; c: unknown }>(
@@ -340,6 +345,7 @@ export async function databricksSalesFilterOptions(): Promise<Partial<SalesFilte
          ORDER BY 1, 2 LIMIT 3000`,
       );
       const map: Record<string, string[]> = {};
+
       for (const r of rows) (map[String(r.uf)] ??= []).push(String(r.c));
 
       return map;

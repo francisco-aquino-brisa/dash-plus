@@ -67,6 +67,7 @@ export function VendedorDashboard({
       if (next.competencia) p.set("competencia", next.competencia);
 
       const qs = p.toString();
+
       startTransition(() => router.push(qs ? `/vendedor?${qs}` : "/vendedor", { scroll: false }));
     },
     [router],

@@ -65,6 +65,7 @@ export default function LoginPage() {
 
   // Rotate the brand taglines on the left panel.
   const [tagIndex, setTagIndex] = useState(0);
+
   useEffect(() => {
     const id = setInterval(() => setTagIndex((i) => (i + 1) % TAGLINES.length), TAGLINE_INTERVAL_MS);
 
@@ -145,6 +146,7 @@ export default function LoginPage() {
           });
         } else {
           const data = await res.json().catch(() => ({}));
+
           setError({ message: data.error || "Não foi possível entrar.", hint: hintForStatus(res.status) });
         }
 

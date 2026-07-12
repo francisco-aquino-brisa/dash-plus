@@ -129,10 +129,12 @@ async function fetchPdu(
       WHERE matricula = ${mat} AND date_format(data, 'yyyy-MM') = '${ym}'
       GROUP BY servico
     `);
+
     for (const r of rows) {
       const svc = str(r.servico);
       const ndu = num(r.ndu);
       const realizado = num(r.realizado);
+
       out[svc] = { ndu, realizado, pdu: ndu > 0 ? +(realizado / ndu).toFixed(2) : 0 };
     }
   } catch {
@@ -220,6 +222,7 @@ async function fetchDiasZerados(
   const keys = ["Todos", "FTTH", "FWA", "5G", "Banda"] as const;
   const zeradosPorServico: Record<string, number[]> = {};
   const comVendaPorServico: Record<string, number[]> = {};
+
   for (const k of keys) {
     zeradosPorServico[k] = [];
     comVendaPorServico[k] = [];
@@ -238,6 +241,7 @@ async function fetchDiasZerados(
       "5G": num(r.r_5g),
       Banda: num(r.r_banda),
     };
+
     for (const k of keys) {
       if (vals[k] > 0) comVendaPorServico[k].push(dia);
       else zeradosPorServico[k].push(dia);

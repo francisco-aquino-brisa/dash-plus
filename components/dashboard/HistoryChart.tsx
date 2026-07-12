@@ -107,11 +107,13 @@ export function HistoryChart({
     setRefLeft(e.activeLabel);
     setRefRight(e.activeLabel);
   };
+
   const onMove = (e: CategoricalChartState | null) => {
     if (!dragging.current || !e?.activeLabel) return;
 
     setRefRight(e.activeLabel);
   };
+
   const onUp = () => {
     dragging.current = false;
 
@@ -119,6 +121,7 @@ export function HistoryChart({
       const i = chart.findIndex((d) => d.mes === refLeft);
       const j = chart.findIndex((d) => d.mes === refRight);
       const [start, end] = i <= j ? [refLeft, refRight] : [refRight, refLeft];
+
       setSel({ start, end });
     } else {
       // A plain click (no drag) clears any existing selection.

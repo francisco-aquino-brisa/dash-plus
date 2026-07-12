@@ -74,9 +74,12 @@ function techsFor(tipo: TipoCidade): Tecnologia[] {
 function lastNMonths(n: number): string[] {
   const out: string[] = [];
   const d = new Date();
+
   d.setDate(1);
+
   for (let i = n - 1; i >= 0; i--) {
     const m = new Date(d.getFullYear(), d.getMonth() - i, 1);
+
     out.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}-01`);
   }
 
@@ -90,6 +93,7 @@ function generate(months: string[]): CityIndicatorRecord[] {
   for (let ci = 0; ci < CITIES.length; ci++) {
     const c = CITIES[ci];
     const sizeFactor = 0.3 + rng() * 0.9; // city scale
+
     for (const tec of techsFor(c.tipo)) {
       const techFactor = tec === "FTTH" ? 1 : tec === "FWA" ? 0.4 : 0.25;
       const baseHP = Math.round(80000 * sizeFactor * techFactor * (0.8 + rng() * 0.4));
@@ -98,6 +102,7 @@ function generate(months: string[]): CityIndicatorRecord[] {
       for (const competencia of months) {
         const baseAnterior = baseAtiva;
         const cresc = Math.round((rng() - 0.35) * baseAtiva * 0.03);
+
         baseAtiva = Math.max(0, baseAtiva + cresc);
         const fechados = Math.round(baseAtiva * (0.008 + rng() * 0.015));
         const fechadoProblemaTecnico = Math.round(fechados * (0.1 + rng() * 0.15));
@@ -167,6 +172,7 @@ function generate(months: string[]): CityIndicatorRecord[] {
 /** Deterministic jitter in [1-spread, 1+spread] seeded by a string. */
 function jitter(seed: string, spread = 0.12): number {
   let h = 0;
+
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
 
   return 1 - spread + mulberry32(h)() * 2 * spread;
@@ -180,8 +186,10 @@ function jitter(seed: string, spread = 0.12): number {
 function buildMockMetas(records: CityIndicatorRecord[]): CityMetaRecord[] {
   const out: CityMetaRecord[] = [];
   const groups = new Map<string, CityIndicatorRecord[]>();
+
   for (const r of records) {
     const k = `${r.competencia}|${r.cidade}`;
+
     (groups.get(k) ?? groups.set(k, []).get(k)!).push(r);
   }
 
@@ -198,8 +206,10 @@ function buildMockMetas(records: CityIndicatorRecord[]): CityMetaRecord[] {
     if (rows.length === 0) return;
 
     const id_cidade = rows[0].id_cidade_src;
+
     for (const { id, value, percent } of specs) {
       const meta = percent ? value : Math.round(value);
+
       out.push({ competencia, cidade, id_cidade, id_indicador: id, servico, meta });
     }
   };
@@ -235,6 +245,7 @@ function buildMockMetas(records: CityIndicatorRecord[]): CityMetaRecord[] {
 
     if (g5.length) {
       const j = (id: string) => jitter(`${cidade}${competencia}5G${id}`);
+
       emit(competencia, cidade, "5G", g5, [
         { id: "BA02", value: Math.max(20, Math.abs(s(g5, (r) => r.crescimento)) * j("BA02")) },
         { id: "CA03", value: +(0.02 * j("CA03")).toFixed(4), percent: true },

@@ -30,6 +30,7 @@ export async function buildSalesFilterOptions(): Promise<SalesFilterOptions> {
   const { GERENTES, CANAIS, NICHOS, UFS, CIDADES, TIPOS } = SALES_FILTER_LISTS;
   // Mock UF→cidades: assign each city to one UF so the cascade is demonstrable.
   const mockCidadesByUf: Record<string, string[]> = {};
+
   CIDADES.forEach((c, i) => (mockCidadesByUf[UFS[i % UFS.length]] ??= []).push(c));
   const base: SalesFilterOptions = {
     periods: PERIODS,

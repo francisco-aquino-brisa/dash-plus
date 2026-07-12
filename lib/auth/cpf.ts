@@ -40,9 +40,11 @@ export function isValidCpf(value: string): boolean {
 
   const calcCheckDigit = (length: number): number => {
     let sum = 0;
+
     for (let i = 0; i < length; i++) {
       sum += parseInt(cpf[i], 10) * (length + 1 - i);
     }
+
     const rest = (sum * 10) % 11;
 
     return rest === 10 ? 0 : rest;

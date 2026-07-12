@@ -87,6 +87,7 @@ function mockServiceCards(
   rng: () => number,
 ): { servicos: ServicoCard[]; agg: Record<string, number> } {
   const base = 40 + Math.floor(hashStr(String(mat)) * 120);
+
   const gen = (mult: number) => {
     const criado = Math.round(base * mult * (0.8 + rng() * 0.6));
     const efetivado = Math.round(criado * (0.7 + rng() * 0.2));
@@ -94,6 +95,7 @@ function mockServiceCards(
 
     return { criado, efetivado, instalado };
   };
+
   const ftth = gen(1);
   const fwa = gen(0.5);
   const ativ5g = Math.round(base * 0.6 * (0.8 + rng() * 0.6));
@@ -178,10 +180,12 @@ function mockDiasZerados(
   const keys = ["Todos", "FTTH", "FWA", "5G", "Banda"] as const;
   const zeradosPorServico: Record<string, number[]> = {};
   const comVendaPorServico: Record<string, number[]> = {};
+
   for (const k of keys) {
     zeradosPorServico[k] = [];
     comVendaPorServico[k] = [];
   }
+
   for (let d = 1; d <= upto; d++) {
     const dow = new Date(ano, mes - 1, d).getDay();
 
@@ -189,9 +193,11 @@ function mockDiasZerados(
 
     for (const k of keys) {
       const zeroed = rng() < (k === "Todos" ? 0.12 : 0.25);
+
       (zeroed ? zeradosPorServico : comVendaPorServico)[k].push(d);
     }
   }
+
   const resumo = keys.map((k) => ({
     servico: k,
     dias: zeradosPorServico[k].length,

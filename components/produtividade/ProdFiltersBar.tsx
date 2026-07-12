@@ -83,6 +83,7 @@ export function ProdFiltersBar({
                   if (!draft?.from || !draft?.to) return;
 
                   const [lo, hi] = draft.from <= draft.to ? [draft.from, draft.to] : [draft.to, draft.from];
+
                   onChange({ ...filters, from: toIso(lo)!, to: toIso(hi)! });
                   setOpen(false);
                 }}

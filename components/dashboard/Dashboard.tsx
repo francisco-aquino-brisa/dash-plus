@@ -142,6 +142,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
   // (null = the main indicator). Reset the chart selection when a new card opens.
   const [detailStats, setDetailStats] = usePreference<string[]>(DETAIL_STATS_PREF_KEY, DEFAULT_DETAIL_STATS);
   const [activeRelatedId, setActiveRelatedId] = useState<string | null>(null);
+
   useEffect(() => {
     setActiveRelatedId(null);
   }, [selectedIndicator]);
@@ -155,6 +156,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
   const navigate = useCallback(
     (f: Filters) => {
       const qs = toQuery(f);
+
       startTransition(() => router.push(qs ? `/dashboard?${qs}` : "/dashboard", { scroll: false }));
     },
     [router],
@@ -166,6 +168,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
   // Auto-refresh flag: poll the cheap watermark probe; refresh only when the
   // source advances (see ADR 0002).
   const wmRef = useRef(watermark);
+
   wmRef.current = watermark;
   useEffect(() => {
     if (!autoRefresh) return;

@@ -9,6 +9,7 @@ import type { ServicoCard } from "@/lib/data/vendedor/types";
 function businessDays(ano: number, mes: number): number {
   const last = new Date(ano, mes, 0).getDate();
   let n = 0;
+
   for (let d = 1; d <= last; d++) {
     const dow = new Date(ano, mes - 1, d).getDay();
 

@@ -17,6 +17,7 @@ function getDefaultRange(): DateRange {
 
   return { from: new Date(today.getFullYear(), today.getMonth(), 1), to: today };
 }
+
 function formatRange(range: DateRange | undefined): string {
   if (!range?.from) return "Personalizado";
 
@@ -43,6 +44,7 @@ export function SalesFiltersBar({
     : undefined;
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateRange | undefined>(currentRange);
+
   useEffect(() => {
     setDraft(filters.from ? { from: fromIso(filters.from), to: fromIso(filters.to) } : undefined);
   }, [filters.from, filters.to, filters.period]);
@@ -128,6 +130,7 @@ export function SalesFiltersBar({
 
                     // Enforce início ≤ fim before fetching.
                     const [lo, hi] = draft.from <= draft.to ? [draft.from, draft.to] : [draft.to, draft.from];
+
                     onChange({ ...filters, period: "custom", from: toIso(lo), to: toIso(hi) });
                     setOpen(false);
                   }}
@@ -174,6 +177,7 @@ export function SalesFiltersBar({
             // Narrow Cidade to the chosen UF; drop a city that doesn't belong to it.
             const allowed = v ? (options.cidadesByUf[v] ?? []) : null;
             const keepCidade = !filters.cidade || !allowed || allowed.includes(filters.cidade);
+
             onChange({ ...filters, uf: v, cidade: keepCidade ? filters.cidade : "" });
           }}
         />

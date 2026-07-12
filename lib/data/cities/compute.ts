@@ -262,6 +262,7 @@ export interface NegativeCityRow {
 export function negativeCities(rows: CityIndicatorRecord[], filters: Filters): NegativeCityRow[] {
   const r = applyFilters(rows, filters);
   const map = new Map<string, NegativeCityRow>();
+
   for (const x of r) {
     const key = `${x.id_cidade}-${x.tecnologia}`;
     const negCresc = x.crescimento < 0 || x.crescimento < x.meta_crescimento * 0.5;
@@ -271,6 +272,7 @@ export function negativeCities(rows: CityIndicatorRecord[], filters: Filters): N
 
     const status: NegativeCityRow["status"] =
       negCresc && negBase ? "Ambas" : negCresc ? "Negativa Crescimento" : "Negativa Base Ativa";
+
     map.set(key, {
       cidade: x.cidade,
       uf: x.uf,
@@ -301,11 +303,14 @@ export interface QuartileBucket {
 export function quartiles(rows: CityIndicatorRecord[], filters: Filters): QuartileBucket[] {
   const r = applyFilters(rows, filters);
   const byKey = new Map<string, { cidade: string; tec: string; atin: number }>();
+
   for (const x of r) {
     const k = `${x.id_cidade}-${x.tecnologia}`;
     const atin = x.meta_crescimento === 0 ? 0 : (x.crescimento / x.meta_crescimento) * 100;
+
     byKey.set(k, { cidade: x.cidade, tec: x.tecnologia, atin });
   }
+
   const all = Array.from(byKey.values());
   const buckets: QuartileBucket[] = [
     { label: "Q1 — Acima da meta", range: ">= 100%", count: 0, pct: 0, cidades: [] },
@@ -313,6 +318,7 @@ export function quartiles(rows: CityIndicatorRecord[], filters: Filters): Quarti
     { label: "Q3 — Abaixo da meta", range: "0% a 69%", count: 0, pct: 0, cidades: [] },
     { label: "Q4 — Negativa", range: "< 0%", count: 0, pct: 0, cidades: [] },
   ];
+
   for (const c of all) {
     let idx = 2;
 
@@ -324,7 +330,9 @@ export function quartiles(rows: CityIndicatorRecord[], filters: Filters): Quarti
     buckets[idx].count++;
     buckets[idx].cidades.push({ cidade: c.cidade, atingimento: c.atin, tecnologia: c.tec });
   }
+
   const total = all.length || 1;
+
   buckets.forEach((b) => (b.pct = (b.count / total) * 100));
   buckets.forEach((b) => b.cidades.sort((a, b) => b.atingimento - a.atingimento));
 
@@ -391,9 +399,11 @@ export function buildDashboardView(
   const kpis = monthlySets[curIdx] ?? computeKpis(rows, months, filters);
 
   const modal = {} as DashboardView["modal"];
+
   for (const key of KPI_KEYS) {
     const series = months.map((m, i) => ({ mes: m, valor: monthlySets[i][key].resultado }));
     const media = series.reduce((a, s) => a + s.valor, 0) / (series.length || 1);
+
     modal[key] = { series, media };
   }
 

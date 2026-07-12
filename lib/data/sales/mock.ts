@@ -87,6 +87,7 @@ function filterFactor(f: SalesFilters): number {
   if (f.period === "custom") {
     const p = resolvePeriod(f);
     const days = Math.max(1, Math.round((+new Date(p.to) - +new Date(p.from)) / 864e5) + 1);
+
     timeMul = days / 30;
   }
 
@@ -229,11 +230,13 @@ const FREE = [
 
 function freeSeries(): Record<string, { mes: string; valor: number }[]> {
   const out: Record<string, { mes: string; valor: number }[]> = {};
+
   for (const nome of FREE) {
     if (BLOCKED_INDICATORS.has(nome)) continue;
 
     const rng = mulberry32(nome.length * 7 + 3);
     const isPct = /%|Churn|x /.test(nome);
+
     out[nome] = MESES.map((mes, i) => {
       const base = isPct
         ? 40 + Math.sin(i / 2 + nome.length) * 8

@@ -20,6 +20,7 @@ import type { DataClient } from "./types";
 export class DatabricksDataClient implements DataClient {
   async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
     const client = new DBSQLClient();
+
     await client.connect(buildConnectionOptions());
 
     const session = await client.openSession();

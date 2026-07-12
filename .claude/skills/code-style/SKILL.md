@@ -32,6 +32,13 @@ Breathing room around control flow:
 - **Blank line before and after every `if`** (skipped when the `if` is the first
   statement in its block).
 - **Blank line before `try`** (unless the `try` is the only statement in the function).
+- **Blank line after a `const`/`let`/`var` block** before the next non-declaration
+  statement. Consecutive declarations stay grouped (no blank between them) — the
+  break separates the "setup" vars from the logic that uses them.
+- **Blank line before and after a multiline block** (`multiline-block-like`):
+  `if`/`for`/`while`/`switch`/`try` bodies **and** `const fn = () => { … }`
+  arrow/function blocks that span multiple lines. So multiline `const` function
+  assignments (e.g. sequential handlers) each get breathing room.
 
 ```ts
 async function example(x: number) {
@@ -40,8 +47,22 @@ async function example(x: number) {
 
   if (!r) return null;
 
+  const [start, end] = pick(rows);
+
+  save({ start, end });
+
   return shape(r);
 }
+
+const onDown = (e: Evt) => {
+  dragging.current = true;
+};
+
+const onMove = (e: Evt) => {
+  if (!dragging.current) return;
+
+  update(e);
+};
 ```
 
 Don't add these by hand — `next lint --fix` applies them.

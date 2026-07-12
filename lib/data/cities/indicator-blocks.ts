@@ -77,10 +77,12 @@ function fmtUnit(unit: IndicatorUnit, v: number): string {
 function sumFields(rows: CityIndicatorRecord[], fields: NumFieldish): number {
   const list = Array.isArray(fields) ? fields : [fields];
   let total = 0;
+
   for (const r of rows) for (const f of list) total += Number(r[f]) || 0;
 
   return total;
 }
+
 type NumFieldish = keyof CityIndicatorRecord | (keyof CityIndicatorRecord)[];
 
 /** Technologies in scope for a block, honoring the Tecnologia filter (BL only). */
@@ -171,8 +173,10 @@ function aggregateMeta(
     let weighted = 0;
     let weight = 0;
     const denById = new Map<string, number>();
+
     for (const r of rows)
       denById.set(r.id_cidade_src, (denById.get(r.id_cidade_src) ?? 0) + sumFields([r], denFields));
+
     for (const [id, meta] of metaById) {
       const den = denById.get(id);
 
@@ -198,6 +202,7 @@ function aggregateMeta(
   const idsInScope = new Set(rows.map((r) => r.id_cidade_src));
   let total = 0;
   let matched = 0;
+
   for (const [id, meta] of metaById) {
     if (!idsInScope.has(id)) continue;
 
@@ -288,6 +293,7 @@ export function computeIndicatorBlock(
 
   // Pre-scope rows per month once; reused across every indicator in the block.
   const rowsByMonth = new Map<string, CityIndicatorRecord[]>();
+
   for (const m of months) rowsByMonth.set(m, scopedRows(records, filters, m, block));
   const curRows = rowsByMonth.get(comp) ?? [];
   const prevRows = prevMes ? (rowsByMonth.get(prevMes) ?? []) : [];

@@ -73,6 +73,7 @@ export function ProdDashboard({
   const navigate = useCallback(
     (f: ProdFilters) => {
       const qs = toQuery(f);
+
       startTransition(() => router.push(qs ? `/produtividade?${qs}` : "/produtividade", { scroll: false }));
     },
     [router],

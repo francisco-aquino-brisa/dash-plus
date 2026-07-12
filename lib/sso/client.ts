@@ -114,6 +114,7 @@ export async function login(input: SsoLoginInput): Promise<SsoLoginResult> {
       (typeof data.message === "string" && data.message) ||
       (typeof data.error === "string" && data.error) ||
       "Credenciais inválidas";
+
     throw new SsoError(message, res.status);
   }
 

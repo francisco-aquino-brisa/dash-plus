@@ -102,6 +102,7 @@ export function AppShell({ user, children }: { user: { name: string }; children:
   const toggle = () =>
     setCollapsed((c) => {
       const next = !c;
+
       localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
 
       return next;

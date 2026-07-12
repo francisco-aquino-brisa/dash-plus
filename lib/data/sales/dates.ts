@@ -11,8 +11,10 @@ export interface ResolvedPeriod {
 function iso(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
+
 function addDays(d: Date, n: number): Date {
   const x = new Date(d);
+
   x.setDate(x.getDate() + n);
 
   return x;
@@ -29,11 +31,13 @@ export function resolvePeriod(f: SalesFilters): ResolvedPeriod {
   switch (f.period) {
     case "mes_anterior": {
       const firstThis = new Date(today.getFullYear(), today.getMonth(), 1);
+
       to = addDays(firstThis, -1);
       from = new Date(to.getFullYear(), to.getMonth(), 1);
       label = "Mês anterior";
       break;
     }
+
     case "7d":
       from = addDays(today, -6);
       label = "Últimos 7 dias";

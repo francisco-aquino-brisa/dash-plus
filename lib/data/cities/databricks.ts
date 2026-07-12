@@ -32,11 +32,13 @@ const WINDOW = `add_months(date_trunc('MM', current_date()), -${MONTHS_WINDOW - 
 function str(v: unknown): string {
   return v == null ? "" : String(v);
 }
+
 function ufFrom(cidade: string): string {
   const parts = cidade.split("/");
 
   return parts.length > 1 ? parts[parts.length - 1].trim() : "";
 }
+
 function normTipo(v: unknown): TipoCidade {
   const s = str(v).toUpperCase();
 

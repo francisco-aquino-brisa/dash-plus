@@ -11,14 +11,17 @@ export interface ResolvedProdPeriod {
 function iso(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
+
 function addDays(d: Date, n: number): Date {
   const x = new Date(d);
+
   x.setDate(x.getDate() + n);
 
   return x;
 }
 
 const MES_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
 function fmtBr(s: string): string {
   const [y, m, d] = s.split("-");
 

@@ -14,6 +14,7 @@ function formatValue(k: KpiBlock): string {
 
   return formatNumber(k.value);
 }
+
 function formatMeta(k: KpiBlock): string {
   if (k.unit === "currency") return `R$ ${k.meta.toFixed(1).replace(".", ",")}`;
 

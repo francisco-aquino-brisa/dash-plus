@@ -31,6 +31,7 @@ export function IndicatorPicker({
   heading?: string;
 }) {
   const selectedSet = new Set(selected);
+
   const toggle = (id: string) => {
     const next = new Set(selectedSet);
 

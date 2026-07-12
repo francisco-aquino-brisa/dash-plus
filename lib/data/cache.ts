@@ -38,6 +38,7 @@ export async function cachedByWatermark<T>(
   if (fresh) return hit!.value as T;
 
   const value = await producer();
+
   store.set(key, { watermark, value, storedAt: Date.now() });
 
   return value;

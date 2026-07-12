@@ -74,6 +74,7 @@ export function SalesDashboard({
   const navigate = useCallback(
     (f: SalesFilters) => {
       const qs = toQuery(f);
+
       startTransition(() => router.push(qs ? `/vendas?${qs}` : "/vendas", { scroll: false }));
     },
     [router],
