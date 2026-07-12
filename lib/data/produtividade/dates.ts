@@ -1,3 +1,4 @@
+import { safeIsoDate } from "../_shared";
 import type { ProdFilters } from "./types";
 
 export interface ResolvedProdPeriod {
@@ -37,8 +38,10 @@ export function defaultProdRange(today = new Date()): { from: string; to: string
 export function resolveProdPeriod(f: ProdFilters): ResolvedProdPeriod {
   const today = new Date();
   const def = defaultProdRange(today);
-  const from = f.from || def.from;
-  const to = f.to || def.to;
+  // Launder request-supplied dates: they are inlined into SQL date literals, so
+  // anything that is not a strict yyyy-MM-dd calendar date falls back to default.
+  const from = safeIsoDate(f.from) ?? def.from;
+  const to = safeIsoDate(f.to) ?? def.to;
   const lengthMs = Math.max(0, +new Date(to) - +new Date(from));
   const prevTo = addDays(new Date(from), -1);
   const prevFrom = new Date(+prevTo - lengthMs);

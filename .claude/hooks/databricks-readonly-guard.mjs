@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 /**
- * PreToolUse guard for the Databricks MCP `execute_sql` tool.
+ * PreToolUse guard for every Databricks access path in this repo.
+ *
+ * The `databricks` MCP was removed (CLAUDE.md), so all warehouse access now runs
+ * through `Bash(node scripts/query-databricks.mjs "<SQL>")`. This guard inspects
+ * BOTH surfaces: the legacy MCP `execute_sql` tool (kept for safety) and any Bash
+ * command that invokes `query-databricks.mjs` — it extracts the SQL argument and
+ * applies the same read-only check.
  *
  * HARD READ-ONLY ENFORCEMENT: deterministically blocks any statement that is
  * not a pure read. The harness runs this before the tool call, so it does not
@@ -13,10 +19,11 @@
  * including stacked statements and CTEs that wrap a write.
  *
  * This is one layer of defense in depth — the credential should ALSO have only
- * read grants (see CLAUDE.md / the databricks-mcp skill).
+ * read grants, and `query-databricks.mjs` self-enforces read-only too.
  */
 
-const TOOL = "mcp__databricks__execute_sql";
+const MCP_TOOL = "mcp__databricks__execute_sql";
+const SCRIPT = "query-databricks.mjs";
 
 function deny(reason) {
   process.stdout.write(
@@ -113,21 +120,53 @@ function validate(sqlRaw) {
   return null; // ok
 }
 
+/**
+ * Pull the SQL out of a `node scripts/query-databricks.mjs "<SQL>" [--flags]`
+ * command. Returns { skip:true } when the command is not a query-databricks call
+ * (or uses `--file`, whose SQL lives in a file the script itself vets read-only).
+ */
+function extractBashSql(command) {
+  const cmd = String(command ?? "");
+
+  if (!cmd.includes(SCRIPT)) return { skip: true }; // not our script → not our concern
+  if (/--file\b/.test(cmd)) return { skip: true }; // file path; script self-enforces read-only
+
+  const after = cmd.slice(cmd.indexOf(SCRIPT) + SCRIPT.length);
+  // First single- or double-quoted argument after the script name = the SQL.
+  const m = after.match(/"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'/);
+
+  if (!m) return { skip: true }; // no inline SQL found; let the script enforce
+
+  // Undo shell escaping (\( \) \* \` \" …) so the SQL parses as written.
+  return { statement: (m[1] ?? m[2] ?? "").replace(/\\(.)/g, "$1") };
+}
+
 (async () => {
   const raw = await readStdin();
   let payload;
   try {
     payload = JSON.parse(raw);
   } catch {
-    // Can't parse the hook payload for execute_sql → fail closed.
+    // Can't parse the hook payload → fail closed.
     return deny("could not parse tool input; blocked as a precaution");
   }
 
   const toolName = payload.tool_name ?? payload.toolName;
-  if (toolName && toolName !== TOOL) return allow(); // not our tool
-
   const input = payload.tool_input ?? payload.toolInput ?? {};
-  const statement = input.statement;
+
+  let statement;
+
+  if (toolName === MCP_TOOL) {
+    statement = input.statement;
+  } else if (toolName === "Bash") {
+    const res = extractBashSql(input.command);
+
+    if (res.skip) return allow(); // not a query-databricks SQL invocation
+
+    statement = res.statement;
+  } else {
+    return allow(); // not a Databricks surface
+  }
 
   const problem = validate(statement);
   if (problem) return deny(`${problem}  — only read queries are permitted against Databricks.`);

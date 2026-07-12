@@ -24,7 +24,7 @@ interface Props {
   data: {
     mes: string;
     valor: number;
-    meta?: number | null;
+    target?: number | null;
     extras?: { label: string; display: string }[];
   }[];
   color?: string;
@@ -51,7 +51,7 @@ type ChartDatum = {
   mes: string;
   valor: number;
   delta: number | null;
-  meta?: number | null;
+  target?: number | null;
   extras?: { label: string; display: string }[];
 };
 
@@ -72,10 +72,10 @@ function ChartTooltip({
         <span className="text-muted-foreground">Real: </span>
         <span className="font-semibold text-foreground">{fmt(d.valor)}</span>
       </div>
-      {d.meta != null && (
+      {d.target != null && (
         <div>
           <span className="text-muted-foreground">Meta: </span>
-          <span className="font-semibold text-foreground">{fmt(d.meta)}</span>
+          <span className="font-semibold text-foreground">{fmt(d.target)}</span>
         </div>
       )}
       {d.extras?.map((e) => (
@@ -109,7 +109,7 @@ export function HistoryChart({
     ...d,
     delta: i > 0 ? relPct(d.valor, data[i - 1].valor) : null,
   }));
-  const hasMeta = chart.some((d) => d.meta != null);
+  const hasTarget = chart.some((d) => d.target != null);
 
   // Google-Finance-style period selection: drag over the plot to pick a range;
   // we then show the dispersion between the first and last month of the range.
@@ -236,7 +236,7 @@ export function HistoryChart({
               width={64}
             />
             <Tooltip content={<ChartTooltip fmt={valueFormatter} />} />
-            {hasMeta && <Legend iconType="plainline" wrapperStyle={{ fontSize: 11 }} />}
+            {hasTarget && <Legend iconType="plainline" wrapperStyle={{ fontSize: 11 }} />}
             <Area
               type="monotone"
               name="Real"
@@ -245,7 +245,7 @@ export function HistoryChart({
               strokeWidth={2}
               fill="url(#histGrad)"
             >
-              {!hasMeta && (
+              {!hasTarget && (
                 <LabelList
                   dataKey="valor"
                   position="top"
@@ -255,11 +255,11 @@ export function HistoryChart({
                 />
               )}
             </Area>
-            {hasMeta && (
+            {hasTarget && (
               <Line
                 type="monotone"
                 name="Meta"
-                dataKey="meta"
+                dataKey="target"
                 stroke="var(--muted-foreground)"
                 strokeWidth={2}
                 strokeDasharray="4 4"

@@ -26,6 +26,23 @@ export function blocked(label: string): KpiBlock {
   return { label, value: 0, meta: 0, delta: 0, available: false };
 }
 
+/**
+ * Validate a strict `yyyy-MM-dd` calendar date and return it unchanged, or null
+ * for anything else. Request-supplied dates (`de`/`ate`/`from`/`to`) are inlined
+ * into SQL date literals (`DATE'...'`), so they MUST be laundered through here
+ * first — this is the guard against SQL injection via those params. Also rejects
+ * non-calendar dates the regex alone would accept (e.g. `2020-02-31`).
+ */
+export function safeIsoDate(value: string | undefined | null): string | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+
+  const d = new Date(`${value}T00:00:00Z`);
+
+  if (Number.isNaN(d.getTime())) return null;
+
+  return d.toISOString().slice(0, 10) === value ? value : null;
+}
+
 /** Funnel column triplet [criado, efetivado, instalado] per service scope. */
 export const FUNNEL_COLS: Record<string, [string, string, string]> = {
   INTERNET: ["criado_ftth", "efetivado_ftth", "instalado_ftth"],

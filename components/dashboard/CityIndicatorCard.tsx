@@ -101,8 +101,8 @@ export function CityIndicatorCard({ kpi, onClick }: { kpi: IndicatorCardVM; onCl
   }
 
   const inverse = kpi.polarity === "down";
-  const hasMeta = kpi.atingimento !== null;
-  const atin = kpi.atingimento ?? 0;
+  const hasMeta = kpi.attainment !== null;
+  const atin = kpi.attainment ?? 0;
   const good = inverse ? atin <= 100 : atin >= 100;
   const warn = inverse ? atin > 100 && atin <= 130 : atin >= 70 && atin < 100;
   const atinColor = good ? "text-success" : warn ? "text-warning" : "text-destructive";

@@ -1,3 +1,4 @@
+import { safeIsoDate } from "../_shared";
 import type { SalesFilters } from "./types";
 
 export interface ResolvedPeriod {
@@ -54,11 +55,19 @@ export function resolvePeriod(f: SalesFilters): ResolvedPeriod {
       from = new Date(today.getFullYear(), 0, 1);
       label = "Ano";
       break;
-    case "custom":
-      from = f.from ? new Date(f.from) : new Date(today.getFullYear(), today.getMonth(), 1);
-      to = f.to ? new Date(f.to) : today;
+
+    case "custom": {
+      // Launder request-supplied dates before they reach the SQL date literals;
+      // anything not a strict yyyy-MM-dd calendar date falls back to default.
+      const cf = safeIsoDate(f.from);
+      const ct = safeIsoDate(f.to);
+
+      from = cf ? new Date(cf) : new Date(today.getFullYear(), today.getMonth(), 1);
+      to = ct ? new Date(ct) : today;
       label = "Período personalizado";
       break;
+    }
+
     case "mes_atual":
     default:
       from = new Date(today.getFullYear(), today.getMonth(), 1);

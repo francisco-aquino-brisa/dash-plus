@@ -1,12 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "mcp__databricks__list_catalogs",
-      "mcp__databricks__list_schemas",
-      "mcp__databricks__list_tables",
-      "mcp__databricks__get_table",
-      "mcp__databricks__list_warehouses",
-      "mcp__databricks__execute_sql",
       "Bash(node scripts/query-databricks.mjs \"SELECT status_venda, COUNT\\(*\\) n, COUNT\\(DISTINCT orcamento_id\\) orcs FROM gdb_brisanet_comunidade_dev.diego_barros_inteligencia_comercial_e_mercado.df_waves_vendas WHERE data >= add_months\\(date_trunc\\('MM', current_date\\(\\)\\), -1\\) GROUP BY 1 ORDER BY 2 DESC LIMIT 30\" --max 30)",
       "Bash(node scripts/query-databricks.mjs \"SELECT 'waves' t, CAST\\(MIN\\(data\\) AS STRING\\) min_d, CAST\\(MAX\\(data\\) AS STRING\\) max_d, COUNT\\(*\\) n FROM gdb_brisanet_comunidade_dev.diego_barros_inteligencia_comercial_e_mercado.df_waves_vendas UNION ALL SELECT 'desempenho_hc', CAST\\(MIN\\(data\\) AS STRING\\), CAST\\(MAX\\(data\\) AS STRING\\), COUNT\\(*\\) FROM gdb_brisanet_comunidade_dev.diego_barros_inteligencia_comercial_e_mercado.desempenho_hc UNION ALL SELECT 'vw_hc_zerado', CAST\\(MIN\\(data\\) AS STRING\\), CAST\\(MAX\\(data\\) AS STRING\\), COUNT\\(*\\) FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.vw_hc_zerado_vendedor\" --max 5)",
       "Bash(node scripts/query-databricks.mjs \"SELECT CAST\\(MIN\\(data\\) AS STRING\\) min_d, CAST\\(MAX\\(data\\) AS STRING\\) max_d FROM gdb_brisanet_comunidade_dev.diego_barros_inteligencia_comercial_e_mercado.df_waves_vendas\" --max 2)",
@@ -46,7 +40,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "mcp__databricks__execute_sql",
+        "matcher": "mcp__databricks__execute_sql|Bash",
         "hooks": [
           {
             "type": "command",

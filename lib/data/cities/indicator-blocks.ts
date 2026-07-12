@@ -28,12 +28,12 @@ export interface FooterStatVM {
   tone: "good" | "warn" | "bad" | "default";
 }
 
-/** One point of a chart series. `meta`/`extras` power the detail-chart overlays. */
+/** One point of a chart series. `target`/`extras` power the detail-chart overlays. */
 export interface SeriesPoint {
   mes: string;
   valor: number;
-  /** Optional meta line value (same unit as `valor`). */
-  meta?: number | null;
+  /** Optional target line value (same unit as `valor`). */
+  target?: number | null;
   /** Pre-formatted extra rows for the tooltip (e.g. ratio components). */
   extras?: { label: string; display: string }[];
 }
@@ -49,7 +49,7 @@ export interface RelatedIndicatorVM {
   value: number;
   /** % change vs previous month (relative). */
   delta: number;
-  media: number;
+  average: number;
   series: SeriesPoint[];
 }
 
@@ -63,10 +63,10 @@ export interface IndicatorCardVM {
   polarity: Polarity;
   available: boolean;
   value: number;
-  meta: number | null;
-  /** Unit of the meta (may differ from the value's unit, e.g. Base Fechada). */
-  metaUnit: IndicatorUnit;
-  atingimento: number | null;
+  target: number | null;
+  /** Unit of the target (may differ from the value's unit, e.g. Base Fechada). */
+  targetUnit: IndicatorUnit;
+  attainment: number | null;
   /** % change vs previous month (relative). */
   delta: number;
   description: string;
@@ -74,7 +74,7 @@ export interface IndicatorCardVM {
   footer: FooterStatVM[];
   /** 12-month series of the realizado, for the detail modal. */
   series: SeriesPoint[];
-  media: number;
+  average: number;
   /** Related metrics for the detail modal (empty when none / unavailable). */
   related: RelatedIndicatorVM[];
 }
@@ -119,7 +119,7 @@ function techScope(block: IndicatorBlock, tecnologia: string): CityIndicatorReco
 }
 
 /** metas_cidades.servico to join against, given the block + active Tec filter. */
-function metaServicoFor(block: IndicatorBlock, tecnologia: string): string {
+function targetServiceFor(block: IndicatorBlock, tecnologia: string): string {
   if (block === "5g") return "5G";
 
   if (tecnologia === "FTTH") return "FTTH";
@@ -154,11 +154,11 @@ interface ComputeCtx {
 }
 
 /** Σ metas_cidades.meta for one indicator over the cities in scope + servico. */
-function sumMeta(ctx: ComputeCtx, metaId: string): number {
+function sumMeta(ctx: ComputeCtx, targetId: string): number {
   let total = 0;
 
   for (const m of ctx.metaRows)
-    if (m.id_indicador === metaId && m.servico === ctx.servico && ctx.idsInScope.has(m.id_cidade))
+    if (m.id_indicador === targetId && m.servico === ctx.servico && ctx.idsInScope.has(m.id_cidade))
       total += m.meta;
 
   return total;
@@ -175,7 +175,7 @@ function computeValue(c: IndicatorCompute | undefined, ctx: ComputeCtx): number 
     return den === 0 ? 0 : (sumFields(ctx.rows, c.num) / den) * 100;
   }
 
-  if (c.kind === "metaSum") return sumMeta(ctx, c.metaId);
+  if (c.kind === "metaSum") return sumMeta(ctx, c.targetId);
 
   if (c.kind === "cancelRate") {
     const num = sumMeta(ctx, c.numMetaId);
@@ -192,17 +192,17 @@ function computeValue(c: IndicatorCompute | undefined, ctx: ComputeCtx): number 
 }
 
 /** Aggregate the meta for the scope. Percent metas are stored as fractions. */
-function aggregateMeta(
+function aggregateTarget(
   def: IndicatorDef,
   rows: CityIndicatorRecord[],
   metaRows: CityMetaRecord[],
   competencia: string,
   servico: string,
 ): number | null {
-  if (!def.metaId) return null;
+  if (!def.targetId) return null;
 
   const metas = metaRows.filter(
-    (m) => m.id_indicador === def.metaId && m.servico === servico && m.competencia === competencia,
+    (m) => m.id_indicador === def.targetId && m.servico === servico && m.competencia === competencia,
   );
 
   if (metas.length === 0) return null;
@@ -210,12 +210,12 @@ function aggregateMeta(
   // Join to the realizado by raw source id_cidade (month-prefixed), per the
   // data team: metas_cidades links on (id_cidade, id_indicador, servico).
   const metaById = new Map(metas.map((m) => [m.id_cidade, m.meta]));
-  // The meta may describe a derived value (metaCompare) instead of the main one.
-  const metaUnit = def.metaCompare ? def.metaCompare.unit : def.unit;
-  const ratioForWeight = def.metaCompare?.compute ?? def.compute;
-  const factor = metaUnit === "percent" ? 100 : 1; // fractions → percent points
+  // The meta may describe a derived value (targetCompare) instead of the main one.
+  const targetUnit = def.targetCompare ? def.targetCompare.unit : def.unit;
+  const ratioForWeight = def.targetCompare?.compute ?? def.compute;
+  const factor = targetUnit === "percent" ? 100 : 1; // fractions → percent points
 
-  if (metaUnit === "percent" && ratioForWeight?.kind === "ratio") {
+  if (targetUnit === "percent" && ratioForWeight?.kind === "ratio") {
     // Weight each city's target % by that city's realizado denominator.
     const denFields = ratioForWeight.den;
     let weighted = 0;
@@ -279,9 +279,9 @@ function seriesMean(series: { valor: number }[]): number {
 }
 
 interface FooterCtx {
-  meta: number | null;
-  atingimento: number | null;
-  projecao: number;
+  target: number | null;
+  attainment: number | null;
+  projected: number;
   compute: ComputeCtx;
 }
 
@@ -291,25 +291,25 @@ function resolveFooter(def: IndicatorDef, ctx: FooterCtx): FooterStatVM[] {
   const inverse = def.polarity === "down";
 
   return slots.map((slot): FooterStatVM => {
-    if (slot === "meta") {
-      const metaUnit = def.metaCompare ? def.metaCompare.unit : def.unit;
-      const dec = def.decimals ?? defaultDecimals(metaUnit);
+    if (slot === "target") {
+      const targetUnit = def.targetCompare ? def.targetCompare.unit : def.unit;
+      const dec = def.decimals ?? defaultDecimals(targetUnit);
 
       return {
         label: "Meta",
-        display: ctx.meta === null ? "—" : fmtUnit(metaUnit, ctx.meta, dec),
+        display: ctx.target === null ? "—" : fmtUnit(targetUnit, ctx.target, dec),
         tone: "default",
       };
     }
 
-    if (slot === "projecao") {
+    if (slot === "projection") {
       const dec = def.decimals ?? defaultDecimals(def.unit);
 
-      return { label: "Projeção", display: fmtUnit(def.unit, ctx.projecao, dec), tone: "default" };
+      return { label: "Projeção", display: fmtUnit(def.unit, ctx.projected, dec), tone: "default" };
     }
 
-    if (slot === "atingimento") {
-      const a = ctx.atingimento;
+    if (slot === "attainment") {
+      const a = ctx.attainment;
 
       if (a === null) return { label: "Ating.", display: "—", tone: "default" };
 
@@ -337,7 +337,7 @@ export function computeIndicatorBlock(
   filters: Filters,
   block: IndicatorBlock,
 ): IndicatorCardVM[] {
-  const servico = metaServicoFor(block, filters.tecnologia);
+  const servico = targetServiceFor(block, filters.tecnologia);
   const comp = filters.competencia;
   const prevMes = previousMonth(months, comp);
 
@@ -388,38 +388,38 @@ export function computeIndicatorBlock(
         polarity: def.polarity,
         available: false,
         value: 0,
-        meta: null,
-        metaUnit: def.metaCompare?.unit ?? def.unit,
-        atingimento: null,
+        target: null,
+        targetUnit: def.targetCompare?.unit ?? def.unit,
+        attainment: null,
         delta: 0,
         description: def.description,
         footer: [],
         series: [],
-        media: 0,
+        average: 0,
         related: [],
       };
     }
 
     const value = computeValue(def.compute, curCtx);
     const prevValue = computeValue(def.compute, prevCtx);
-    // metaCompute yields the meta directly (already in final unit); otherwise
+    // targetCompute yields the target directly (already in final unit); otherwise
     // aggregate the per-city targets from metas_cidades.
-    const meta = def.metaCompute
-      ? computeValue(def.metaCompute, curCtx)
-      : aggregateMeta(def, curCtx.rows, metaRecords, comp, servico);
-    // When the meta describes a derived value (metaCompare), compare against it.
-    const refValue = def.metaCompare ? computeValue(def.metaCompare.compute, curCtx) : value;
-    const atingimento = meta === null || meta === 0 ? null : (refValue / meta) * 100;
+    const target = def.targetCompute
+      ? computeValue(def.targetCompute, curCtx)
+      : aggregateTarget(def, curCtx.rows, metaRecords, comp, servico);
+    // When the target describes a derived value (targetCompare), compare against it.
+    const refValue = def.targetCompare ? computeValue(def.targetCompare.compute, curCtx) : value;
+    const attainment = target === null || target === 0 ? null : (refValue / target) * 100;
     // Pro-rata projection only makes sense for volumes; ratios stay as-is.
-    const projecao = def.unit === "percent" ? value : projection(value, comp);
-    const footer = resolveFooter(def, { meta, atingimento, projecao, compute: curCtx });
+    const projected = def.unit === "percent" ? value : projection(value, comp);
+    const footer = resolveFooter(def, { target, attainment, projected, compute: curCtx });
 
     // Enrich the main series with the meta line + tooltip extras when declared.
     const series: SeriesPoint[] = months.map((m) => {
       const ctx = ctxFor(m);
       const point: SeriesPoint = { mes: m, valor: computeValue(def.compute, ctx) };
 
-      if (def.chartMeta) point.meta = aggregateMeta(def, ctx.rows, metaRecords, m, servico);
+      if (def.chartMeta) point.target = aggregateTarget(def, ctx.rows, metaRecords, m, servico);
 
       if (def.chartExtras)
         point.extras = def.chartExtras.map((e) => {
@@ -433,7 +433,7 @@ export function computeIndicatorBlock(
 
       return point;
     });
-    const media = seriesMean(series);
+    const average = seriesMean(series);
 
     // Related metrics (detail modal): same scope, each charted on click.
     const related: RelatedIndicatorVM[] = (def.related ?? []).map((rel) => {
@@ -449,7 +449,7 @@ export function computeIndicatorBlock(
         polarity: rel.polarity,
         value: relValue,
         delta: relDelta(relValue, relPrev),
-        media: seriesMean(relSeries),
+        average: seriesMean(relSeries),
         series: relSeries,
       };
     });
@@ -463,14 +463,14 @@ export function computeIndicatorBlock(
       polarity: def.polarity,
       available: true,
       value,
-      meta,
-      metaUnit: def.metaCompare?.unit ?? def.unit,
-      atingimento,
+      target,
+      targetUnit: def.targetCompare?.unit ?? def.unit,
+      attainment,
       delta: relDelta(value, prevValue),
       description: def.description,
       footer,
       series,
-      media,
+      average,
       related,
     };
   });

@@ -6,8 +6,8 @@
 // `available: false` and render as "Sem acesso aos dados" (mirrors the mockup).
 //
 // Metas come exclusively from `metas_cidades` (long-format), joined by
-// (metaId, servico, cidade, competência). `metaId` is usually the same id; when
-// undefined the card shows the realizado with no target/atingimento.
+// (targetId, servico, cidade, competência). `targetId` is usually the same id; when
+// undefined the card shows the realizado with no target/attainment.
 //
 // Business rule: Banda Larga = FTTH + FWA (servico "Banda Larga"); 5G is
 // independent. See CONTEXT.md and CLAUDE.md "Indicator definitions".
@@ -32,25 +32,25 @@ export type IndicatorCompute =
   | { kind: "ratio"; num: NumField | NumField[]; den: NumField | NumField[] }
   /** (base_ativa + fechados) − same of previous month. Needs prev-month rows. */
   | { kind: "growthBase" }
-  /** Σ metas_cidades.meta for `metaId` over cities in scope (servico-aware). */
-  | { kind: "metaSum"; metaId: string }
+  /** Σ metas_cidades.meta for `targetId` over cities in scope (servico-aware). */
+  | { kind: "metaSum"; targetId: string }
   /** Churn-target rate: Σmeta[numMetaId] / (Σ prevBaseFields[prev month] +
    *  Σmeta[denMetaId]) × 100. Used for the Churn Rate meta (CA12 / base geral). */
   | { kind: "cancelRate"; numMetaId: string; denMetaId: string; prevBaseFields: NumField[] };
 
 /**
- * A slot in the card footer (the small columns under the value). "meta",
- * "projecao" and "atingimento" are the built-in stats; a custom slot renders a
+ * A slot in the card footer (the small columns under the value). "target",
+ * "projection" and "attainment" are the built-in stats; a custom slot renders a
  * derived value with its own label (e.g. "% Fechados"). Order is preserved.
  */
 export type FooterSlot =
-  | "meta"
-  | "projecao"
-  | "atingimento"
+  | "target"
+  | "projection"
+  | "attainment"
   | { label: string; compute: IndicatorCompute; unit?: IndicatorUnit; decimals?: number };
 
 /** Default footer when a def doesn't override it. */
-export const DEFAULT_FOOTER: FooterSlot[] = ["meta", "projecao", "atingimento"];
+export const DEFAULT_FOOTER: FooterSlot[] = ["target", "projection", "attainment"];
 
 export interface IndicatorDef {
   id: string;
@@ -67,18 +67,18 @@ export interface IndicatorDef {
    * Meta computed directly (already in final unit), bypassing metas_cidades
    * per-city aggregation — e.g. Churn Rate's target is a ratio of two metas.
    */
-  metaCompute?: IndicatorCompute;
+  targetCompute?: IndicatorCompute;
   /** id_indicador to look up in metas_cidades; absent → no meta. */
-  metaId?: string;
+  targetId?: string;
   /** Which metas_cidades.servico row applies at the aggregate (block) level. */
-  metaServico?: "Banda Larga" | "5G";
+  targetService?: "Banda Larga" | "5G";
   /**
    * When the stored meta refers to a DERIVED value (not the card's main value),
    * with its own unit — e.g. Base Fechada shows a quantity but its meta is the
-   * fechamento RATE (%). The atingimento then compares this computed value to the
+   * fechamento RATE (%). The attainment then compares this computed value to the
    * meta, and the Meta column is formatted with `unit`.
    */
-  metaCompare?: { compute: IndicatorCompute; unit: IndicatorUnit };
+  targetCompare?: { compute: IndicatorCompute; unit: IndicatorUnit };
   /** Footer columns for this card. Defaults to Meta · Projeção · Ating. */
   footer?: FooterSlot[];
   /** Plot the meta as a second line in the detail chart (needs a meta). */
@@ -94,7 +94,7 @@ export interface IndicatorDef {
 /**
  * A related indicator shown inside the detail modal, below the main stats. Each
  * is a secondary metric derived from the same scoped rows; clicking its card
- * swaps the chart to this metric's 12-month series. No meta/atingimento — these
+ * swaps the chart to this metric's 12-month series. No meta/attainment — these
  * are context, not targets.
  */
 export interface RelatedDef {
@@ -152,20 +152,20 @@ const BANDA_LARGA: IndicatorDef[] = [
     polarity: "down",
     available: true,
     compute: { kind: "sum", field: "fechados" },
-    metaId: "BA03",
-    metaServico: "Banda Larga",
-    metaCompare: {
+    targetId: "BA03",
+    targetService: "Banda Larga",
+    targetCompare: {
       compute: { kind: "ratio", num: "fechados", den: ["base_ativa", "fechados"] },
       unit: "percent",
     },
     footer: [
-      "meta",
+      "target",
       {
         label: "% Fechados",
         compute: { kind: "ratio", num: "fechados", den: ["base_ativa", "fechados"] },
         unit: "percent",
       },
-      "atingimento",
+      "attainment",
     ],
     related: [
       {
@@ -208,9 +208,9 @@ const BANDA_LARGA: IndicatorDef[] = [
     polarity: "up",
     available: true,
     compute: { kind: "growthBase" },
-    metaId: "BA04",
-    metaServico: "Banda Larga",
-    footer: ["meta", "atingimento"],
+    targetId: "BA04",
+    targetService: "Banda Larga",
+    footer: ["target", "attainment"],
     description: "(Base Ativa + Fechados) do mês − (Base Ativa + Fechados) do mês anterior.",
   },
   {
@@ -299,20 +299,20 @@ const BANDA_LARGA: IndicatorDef[] = [
     compute: { kind: "ratio", num: "cancelamentos", den: ["base_ativa", "fechados"] },
     // Meta = meta de cancelamento (CA12) ÷ base geral projetada (base geral do mês
     // anterior + meta de crescimento base BA04) × 100.
-    metaCompute: {
+    targetCompute: {
       kind: "cancelRate",
       numMetaId: "CA12",
       denMetaId: "BA04",
       prevBaseFields: ["base_ativa", "fechados"],
     },
-    footer: ["meta", "atingimento"],
+    footer: ["target", "attainment"],
     related: [
       {
         id: "meta_cancelamentos",
         label: "Meta de Cancelamentos",
         unit: "qtd",
         polarity: "down",
-        compute: { kind: "metaSum", metaId: "CA12" },
+        compute: { kind: "metaSum", targetId: "CA12" },
       },
       {
         id: "cancelamentos",
@@ -347,9 +347,9 @@ const BANDA_LARGA: IndicatorDef[] = [
     available: true,
     compute: { kind: "ratio", num: "cancelados_4_mes", den: "instalados_4_mes" },
     // Meta = média das metas CA09 ponderada por instalados_4_mes (metas_cidades).
-    metaId: "CA09",
-    metaServico: "Banda Larga",
-    footer: ["meta", "atingimento"],
+    targetId: "CA09",
+    targetService: "Banda Larga",
+    footer: ["target", "attainment"],
     chartMeta: true,
     chartExtras: [
       { label: "Cancelados 4m", compute: { kind: "sum", field: "cancelados_4_mes" }, unit: "qtd" },
@@ -381,8 +381,8 @@ const BANDA_LARGA: IndicatorDef[] = [
     polarity: "up",
     available: true,
     compute: { kind: "sum", field: "vendas_criadas" },
-    metaId: "VE01",
-    metaServico: "Banda Larga",
+    targetId: "VE01",
+    targetService: "Banda Larga",
     description: "Contagem de pedidos criados no período (orcamentos).",
   },
   {
@@ -393,8 +393,8 @@ const BANDA_LARGA: IndicatorDef[] = [
     polarity: "up",
     available: true,
     compute: { kind: "sum", field: "vendas_efetivadas" },
-    metaId: "VE02",
-    metaServico: "Banda Larga",
+    targetId: "VE02",
+    targetService: "Banda Larga",
     description: "Contagem de pedidos efetivados no período (orcamentos_efetivados).",
   },
   {
@@ -405,8 +405,8 @@ const BANDA_LARGA: IndicatorDef[] = [
     polarity: "up",
     available: true,
     compute: { kind: "sum", field: "vendas_instaladas" },
-    metaId: "VE03",
-    metaServico: "Banda Larga",
+    targetId: "VE03",
+    targetService: "Banda Larga",
     description: "Contagem de instalações concluídas no período (instalacoes).",
   },
   {
@@ -417,8 +417,8 @@ const BANDA_LARGA: IndicatorDef[] = [
     polarity: "up",
     available: true,
     compute: { kind: "ratio", num: "vendas_efetivadas", den: "vendas_criadas" },
-    metaId: "VE05",
-    metaServico: "Banda Larga",
+    targetId: "VE05",
+    targetService: "Banda Larga",
     description: "Vendas Efetivadas ÷ Vendas Criadas × 100.",
   },
   {
@@ -429,8 +429,8 @@ const BANDA_LARGA: IndicatorDef[] = [
     polarity: "up",
     available: true,
     compute: { kind: "ratio", num: "vendas_instaladas", den: "vendas_efetivadas" },
-    metaId: "VE06",
-    metaServico: "Banda Larga",
+    targetId: "VE06",
+    targetService: "Banda Larga",
     description: "Vendas Instaladas ÷ Vendas Efetivadas × 100.",
   },
   BLOCKED(
@@ -461,8 +461,8 @@ const CINCO_G: IndicatorDef[] = [
     polarity: "up",
     available: true,
     compute: { kind: "sum", field: "crescimento" },
-    metaId: "BA02",
-    metaServico: "5G",
+    targetId: "BA02",
+    targetService: "5G",
     description: "Soma do crescimento da base ativa 5G no mês (Soma[crescimento]).",
   },
   {
@@ -493,8 +493,8 @@ const CINCO_G: IndicatorDef[] = [
     polarity: "down",
     available: true,
     compute: { kind: "ratio", num: "cancelamentos", den: "base_ativa_anterior" },
-    metaId: "CA03",
-    metaServico: "5G",
+    targetId: "CA03",
+    targetService: "5G",
     description: "Cancelamentos 5G do mês ÷ base ativa do mês anterior × 100. Menor é melhor.",
   },
   {
@@ -515,8 +515,8 @@ const CINCO_G: IndicatorDef[] = [
     polarity: "up",
     available: true,
     compute: { kind: "sum", field: "ativacao_mes" },
-    metaId: "VE04",
-    metaServico: "5G",
+    targetId: "VE04",
+    targetService: "5G",
     description: "Contagem de ativações 5G no mês (Soma[ativacao_mes]).",
   },
   {
@@ -537,8 +537,8 @@ const CINCO_G: IndicatorDef[] = [
     polarity: "down",
     available: true,
     compute: { kind: "sum", field: "cancelamentos" },
-    metaId: "CA12",
-    metaServico: "5G",
+    targetId: "CA12",
+    targetService: "5G",
     description: "Total de cancelamentos 5G no mês (Soma[cancelamento_mes]). Menor é melhor.",
   },
   BLOCKED(
@@ -643,21 +643,21 @@ export const SELECTION_PREF_KEY: Record<IndicatorBlock, string> = {
 
 // ── Detail modal: the top stat cards (add/remove) ────────────────────────────
 /** Stat slots shown above the chart in the indicator detail modal. */
-export type DetailStat = "atual" | "meta" | "atingimento" | "media" | "delta";
+export type DetailStat = "current" | "target" | "attainment" | "average" | "delta";
 
 export const DETAIL_STAT_LABELS: Record<DetailStat, string> = {
-  atual: "Atual",
-  meta: "Meta",
-  atingimento: "Atingimento",
-  media: "Média 12m",
+  current: "Atual",
+  target: "Meta",
+  attainment: "Atingimento",
+  average: "Média 12m",
   delta: "Variação mês",
 };
 
 /** Canonical order for rendering + the picker. */
-export const DETAIL_STAT_ORDER: DetailStat[] = ["atual", "meta", "atingimento", "media", "delta"];
+export const DETAIL_STAT_ORDER: DetailStat[] = ["current", "target", "attainment", "average", "delta"];
 
 /** Default stat cards (the historical set). */
-export const DEFAULT_DETAIL_STATS: DetailStat[] = ["atual", "meta", "atingimento", "media"];
+export const DEFAULT_DETAIL_STATS: DetailStat[] = ["current", "target", "attainment", "average"];
 
 /** localStorage preference key for the detail-modal stat selection. */
 export const DETAIL_STATS_PREF_KEY = "cidades.detalhe.stats";

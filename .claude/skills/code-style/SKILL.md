@@ -1,6 +1,6 @@
 ---
 name: code-style
-description: Code style & conventions for Brisa Dash — how to write and format code so it stays consistent. Use whenever writing or reviewing TypeScript/React/CSS in this repo: formatting (Prettier/ESLint, the gate), spacing rules (blank lines around return/if/try), naming, language (pt-BR UI vs English code), design tokens, component/data-layer structure, imports, comments. Complements databricks-first (data), verify-ui (verification), frontend-design (visual) and vercel-react-best-practices (perf).
+description: Code style & conventions for Brisa Dash — how to write and format code so it stays consistent. Use whenever writing or reviewing TypeScript/React/CSS in this repo: formatting (Prettier/ESLint, the gate), spacing rules (blank lines around return/if/try), naming, language (pt-BR UI vs English code), design tokens, component/data-layer structure, SQL safety (parameterize inputs, never interpolate — the SQL-injection guard), imports, comments. Complements databricks-first (data), verify-ui (verification), frontend-design (visual) and vercel-react-best-practices (perf).
 ---
 
 # Code style & conventions
@@ -83,13 +83,53 @@ const rows = await q(`SELECT …`);
 const r = rows[0] ?? {};
 ```
 
+## SQL: parameterize every input, never interpolate
+
+Hard security rule — this is the SQL-injection guard for the data layer.
+
+- **Every request-derived value** (dates, ids, filters, `matricula`, `competencia`,
+  `servico`, `mode`, `cidade`, `gerente`, …) MUST reach a query as a `?` ordinal
+  parameter (the driver's `ordinalParameters`) — **never** string-concatenated or
+  template-interpolated into the SQL. Push it onto the `params: unknown[]` array.
+- **Only code-owned constants may be interpolated:** env-derived catalog/schema/
+  table names (backtick-wrapped) and column names chosen from an **internal
+  whitelist** (`FUNNEL_COLS`, `grupoCol`, `metricCol`). Never a value that came from
+  `searchParams` or the request body.
+- **Dates are the classic trap.** The funnel windows inline them into `DATE'…'`
+  literals, so a request date MUST first pass `safeIsoDate()` (`lib/data/_shared.ts`),
+  which returns a validated `yyyy-MM-dd` or `null` → fall back to a default. Do
+  **not** trust `new Date(x).toISOString()` as the sanitizer — it throws on garbage
+  and drifts silently; validate the format explicitly.
+- When you add a new filter/param to an adapter and catch yourself writing
+  `` `… ${value} …` `` where `value` is not a proven constant, **stop** — parameterize
+  it, or (for enum-like fields) map it through an internal lookup.
+
+```ts
+// bad — request value interpolated straight into the SQL
+`WHERE data BETWEEN DATE'${f.from}' AND DATE'${f.to}' AND gerente = '${f.gerente}'`;
+
+// good — dates laundered via safeIsoDate at the source; dimension filters as `?`
+const params: unknown[] = [];
+
+if (f.gerente) (clauses.push("gerente = ?"), params.push(f.gerente));
+
+// f.from/f.to already passed safeIsoDate() in resolve*Period(); columns are constants
+`WHERE data BETWEEN DATE'${p.from}' AND DATE'${p.to}'${clauses.length ? ` AND ${clauses.join(" AND ")}` : ""}`;
+```
+
 ## Language: pt-BR in the UI, English in the code
 
 - **User-facing copy** (labels, headings, tooltips, empty/error states) is **pt-BR**
   (see CONTEXT.md for canonical terms).
-- **Identifiers, comments, commit messages, docs are English** — but keep Brisanet
-  domain terms in their pt-BR form when that's the ubiquitous language
-  (`crescimento`, `metas_cidades`, `gerencia`).
+- **Identifiers, comments, commit messages, docs are English.** Computed/invented
+  identifiers (view-model fields, functions, locals) use English: `target` (not
+  `meta`), `attainment` (not `atingimento`), `average` (not `media`), `projected`
+  (not `projecao`), `result` (not `resultado`).
+- **Exception — fields that mirror a Databricks column stay in their warehouse
+  (pt-BR) spelling**, so the code maps 1:1 to the source and stays verifiable
+  (`base_ativa`, `cancelamentos`, `gerencia`, `competencia`, `metas_cidades.meta`,
+  `id_indicador`, `servico`). Don't rename these — the SQL and the type must match
+  the warehouse. Ubiquitous domain words (`crescimento`, `Banda Larga`) also stay pt-BR.
 
 ## Naming
 

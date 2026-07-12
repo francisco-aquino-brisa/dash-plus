@@ -525,11 +525,11 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                     : formatNumber(v);
               const fmt = (v: number) => fmtU(ind.unit, v, ind.decimals);
               const atinGood =
-                ind.atingimento === null
+                ind.attainment === null
                   ? undefined
                   : ind.polarity === "down"
-                    ? ind.atingimento <= 100
-                    : ind.atingimento >= 100;
+                    ? ind.attainment <= 100
+                    : ind.attainment >= 100;
               const deltaGood = ind.polarity === "down" ? ind.delta <= 0 : ind.delta >= 0;
 
               // The related metric being charted (null → the main indicator).
@@ -543,29 +543,29 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                 chartUnit === "qtd" ? formatChartLabel(v) : fmtU(chartUnit, v, chartDecimals);
 
               const statFor = (s: DetailStat) => {
-                if (s === "atual")
+                if (s === "current")
                   return (
                     <MiniStat label="Atual" value={fmt(ind.value)} hint={formatMonth(filters.competencia)} />
                   );
 
-                if (s === "meta")
+                if (s === "target")
                   return (
                     <MiniStat
                       label="Meta"
-                      value={ind.meta === null ? "—" : fmtU(ind.metaUnit, ind.meta, ind.decimals)}
+                      value={ind.target === null ? "—" : fmtU(ind.targetUnit, ind.target, ind.decimals)}
                     />
                   );
 
-                if (s === "atingimento")
+                if (s === "attainment")
                   return (
                     <MiniStat
                       label="Atingimento"
-                      value={ind.atingimento === null ? "—" : formatPct(ind.atingimento, 0)}
+                      value={ind.attainment === null ? "—" : formatPct(ind.attainment, 0)}
                       good={atinGood}
                     />
                   );
 
-                if (s === "media") return <MiniStat label="Média 12m" value={fmt(ind.media)} />;
+                if (s === "average") return <MiniStat label="Média 12m" value={fmt(ind.average)} />;
 
                 return (
                   <MiniStat
@@ -580,7 +580,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
               // without one (e.g. Reativação de Bloqueados) hide them from the modal.
               const shown = DETAIL_STAT_ORDER.filter(
                 (s) =>
-                  detailStats.includes(s) && !(ind.meta === null && (s === "meta" || s === "atingimento")),
+                  detailStats.includes(s) && !(ind.target === null && (s === "target" || s === "attainment")),
               );
               const statCols: Record<number, string> = {
                 1: "sm:grid-cols-1",

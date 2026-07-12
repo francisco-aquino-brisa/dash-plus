@@ -87,6 +87,15 @@ async function pduSeries(...): Promise<PduPoint[]> {
 Already applied to: PDU (sales/produtividade/vendedor), 5G + metas reads on Cities.
 Apply the same to any new block that reads a source which may not exist.
 
+## Building the SQL safely (injection guard)
+
+Verifying an object exists is separate from building the query that reads it. When
+you write or edit any SQL in an adapter, **every request-derived value goes in as a
+`?` ordinal parameter — never interpolated**; only code-owned constants (env
+catalog/schema/table names, whitelisted column names) may be templated. Request
+dates must pass `safeIsoDate()` before they touch a `DATE'…'` literal. Full rule and
+examples live in the `code-style` skill ("SQL: parameterize every input").
+
 ## When documenting data
 
 Everything in `docs/data-map.md` and similar must be traceable to a query you
