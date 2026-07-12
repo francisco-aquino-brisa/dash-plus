@@ -1,10 +1,68 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Lock, Minus } from "lucide-react";
+import {
+  Activity,
+  ArrowDown,
+  ArrowLeftRight,
+  ArrowUp,
+  ArrowUpRight,
+  Ban,
+  CheckCircle2,
+  DollarSign,
+  Flame,
+  Layers,
+  Lock,
+  Minus,
+  Percent,
+  Radio,
+  RefreshCw,
+  Rocket,
+  ShoppingCart,
+  TrendingDown,
+  TrendingUp,
+  UserMinus,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatNumber, formatPct } from "@/lib/format";
 import { InfoHint } from "@/components/ui/info-hint";
 import type { IndicatorCardVM } from "@/lib/data/cities/indicator-blocks";
+
+// Icon per id_indicador (shared meaning across blocks). Falls back by unit.
+const ICON_BY_ID: Record<string, LucideIcon> = {
+  BA01: Users,
+  BA02: ArrowUpRight,
+  BA03: TrendingDown,
+  BA04: TrendingUp,
+  BA10: Ban,
+  BA11: UserMinus,
+  BA12: UserMinus,
+  BA13: RefreshCw,
+  CA01: Flame,
+  CA02: Flame,
+  CA03: Flame,
+  CA04: Flame,
+  CA09: Flame,
+  CA10: Flame,
+  CA12: Flame,
+  VE01: ShoppingCart,
+  VE02: CheckCircle2,
+  VE03: Rocket,
+  VE04: Radio,
+  VE05: Percent,
+  VE06: Percent,
+  VE27: Layers,
+  VE32: ArrowLeftRight,
+  VE33: ArrowLeftRight,
+  VE34: Percent,
+  VE35: Percent,
+  VE51: Radio,
+};
+
+function iconFor(kpi: IndicatorCardVM): LucideIcon {
+  return ICON_BY_ID[kpi.id] ?? (kpi.unit === "currency" ? DollarSign : kpi.unit === "percent" ? Percent : Activity);
+}
 
 function formatValue(unit: IndicatorCardVM["unit"], v: number): string {
   if (unit === "currency") return `R$ ${v.toFixed(1).replace(".", ",")}`;
@@ -13,11 +71,15 @@ function formatValue(unit: IndicatorCardVM["unit"], v: number): string {
 }
 
 export function CityIndicatorCard({ kpi, onClick }: { kpi: IndicatorCardVM; onClick?: () => void }) {
+  const Icon = iconFor(kpi);
+
   if (!kpi.available) {
     return (
       <div className="relative overflow-hidden rounded-xl border border-dashed border-border bg-secondary/20 p-5">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Lock className="h-4 w-4" />
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-secondary/60">
+            <Lock className="h-4 w-4" />
+          </span>
           <h3 className="text-sm font-medium">{kpi.label}</h3>
           <InfoHint def={{ formula: kpi.description }} />
         </div>
@@ -32,12 +94,15 @@ export function CityIndicatorCard({ kpi, onClick }: { kpi: IndicatorCardVM; onCl
   const atin = kpi.atingimento ?? 0;
   const good = inverse ? atin <= 100 : atin >= 100;
   const warn = inverse ? atin > 100 && atin <= 130 : atin >= 70 && atin < 100;
+  const atinColor = good ? "text-success" : warn ? "text-warning" : "text-destructive";
   const barColor = good ? "bg-success" : warn ? "bg-warning" : "bg-destructive";
 
-  const up = kpi.delta > 0.05;
-  const down = kpi.delta < -0.05;
-  const deltaGood = inverse ? down : up;
-  const DeltaIcon = up ? ArrowUp : down ? ArrowDown : Minus;
+  const up = kpi.delta > 0.5;
+  const down = kpi.delta < -0.5;
+  const tendGood = inverse ? down : up;
+  const TendIcon = up ? ArrowUp : down ? ArrowDown : Minus;
+
+  const fmt = (v: number) => formatValue(kpi.unit, v);
 
   return (
     <button
@@ -46,32 +111,53 @@ export function CityIndicatorCard({ kpi, onClick }: { kpi: IndicatorCardVM; onCl
       className="group relative w-full overflow-hidden rounded-xl border border-border bg-gradient-card p-5 text-left shadow-elegant transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/15 text-primary">
+            <Icon className="h-4 w-4" />
+          </span>
           <h3 className="text-sm font-medium text-muted-foreground">{kpi.label}</h3>
           <InfoHint def={{ formula: kpi.description }} />
         </div>
         <span
           className={cn(
             "flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium",
-            deltaGood ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive",
+            tendGood ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive",
           )}
         >
-          <DeltaIcon className="h-3 w-3" /> {Math.abs(kpi.delta).toFixed(1).replace(".", ",")}%
+          <TendIcon className="h-3 w-3" /> {Math.abs(kpi.delta).toFixed(1).replace(".", ",")}%
         </span>
       </div>
 
-      <div className="mt-3 text-3xl font-bold tracking-tight text-foreground">
-        {formatValue(kpi.unit, kpi.value)}
-      </div>
-      <div className="mt-1 text-xs text-muted-foreground">
-        {hasMeta ? `Meta ${formatValue(kpi.unit, kpi.meta as number)} · ${formatPct(atin, 0)}` : "Meta —"}
+      <div className="mt-3 flex items-baseline gap-2">
+        <span className="text-3xl font-bold tracking-tight text-foreground">{fmt(kpi.value)}</span>
+        {hasMeta && <span className={cn("text-sm font-semibold", atinColor)}>{atin.toFixed(0)}%</span>}
       </div>
 
-      {hasMeta && (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
-          <div className={cn("h-full rounded-full", barColor)} style={{ width: `${Math.max(2, Math.min(100, atin))}%` }} />
+      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border/60 pt-3 text-xs">
+        <div>
+          <div className="text-muted-foreground">Meta</div>
+          <div className="font-semibold text-foreground">{kpi.meta === null ? "—" : fmt(kpi.meta)}</div>
         </div>
-      )}
+        <div>
+          <div className="text-muted-foreground">Projeção</div>
+          <div className="font-semibold text-foreground">{fmt(kpi.projecao)}</div>
+        </div>
+        <div>
+          <div className="text-muted-foreground">Ating.</div>
+          <div className={cn("font-semibold", hasMeta ? atinColor : "text-foreground")}>
+            {hasMeta ? `${atin.toFixed(0)}%` : "—"}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
+        {hasMeta && (
+          <div
+            className={cn("h-full rounded-full", barColor)}
+            style={{ width: `${Math.max(2, Math.min(100, atin))}%` }}
+          />
+        )}
+      </div>
     </button>
   );
 }

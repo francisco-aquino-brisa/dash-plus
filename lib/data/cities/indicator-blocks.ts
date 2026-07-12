@@ -15,7 +15,7 @@ import {
   type IndicatorUnit,
   type Polarity,
 } from "./indicators";
-import { applyFilters, previousMonth, sum } from "./compute";
+import { applyFilters, previousMonth, projection, sum } from "./compute";
 
 export interface IndicatorCardVM {
   id: string;
@@ -27,6 +27,8 @@ export interface IndicatorCardVM {
   value: number;
   meta: number | null;
   atingimento: number | null;
+  /** Day-of-month projection of the realizado (= value for ratios/percent). */
+  projecao: number;
   /** % change vs previous month (relative). */
   delta: number;
   description: string;
@@ -162,7 +164,7 @@ export function computeIndicatorBlock(
     if (!def.available) {
       return {
         id: def.id, block: def.block, label: def.label, unit: def.unit, polarity: def.polarity,
-        available: false, value: 0, meta: null, atingimento: null, delta: 0,
+        available: false, value: 0, meta: null, atingimento: null, projecao: 0, delta: 0,
         description: def.description, series: [], media: 0,
       };
     }
@@ -171,6 +173,8 @@ export function computeIndicatorBlock(
     const prevValue = realizado(def, prevRows, []);
     const meta = aggregateMeta(def, curRows, metaRecords, comp, servico);
     const atingimento = meta === null || meta === 0 ? null : (value / meta) * 100;
+    // Pro-rata projection only makes sense for volumes; ratios stay as-is.
+    const projecao = def.unit === "percent" ? value : projection(value, comp);
 
     const series = months.map((m, i) => {
       const rows = rowsByMonth.get(m) ?? [];
@@ -181,7 +185,7 @@ export function computeIndicatorBlock(
 
     return {
       id: def.id, block: def.block, label: def.label, unit: def.unit, polarity: def.polarity,
-      available: true, value, meta, atingimento, delta: relDelta(value, prevValue),
+      available: true, value, meta, atingimento, projecao, delta: relDelta(value, prevValue),
       description: def.description, series, media,
     };
   });
