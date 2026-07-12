@@ -28,6 +28,19 @@ export interface FooterStatVM {
   tone: "good" | "warn" | "bad" | "default";
 }
 
+/** A secondary metric shown in the detail modal; clicking it charts its series. */
+export interface RelatedIndicatorVM {
+  id: string;
+  label: string;
+  unit: IndicatorUnit;
+  polarity: Polarity;
+  value: number;
+  /** % change vs previous month (relative). */
+  delta: number;
+  media: number;
+  series: { mes: string; valor: number }[];
+}
+
 export interface IndicatorCardVM {
   id: string;
   block: IndicatorBlock;
@@ -48,6 +61,8 @@ export interface IndicatorCardVM {
   /** 12-month series of the realizado, for the detail modal. */
   series: { mes: string; valor: number }[];
   media: number;
+  /** Related metrics for the detail modal (empty when none / unavailable). */
+  related: RelatedIndicatorVM[];
 }
 
 function fmtUnit(unit: IndicatorUnit, v: number): string {
@@ -197,6 +212,24 @@ function relDelta(cur: number, prev: number): number {
   return prev === 0 ? 0 : ((cur - prev) / Math.abs(prev)) * 100;
 }
 
+/** 12-month series of a compute, each month using the previous for growthBase. */
+function buildSeries(
+  compute: IndicatorCompute | undefined,
+  rowsByMonth: Map<string, CityIndicatorRecord[]>,
+  months: string[],
+): { mes: string; valor: number }[] {
+  return months.map((m, i) => {
+    const rows = rowsByMonth.get(m) ?? [];
+    const pr = i > 0 ? (rowsByMonth.get(months[i - 1]) ?? []) : [];
+
+    return { mes: m, valor: computeValue(compute, rows, pr) };
+  });
+}
+
+function seriesMean(series: { valor: number }[]): number {
+  return series.reduce((a, s) => a + s.valor, 0) / (series.length || 1);
+}
+
 interface FooterCtx {
   meta: number | null;
   atingimento: number | null;
@@ -277,6 +310,7 @@ export function computeIndicatorBlock(
         footer: [],
         series: [],
         media: 0,
+        related: [],
       };
     }
 
@@ -290,13 +324,26 @@ export function computeIndicatorBlock(
     const projecao = def.unit === "percent" ? value : projection(value, comp);
     const footer = resolveFooter(def, { meta, atingimento, projecao, curRows, prevRows });
 
-    const series = months.map((m, i) => {
-      const rows = rowsByMonth.get(m) ?? [];
-      const pr = i > 0 ? (rowsByMonth.get(months[i - 1]) ?? []) : [];
+    const series = buildSeries(def.compute, rowsByMonth, months);
+    const media = seriesMean(series);
 
-      return { mes: m, valor: computeValue(def.compute, rows, pr) };
+    // Related metrics (detail modal): same scope, each charted on click.
+    const related: RelatedIndicatorVM[] = (def.related ?? []).map((rel) => {
+      const relSeries = buildSeries(rel.compute, rowsByMonth, months);
+      const relValue = computeValue(rel.compute, curRows, prevRows);
+      const relPrev = computeValue(rel.compute, prevRows, []);
+
+      return {
+        id: rel.id,
+        label: rel.label,
+        unit: rel.unit,
+        polarity: rel.polarity,
+        value: relValue,
+        delta: relDelta(relValue, relPrev),
+        media: seriesMean(relSeries),
+        series: relSeries,
+      };
     });
-    const media = series.reduce((a, s) => a + s.valor, 0) / (series.length || 1);
 
     return {
       id: def.id,
@@ -314,6 +361,7 @@ export function computeIndicatorBlock(
       footer,
       series,
       media,
+      related,
     };
   });
 }

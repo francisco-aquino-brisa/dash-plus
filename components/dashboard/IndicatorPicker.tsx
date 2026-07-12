@@ -19,10 +19,16 @@ export function IndicatorPicker({
   options,
   selected,
   onChange,
+  label = "Indicadores",
+  heading = "Selecione os indicadores",
 }: {
   options: PickerOption[];
   selected: string[];
   onChange: (next: string[]) => void;
+  /** Trigger button text (before the count). */
+  label?: string;
+  /** Popover heading. */
+  heading?: string;
 }) {
   const selectedSet = new Set(selected);
   const toggle = (id: string) => {
@@ -43,12 +49,12 @@ export function IndicatorPicker({
           className="flex items-center gap-1.5 rounded-md border border-border bg-secondary/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
-          Indicadores ({selected.length})
+          {label} ({selected.length})
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="max-h-[360px] w-72 overflow-y-auto p-1.5">
         <div className="px-2 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
-          Selecione os indicadores
+          {heading}
         </div>
         {options.map((o) => {
           const on = selectedSet.has(o.id);

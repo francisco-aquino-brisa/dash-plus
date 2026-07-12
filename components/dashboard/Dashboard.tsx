@@ -4,8 +4,11 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
+  ArrowDown,
+  ArrowUp,
   Building2,
   CheckCircle2,
+  Minus,
   Radio,
   RefreshCw,
   Rocket,
@@ -24,10 +27,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import type { DashboardView } from "@/lib/data/cities/compute";
 import type { IndicatorCardVM } from "@/lib/data/cities/indicator-blocks";
 import type { FilterOptions, Filters } from "@/lib/data/cities/types";
-import { DEFAULT_SELECTION, SELECTION_PREF_KEY } from "@/lib/data/cities/indicators";
+import {
+  DEFAULT_SELECTION,
+  SELECTION_PREF_KEY,
+  DEFAULT_DETAIL_STATS,
+  DETAIL_STATS_PREF_KEY,
+  DETAIL_STAT_LABELS,
+  DETAIL_STAT_ORDER,
+  type DetailStat,
+} from "@/lib/data/cities/indicators";
 import { usePreference } from "@/lib/preferences/use-preference";
 import { MOCK_DATA_LABEL } from "@/lib/copy";
-import { formatMonth, formatNumber, formatPct } from "@/lib/format";
+import { formatChartLabel, formatMonth, formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -93,7 +104,7 @@ function MiniStat({
   good?: boolean | null;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-secondary/30 p-3">
+    <div className="h-full rounded-lg border border-border bg-secondary/30 p-3">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div
         className={cn(
@@ -126,6 +137,14 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
     SELECTION_PREF_KEY["5g"],
     DEFAULT_SELECTION["5g"],
   );
+
+  // Detail modal: which stat cards to show, and which related metric is charted
+  // (null = the main indicator). Reset the chart selection when a new card opens.
+  const [detailStats, setDetailStats] = usePreference<string[]>(DETAIL_STATS_PREF_KEY, DEFAULT_DETAIL_STATS);
+  const [activeRelatedId, setActiveRelatedId] = useState<string | null>(null);
+  useEffect(() => {
+    setActiveRelatedId(null);
+  }, [selectedIndicator]);
 
   // The Tecnologia filter drives which blocks show (5G collapses to its block;
   // FTTH/FWA scope the BL block and hide 5G; empty / Banda Larga shows both).
@@ -495,7 +514,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
           {selectedIndicator &&
             (() => {
               const ind = selectedIndicator;
-              const fmtU = (unit: typeof ind.unit, v: number) =>
+              const fmtU = (unit: IndicatorCardVM["unit"], v: number) =>
                 unit === "currency"
                   ? `R$ ${v.toFixed(1).replace(".", ",")}`
                   : unit === "percent"
@@ -508,6 +527,56 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                   : ind.polarity === "down"
                     ? ind.atingimento <= 100
                     : ind.atingimento >= 100;
+              const deltaGood = ind.polarity === "down" ? ind.delta <= 0 : ind.delta >= 0;
+
+              // The related metric being charted (null → the main indicator).
+              const activeRel = ind.related.find((r) => r.id === activeRelatedId) ?? null;
+              const chartSeries = activeRel ? activeRel.series : ind.series;
+              const chartUnit = activeRel ? activeRel.unit : ind.unit;
+              const chartLabel = activeRel ? activeRel.label : ind.label;
+              const chartFmt = (v: number) => fmtU(chartUnit, v);
+              const chartCompact = (v: number) =>
+                chartUnit === "qtd" ? formatChartLabel(v) : fmtU(chartUnit, v);
+
+              const statFor = (s: DetailStat) => {
+                if (s === "atual")
+                  return (
+                    <MiniStat label="Atual" value={fmt(ind.value)} hint={formatMonth(filters.competencia)} />
+                  );
+
+                if (s === "meta")
+                  return (
+                    <MiniStat label="Meta" value={ind.meta === null ? "—" : fmtU(ind.metaUnit, ind.meta)} />
+                  );
+
+                if (s === "atingimento")
+                  return (
+                    <MiniStat
+                      label="Atingimento"
+                      value={ind.atingimento === null ? "—" : formatPct(ind.atingimento, 0)}
+                      good={atinGood}
+                    />
+                  );
+
+                if (s === "media") return <MiniStat label="Média 12m" value={fmt(ind.media)} />;
+
+                return (
+                  <MiniStat
+                    label="Variação mês"
+                    value={`${ind.delta >= 0 ? "+" : ""}${ind.delta.toFixed(1).replace(".", ",")}%`}
+                    good={deltaGood}
+                  />
+                );
+              };
+
+              const shown = DETAIL_STAT_ORDER.filter((s) => detailStats.includes(s));
+              const statCols: Record<number, string> = {
+                1: "sm:grid-cols-1",
+                2: "sm:grid-cols-2",
+                3: "sm:grid-cols-3",
+                4: "sm:grid-cols-4",
+                5: "sm:grid-cols-5",
+              };
 
               return (
                 <>
@@ -515,17 +584,104 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                     <DialogTitle>{ind.label} · Histórico Anual</DialogTitle>
                     <DialogDescription>Evolução mensal do indicador no escopo filtrado.</DialogDescription>
                   </DialogHeader>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <MiniStat label="Atual" value={fmt(ind.value)} hint={formatMonth(filters.competencia)} />
-                    <MiniStat label="Meta" value={ind.meta === null ? "—" : fmtU(ind.metaUnit, ind.meta)} />
-                    <MiniStat
-                      label="Atingimento"
-                      value={ind.atingimento === null ? "—" : formatPct(ind.atingimento, 0)}
-                      good={atinGood}
-                    />
-                    <MiniStat label="Média 12m" value={fmt(ind.media)} />
+
+                  {/* Cards exibidos — chips inline (popover não funciona dentro do
+                      Dialog modal: o Radix aplica pointer-events:none fora dele). */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="mr-1 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+                      Cards
+                    </span>
+                    {DETAIL_STAT_ORDER.map((s) => {
+                      const on = detailStats.includes(s);
+
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() =>
+                            setDetailStats(
+                              DETAIL_STAT_ORDER.filter((k) => (k === s ? !on : detailStats.includes(k))),
+                            )
+                          }
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                            on
+                              ? "border-primary bg-primary/15 text-foreground"
+                              : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {DETAIL_STAT_LABELS[s]}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <HistoryChart data={ind.series} />
+
+                  {shown.length > 0 && (
+                    <div className={cn("grid grid-cols-2 gap-3", statCols[shown.length])}>
+                      {shown.map((s) => (
+                        <div key={s} className="h-full">
+                          {statFor(s)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Exibindo no gráfico: <span className="font-medium text-foreground">{chartLabel}</span>
+                  </div>
+                  <HistoryChart
+                    data={chartSeries}
+                    unit={chartUnit}
+                    valueFormatter={chartFmt}
+                    compactFormatter={chartCompact}
+                  />
+
+                  {ind.related.length > 0 && (
+                    <div className="mt-2">
+                      <h4 className="mb-2 text-sm font-semibold text-foreground">Indicadores relacionados</h4>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        {ind.related.map((rel) => {
+                          const on = rel.id === activeRelatedId;
+                          const up = rel.delta > 0.5;
+                          const down = rel.delta < -0.5;
+                          const tendGood = rel.polarity === "down" ? down : up;
+                          const TendIcon = up ? ArrowUp : down ? ArrowDown : Minus;
+
+                          return (
+                            <button
+                              key={rel.id}
+                              type="button"
+                              onClick={() => setActiveRelatedId(on ? null : rel.id)}
+                              className={cn(
+                                "rounded-lg border p-3 text-left transition-colors",
+                                on
+                                  ? "border-primary bg-primary/10"
+                                  : "border-border bg-secondary/30 hover:border-primary/50",
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-xs leading-tight text-muted-foreground">
+                                  {rel.label}
+                                </span>
+                                <span
+                                  className={cn(
+                                    "flex shrink-0 items-center gap-0.5 text-[11px] font-medium",
+                                    tendGood ? "text-success" : "text-destructive",
+                                  )}
+                                >
+                                  <TendIcon className="h-3 w-3" />
+                                  {Math.abs(rel.delta).toFixed(0)}%
+                                </span>
+                              </div>
+                              <div className="mt-1 text-xl font-bold tracking-tight text-foreground">
+                                {fmtU(rel.unit, rel.value)}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </>
               );
             })()}

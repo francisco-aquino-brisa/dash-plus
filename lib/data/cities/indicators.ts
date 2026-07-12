@@ -66,8 +66,25 @@ export interface IndicatorDef {
   metaCompare?: { compute: IndicatorCompute; unit: IndicatorUnit };
   /** Footer columns for this card. Defaults to Meta · Projeção · Ating. */
   footer?: FooterSlot[];
+  /** Secondary metrics shown in the detail modal (clickable → chart swaps). */
+  related?: RelatedDef[];
   /** Readable formula for the InfoHint tooltip. */
   description: string;
+}
+
+/**
+ * A related indicator shown inside the detail modal, below the main stats. Each
+ * is a secondary metric derived from the same scoped rows; clicking its card
+ * swaps the chart to this metric's 12-month series. No meta/atingimento — these
+ * are context, not targets.
+ */
+export interface RelatedDef {
+  /** Stable id within the parent (its source column name). */
+  id: string;
+  label: string;
+  unit: IndicatorUnit;
+  polarity: Polarity;
+  compute: IndicatorCompute;
 }
 
 /** Composite key so ids shared across blocks (BA02, CA03, RE01) stay distinct. */
@@ -128,6 +145,36 @@ const BANDA_LARGA: IndicatorDef[] = [
         unit: "percent",
       },
       "atingimento",
+    ],
+    related: [
+      {
+        id: "bloqueados",
+        label: "Bloqueados",
+        unit: "qtd",
+        polarity: "down",
+        compute: { kind: "sum", field: "bloqueados" },
+      },
+      {
+        id: "desativado_auto",
+        label: "Desativado Automático",
+        unit: "qtd",
+        polarity: "down",
+        compute: { kind: "sum", field: "desativado_auto" },
+      },
+      {
+        id: "desativado_s",
+        label: "Desativado Solicitados",
+        unit: "qtd",
+        polarity: "down",
+        compute: { kind: "sum", field: "desativado_s" },
+      },
+      {
+        id: "fechado_problema_tecnico",
+        label: "Fechados por Problema Técnico",
+        unit: "qtd",
+        polarity: "down",
+        compute: { kind: "sum", field: "fechado_problema_tecnico" },
+      },
     ],
     description:
       "Soma de clientes fechados no mês (Soma[fechados]). Meta = taxa de fechamento (metas_cidades). Menor é melhor.",
@@ -474,3 +521,24 @@ export const SELECTION_PREF_KEY: Record<IndicatorBlock, string> = {
   "banda-larga": "cidades.blocos.banda-larga.selecionados",
   "5g": "cidades.blocos.5g.selecionados",
 };
+
+// ── Detail modal: the top stat cards (add/remove) ────────────────────────────
+/** Stat slots shown above the chart in the indicator detail modal. */
+export type DetailStat = "atual" | "meta" | "atingimento" | "media" | "delta";
+
+export const DETAIL_STAT_LABELS: Record<DetailStat, string> = {
+  atual: "Atual",
+  meta: "Meta",
+  atingimento: "Atingimento",
+  media: "Média 12m",
+  delta: "Variação mês",
+};
+
+/** Canonical order for rendering + the picker. */
+export const DETAIL_STAT_ORDER: DetailStat[] = ["atual", "meta", "atingimento", "media", "delta"];
+
+/** Default stat cards (the historical set). */
+export const DEFAULT_DETAIL_STATS: DetailStat[] = ["atual", "meta", "atingimento", "media"];
+
+/** localStorage preference key for the detail-modal stat selection. */
+export const DETAIL_STATS_PREF_KEY = "cidades.detalhe.stats";
