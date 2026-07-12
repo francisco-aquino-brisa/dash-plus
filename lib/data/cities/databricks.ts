@@ -21,7 +21,13 @@
 
 import { getDataClient } from "../client";
 import { num } from "../_shared";
-import type { CityDataset, CityIndicatorRecord, Tecnologia, TipoCidade } from "./types";
+import type {
+  CityDataset,
+  CityIndicatorRecord,
+  CityMetaRecord,
+  Tecnologia,
+  TipoCidade,
+} from "./types";
 
 const CATALOG = process.env.DATABRICKS_CITIES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const SCHEMA = process.env.DATABRICKS_CITIES_SCHEMA ?? "projeto_brisa_performance";
@@ -84,6 +90,7 @@ async function fetchCitiesFTTHFWA(): Promise<CityIndicatorRecord[]> {
       tipo_cidade: normTipo(r.tipo_cidade),
       tecnologia: tec === "FWA" ? "FWA" : "FTTH",
       base_ativa: baseAtiva,
+      base_ativa_anterior: 0, // not in indicadores_cidades; prev-month join used instead
       crescimento: num(r.crescimento),
       fechados: num(r.fechados),
       fechado_problema_tecnico: num(r.fechado_problema_tecnico),
@@ -97,6 +104,7 @@ async function fetchCitiesFTTHFWA(): Promise<CityIndicatorRecord[]> {
       cancelamentos_com_consumo: 0,
       cancelamentos_sem_consumo: 0,
       ativacao_mes: 0,
+      chips_combo: 0,
       vendas_criadas: num(r.orcamentos),
       vendas_efetivadas: num(r.orcamentos_efetivados),
       vendas_instaladas: num(r.instalacoes),
@@ -119,8 +127,8 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
     SELECT
       date_format(data, 'yyyy-MM-01') AS competencia,
       cidade, gerencia, coordenacao, tipo_cidade,
-      base_ativa, crescimento, ativacao_mes, cancelamento_mes,
-      cancel_com_consumo, cancel_sem_consumo,
+      base_ativa, base_ativa_anterior, crescimento, ativacao_mes, cancelamento_mes,
+      cancel_com_consumo, cancel_sem_consumo, chips_combo,
       instalacoes_4_mes, cancelamentos_4_mes
     FROM ${FQ("indicadores_cidades_5g")}
     WHERE data >= ${WINDOW}
@@ -141,6 +149,7 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
       tipo_cidade: normTipo(r.tipo_cidade),
       tecnologia: "5G",
       base_ativa: num(r.base_ativa),
+      base_ativa_anterior: num(r.base_ativa_anterior),
       crescimento: num(r.crescimento),
       fechados: canc,
       fechado_problema_tecnico: 0,
@@ -154,6 +163,7 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
       cancelamentos_com_consumo: num(r.cancel_com_consumo),
       cancelamentos_sem_consumo: num(r.cancel_sem_consumo),
       ativacao_mes: num(r.ativacao_mes),
+      chips_combo: num(r.chips_combo),
       vendas_criadas: 0,
       vendas_efetivadas: 0,
       vendas_instaladas: 0,
@@ -171,12 +181,42 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
   });
 }
 
+/**
+ * Long-format targets from `metas_cidades`. Only active rows; the meta value is
+ * stored per (id_indicador, servico, cidade, competência) — percentages as
+ * fractions, matching the compute layer's expectation.
+ */
+async function fetchMetas(): Promise<CityMetaRecord[]> {
+  const sql = `
+    SELECT
+      date_format(data, 'yyyy-MM-01') AS competencia,
+      cidade, id_indicador, servico, meta
+    FROM ${FQ("metas_cidades")}
+    WHERE data >= ${WINDOW}
+      AND upper(coalesce(stutus, '')) = 'ATIVO'
+      AND coalesce(id_indicador, '') <> ''
+      AND coalesce(cidade, '') <> ''
+  `;
+  const raw = await getDataClient().query<Record<string, unknown>>(sql);
+  return raw.map((r) => ({
+    competencia: str(r.competencia),
+    cidade: str(r.cidade),
+    id_indicador: str(r.id_indicador),
+    servico: str(r.servico),
+    meta: num(r.meta),
+  }));
+}
+
 export async function databricksCityDataset(): Promise<CityDataset> {
   const watermark = await databricksWatermark();
-  const [ftthFwa, fiveG] = await Promise.all([fetchCitiesFTTHFWA(), fetch5G()]);
+  const [ftthFwa, fiveG, metaRecords] = await Promise.all([
+    fetchCitiesFTTHFWA(),
+    fetch5G(),
+    fetchMetas(),
+  ]);
   const records = [...ftthFwa, ...fiveG];
   const months = Array.from(new Set(records.map((r) => r.competencia)))
     .filter(Boolean)
     .sort();
-  return { records, months, watermark };
+  return { records, metaRecords, months, watermark };
 }

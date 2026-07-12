@@ -4,22 +4,19 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
-  ArrowUpRight,
   Building2,
   CheckCircle2,
-  Flame,
   Radio,
   RefreshCw,
   Rocket,
   ShoppingCart,
-  TrendingDown,
-  TrendingUp,
   Users,
   Wifi,
   Zap,
 } from "lucide-react";
 import { FilterBar } from "@/components/dashboard/FilterBar";
-import { KpiCard } from "@/components/dashboard/KpiCard";
+import { CityIndicatorCard } from "@/components/dashboard/CityIndicatorCard";
+import { IndicatorPicker } from "@/components/dashboard/IndicatorPicker";
 import { NegativeCitiesTable } from "@/components/dashboard/NegativeCitiesTable";
 import { QuartileChart } from "@/components/dashboard/QuartileChart";
 import { HistoryChart } from "@/components/dashboard/HistoryChart";
@@ -30,8 +27,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import type { DashboardView, KpiKey } from "@/lib/data/cities/compute";
+import type { DashboardView } from "@/lib/data/cities/compute";
+import type { IndicatorCardVM } from "@/lib/data/cities/indicator-blocks";
 import type { FilterOptions, Filters } from "@/lib/data/cities/types";
+import { DEFAULT_SELECTION, SELECTION_PREF_KEY } from "@/lib/data/cities/indicators";
+import { usePreference } from "@/lib/preferences/use-preference";
 import { MOCK_DATA_LABEL } from "@/lib/copy";
 import { formatMonth, formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -111,11 +111,26 @@ function MiniStat({
 export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const { filters, kpis, growth, negatives, quartis, history, coverage, churn5g, desativados, modal } = view;
+  const { filters, kpis, growth, negatives, quartis, history, coverage, churn5g, desativados, blocks } = view;
 
-  const [selectedKpi, setSelectedKpi] = useState<{ key: KpiKey; title: string } | null>(null);
+  const [selectedIndicator, setSelectedIndicator] = useState<IndicatorCardVM | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(cache.autoRefresh);
   const [refreshing, setRefreshing] = useState(false);
+
+  const [blSelection, setBlSelection] = usePreference<string[]>(
+    SELECTION_PREF_KEY["banda-larga"],
+    DEFAULT_SELECTION["banda-larga"],
+  );
+  const [g5Selection, setG5Selection] = usePreference<string[]>(
+    SELECTION_PREF_KEY["5g"],
+    DEFAULT_SELECTION["5g"],
+  );
+
+  // The Tecnologia filter drives which blocks show (5G collapses to its block;
+  // FTTH/FWA scope the BL block and hide 5G; empty / Banda Larga shows both).
+  const tec = filters.tecnologia;
+  const showBL = tec === "" || tec === "Banda Larga" || tec === "FTTH" || tec === "FWA";
+  const showG5 = tec === "" || tec === "Banda Larga" || tec === "5G";
 
   const navigate = useCallback(
     (f: Filters) => {
@@ -161,6 +176,40 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
     kpis.vendasEfetivadas.resultado === 0
       ? 0
       : (kpis.vendasInstaladas.resultado / kpis.vendasEfetivadas.resultado) * 100;
+
+  const renderBlock = (
+    title: string,
+    subtitle: string,
+    vms: IndicatorCardVM[],
+    selection: string[],
+    setSelection: (next: string[]) => void,
+  ) => {
+    const options = vms.map((v) => ({ id: v.id, label: v.label, available: v.available }));
+    const cards = vms.filter((v) => selection.includes(v.id));
+    return (
+      <Section
+        title={title}
+        subtitle={subtitle}
+        right={<IndicatorPicker options={options} selected={selection} onChange={setSelection} />}
+      >
+        {cards.length === 0 ? (
+          <p className="py-4 text-sm text-muted-foreground">
+            Nenhum indicador selecionado. Use “Indicadores” para escolher.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {cards.map((vm) => (
+              <CityIndicatorCard
+                key={vm.id}
+                kpi={vm}
+                onClick={vm.available ? () => setSelectedIndicator(vm) : undefined}
+              />
+            ))}
+          </div>
+        )}
+      </Section>
+    );
+  };
 
   return (
     <div className="min-h-screen pb-12">
@@ -214,42 +263,23 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
           <FilterBar filters={filters} options={options} onChange={navigate} onReset={resetFilters} />
         </div>
 
-        {/* KPIs Executivos */}
-        <section>
-          <div className="mb-3 flex items-end justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">KPIs Executivos</h2>
-              <p className="text-sm text-muted-foreground">
-                Meta x Realizado x Projeção · {formatMonth(filters.competencia)}
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {(
-              [
-                ["crescimentoBase", "Crescimento Base", TrendingUp, true],
-                ["crescimentoBaseAtiva", "Crescimento Base Ativa", ArrowUpRight, false],
-                ["baseFechada", "Base Fechada", TrendingDown, false],
-                ["reativacao", "Reativação Bloqueados", RefreshCw, false],
-                ["churnRate", "Churn Rate", Flame, false],
-                ["churnSafra", "Churn Safra", Flame, false],
-                ["vendasCriadas", "Vendas Criadas", ShoppingCart, false],
-                ["vendasEfetivadas", "Vendas Efetivadas", CheckCircle2, false],
-                ["vendasInstaladas", "Vendas Instaladas", Rocket, false],
-                ["ativacoes5g", "Ativações 5G", Radio, false],
-              ] as const
-            ).map(([key, title, Icon, highlight]) => (
-              <KpiCard
-                key={key}
-                title={title}
-                icon={Icon}
-                kpi={kpis[key]}
-                highlight={highlight}
-                onClick={() => setSelectedKpi({ key, title })}
-              />
-            ))}
-          </div>
-        </section>
+        {/* Blocos de indicadores selecionáveis (Banda Larga + 5G) */}
+        {showBL &&
+          renderBlock(
+            "Banda Larga (INTERNET + FWA)",
+            `Meta x Realizado · ${formatMonth(filters.competencia)}`,
+            blocks.bandaLarga,
+            blSelection,
+            setBlSelection,
+          )}
+        {showG5 &&
+          renderBlock(
+            "5G",
+            "Ativações, portabilidade, ticket e churn",
+            blocks.g5,
+            g5Selection,
+            setG5Selection,
+          )}
 
         {/* Bloco 1 - Crescimento de Base */}
         <Section
@@ -446,41 +476,42 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
         </footer>
       </main>
 
-      <Dialog open={!!selectedKpi} onOpenChange={(o) => !o && setSelectedKpi(null)}>
+      <Dialog open={!!selectedIndicator} onOpenChange={(o) => !o && setSelectedIndicator(null)}>
         <DialogContent className="max-w-3xl">
-          {selectedKpi &&
+          {selectedIndicator &&
             (() => {
-              const current = kpis[selectedKpi.key];
-              const { series, media } = modal[selectedKpi.key];
+              const ind = selectedIndicator;
+              const fmt = (v: number) =>
+                ind.unit === "currency"
+                  ? `R$ ${v.toFixed(1).replace(".", ",")}`
+                  : ind.unit === "percent"
+                    ? formatPct(v)
+                    : formatNumber(v);
+              const atinGood =
+                ind.atingimento === null
+                  ? undefined
+                  : ind.polarity === "down"
+                    ? ind.atingimento <= 100
+                    : ind.atingimento >= 100;
               return (
                 <>
                   <DialogHeader>
-                    <DialogTitle>{selectedKpi.title} · Histórico Anual</DialogTitle>
+                    <DialogTitle>{ind.label} · Histórico Anual</DialogTitle>
                     <DialogDescription>
-                      Evolução mensal do indicador no escopo filtrado ({kpis.scope}).
+                      Evolução mensal do indicador no escopo filtrado.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <MiniStat
-                      label="Atual"
-                      value={current.isPct ? formatPct(current.resultado) : formatNumber(current.resultado)}
-                      hint={formatMonth(filters.competencia)}
-                    />
-                    <MiniStat
-                      label="Meta"
-                      value={current.isPct ? formatPct(current.meta) : formatNumber(current.meta)}
-                    />
+                    <MiniStat label="Atual" value={fmt(ind.value)} hint={formatMonth(filters.competencia)} />
+                    <MiniStat label="Meta" value={ind.meta === null ? "—" : fmt(ind.meta)} />
                     <MiniStat
                       label="Atingimento"
-                      value={formatPct(current.atingimento, 0)}
-                      good={current.inverse ? current.atingimento <= 100 : current.atingimento >= 100}
+                      value={ind.atingimento === null ? "—" : formatPct(ind.atingimento, 0)}
+                      good={atinGood}
                     />
-                    <MiniStat
-                      label="Média 12m"
-                      value={current.isPct ? formatPct(media) : formatNumber(media)}
-                    />
+                    <MiniStat label="Média 12m" value={fmt(ind.media)} />
                   </div>
-                  <HistoryChart data={series} />
+                  <HistoryChart data={ind.series} />
                 </>
               );
             })()}

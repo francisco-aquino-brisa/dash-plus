@@ -29,6 +29,8 @@ export interface CityIndicatorRecord {
 
   // Base & growth.
   base_ativa: number;
+  /** Previous-month active base (5G source column; 0 for FTTH/FWA). */
+  base_ativa_anterior: number;
   crescimento: number;
   fechados: number;
   fechado_problema_tecnico: number;
@@ -44,6 +46,7 @@ export interface CityIndicatorRecord {
   cancelamentos_com_consumo: number; // 5G
   cancelamentos_sem_consumo: number; // 5G
   ativacao_mes: number; // 5G
+  chips_combo: number; // 5G — chips ativados em combo
 
   // Sales funnel.
   vendas_criadas: number;
@@ -67,8 +70,24 @@ export interface CityIndicatorRecord {
   meta_ativacao: number;
 }
 
+/**
+ * Long-format target row from `metas_cidades`, one per
+ * (id_indicador, servico, cidade, competência). The realizado lives in the
+ * wide indicator tables; this only carries the target.
+ */
+export interface CityMetaRecord {
+  competencia: string;
+  cidade: string;
+  id_indicador: string;
+  /** "Banda Larga" | "FTTH" | "FWA" | "5G". */
+  servico: string;
+  meta: number;
+}
+
 export interface CityDataset {
   records: CityIndicatorRecord[];
+  /** Targets from metas_cidades, joined per indicator/servico/cidade/mês. */
+  metaRecords: CityMetaRecord[];
   /** Selectable competências (yyyy-MM-01), ascending. */
   months: string[];
   /** Source freshness signal (see ADR 0002). */

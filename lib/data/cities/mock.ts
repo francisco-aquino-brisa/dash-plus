@@ -8,7 +8,13 @@
 //   HÍBRIDA → FTTH + FWA + 5G
 
 import { mulberry32 } from "../_random";
-import type { CityDataset, CityIndicatorRecord, Tecnologia, TipoCidade } from "./types";
+import type {
+  CityDataset,
+  CityIndicatorRecord,
+  CityMetaRecord,
+  Tecnologia,
+  TipoCidade,
+} from "./types";
 
 interface CityDef {
   nome: string;
@@ -81,6 +87,7 @@ function generate(months: string[]): CityIndicatorRecord[] {
       let baseAtiva = Math.round(baseHP * (0.25 + rng() * 0.25));
 
       for (const competencia of months) {
+        const baseAnterior = baseAtiva;
         const cresc = Math.round((rng() - 0.35) * baseAtiva * 0.03);
         baseAtiva = Math.max(0, baseAtiva + cresc);
         const fechados = Math.round(baseAtiva * (0.008 + rng() * 0.015));
@@ -100,6 +107,7 @@ function generate(months: string[]): CityIndicatorRecord[] {
         const inst4m = Math.round(vInst * (0.85 + rng() * 0.3));
         const canc4m = Math.round(inst4m * (0.02 + rng() * 0.05));
         const is5g = tec === "5G";
+        const ativacaoMes = is5g ? Math.round(vInst * 0.8) : 0;
 
         out.push({
           competencia,
@@ -111,6 +119,7 @@ function generate(months: string[]): CityIndicatorRecord[] {
           tipo_cidade: c.tipo,
           tecnologia: tec,
           base_ativa: baseAtiva,
+          base_ativa_anterior: baseAnterior,
           crescimento: cresc,
           fechados,
           fechado_problema_tecnico: fechadoProblemaTecnico,
@@ -123,7 +132,8 @@ function generate(months: string[]): CityIndicatorRecord[] {
           cancelamentos_voluntarios: cancelVol,
           cancelamentos_com_consumo: is5g ? Math.round(cancelamentos * 0.6) : 0,
           cancelamentos_sem_consumo: is5g ? Math.round(cancelamentos * 0.4) : 0,
-          ativacao_mes: is5g ? Math.round(vInst * 0.8) : 0,
+          ativacao_mes: ativacaoMes,
+          chips_combo: is5g ? Math.round(ativacaoMes * (0.3 + rng() * 0.15)) : 0,
           vendas_criadas: vCriadas,
           vendas_efetivadas: vEfet,
           vendas_instaladas: vInst,
@@ -143,10 +153,89 @@ function generate(months: string[]): CityIndicatorRecord[] {
   return out;
 }
 
+/** Deterministic jitter in [1-spread, 1+spread] seeded by a string. */
+function jitter(seed: string, spread = 0.12): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return 1 - spread + (mulberry32(h)() * 2 * spread);
+}
+
+/**
+ * Synthesize metas_cidades-shaped targets for the cataloged indicators so the
+ * mock exercises the same join as Databricks. Percent metas are stored as
+ * fractions (compute multiplies by 100), matching the real table.
+ */
+function buildMockMetas(records: CityIndicatorRecord[]): CityMetaRecord[] {
+  const out: CityMetaRecord[] = [];
+  const groups = new Map<string, CityIndicatorRecord[]>();
+  for (const r of records) {
+    const k = `${r.competencia}|${r.cidade}`;
+    (groups.get(k) ?? groups.set(k, []).get(k)!).push(r);
+  }
+
+  const s = (rows: CityIndicatorRecord[], pick: (r: CityIndicatorRecord) => number) =>
+    rows.reduce((a, r) => a + (pick(r) || 0), 0);
+
+  const emit = (
+    competencia: string,
+    cidade: string,
+    servico: string,
+    rows: CityIndicatorRecord[],
+    specs: { id: string; value: number; percent?: boolean }[],
+  ) => {
+    if (rows.length === 0) return;
+    for (const { id, value, percent } of specs) {
+      const meta = percent ? value : Math.round(value);
+      out.push({ competencia, cidade, id_indicador: id, servico, meta });
+    }
+  };
+
+  for (const [key, rows] of groups) {
+    const [competencia, cidade] = key.split("|");
+    const bl = rows.filter((r) => r.tecnologia === "FTTH" || r.tecnologia === "FWA");
+    const ftth = rows.filter((r) => r.tecnologia === "FTTH");
+    const fwa = rows.filter((r) => r.tecnologia === "FWA");
+    const g5 = rows.filter((r) => r.tecnologia === "5G");
+
+    const blSpecs = (set: CityIndicatorRecord[], svc: string) => {
+      const crit = s(set, (r) => r.vendas_criadas);
+      const efet = s(set, (r) => r.vendas_efetivadas);
+      const inst = s(set, (r) => r.vendas_instaladas);
+      const j = (id: string) => jitter(`${cidade}${competencia}${svc}${id}`);
+      return [
+        { id: "BA03", value: s(set, (r) => r.fechados) * j("BA03") },
+        { id: "BA04", value: Math.max(50, Math.abs(s(set, (r) => r.crescimento)) * j("BA04")) },
+        { id: "CA03", value: +(0.02 * j("CA03")).toFixed(4), percent: true },
+        { id: "VE01", value: crit * j("VE01") },
+        { id: "VE02", value: efet * j("VE02") },
+        { id: "VE03", value: inst * j("VE03") },
+        { id: "VE05", value: +((crit ? efet / crit : 0.7) * j("VE05")).toFixed(4), percent: true },
+        { id: "VE06", value: +((efet ? inst / efet : 0.7) * j("VE06")).toFixed(4), percent: true },
+      ];
+    };
+
+    emit(competencia, cidade, "Banda Larga", bl, blSpecs(bl, "Banda Larga"));
+    emit(competencia, cidade, "FTTH", ftth, blSpecs(ftth, "FTTH"));
+    emit(competencia, cidade, "FWA", fwa, blSpecs(fwa, "FWA"));
+
+    if (g5.length) {
+      const j = (id: string) => jitter(`${cidade}${competencia}5G${id}`);
+      emit(competencia, cidade, "5G", g5, [
+        { id: "BA02", value: Math.max(20, Math.abs(s(g5, (r) => r.crescimento)) * j("BA02")) },
+        { id: "CA03", value: +(0.02 * j("CA03")).toFixed(4), percent: true },
+        { id: "VE04", value: s(g5, (r) => r.ativacao_mes) * j("VE04") },
+        { id: "CA12", value: s(g5, (r) => r.cancelamentos) * j("CA12") },
+      ]);
+    }
+  }
+  return out;
+}
+
 export function mockCityDataset(): CityDataset {
   const months = lastNMonths(12);
   const records = generate(months);
+  const metaRecords = buildMockMetas(records);
   // Watermark is stable in mock mode (data does not change between requests).
   const watermark = `mock:${months[months.length - 1]}`;
-  return { records, months, watermark };
+  return { records, metaRecords, months, watermark };
 }

@@ -35,7 +35,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const dataset = await getCityDataset();
   const options = buildFilterOptions(dataset);
   const filters = parseFilters(searchParams, dataset.months);
-  const view = buildDashboardView(dataset.records, dataset.months, filters);
+  const view = buildDashboardView(dataset.records, dataset.metaRecords, dataset.months, filters);
   const cfg = getCacheConfig();
 
   return (

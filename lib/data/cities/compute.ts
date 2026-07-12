@@ -5,7 +5,8 @@
 //
 // Business rule: "Banda Larga" = FTTH + FWA. 5G is an independent base.
 
-import type { CityIndicatorRecord, Filters } from "./types";
+import type { CityIndicatorRecord, CityMetaRecord, Filters } from "./types";
+import { computeIndicatorBlock, type IndicatorCardVM } from "./indicator-blocks";
 
 export const DEFAULT_FILTERS: Omit<Filters, "competencia"> = {
   gerencia: "",
@@ -324,6 +325,8 @@ export interface DashboardView {
   desativados: { solicitados: number; automaticos: number };
   /** Per-KPI 12-month series + average, for the KPI detail modal. */
   modal: Record<KpiKey, { series: { mes: string; valor: number }[]; media: number }>;
+  /** Selectable indicators per block; the client shows the user's chosen subset. */
+  blocks: { bandaLarga: IndicatorCardVM[]; g5: IndicatorCardVM[] };
 }
 
 const KPI_KEYS: KpiKey[] = [
@@ -341,6 +344,7 @@ const KPI_KEYS: KpiKey[] = [
 
 export function buildDashboardView(
   rows: CityIndicatorRecord[],
+  metaRecords: CityMetaRecord[],
   months: string[],
   filters: Filters,
 ): DashboardView {
@@ -391,5 +395,9 @@ export function buildDashboardView(
       automaticos: sum(nonFiveG, (r) => r.desativado_auto),
     },
     modal,
+    blocks: {
+      bandaLarga: computeIndicatorBlock(rows, metaRecords, months, filters, "banda-larga"),
+      g5: computeIndicatorBlock(rows, metaRecords, months, filters, "5g"),
+    },
   };
 }
