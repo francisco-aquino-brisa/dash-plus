@@ -29,6 +29,10 @@ export class DatabricksDataClient implements DataClient {
       const op = await session.executeStatement(sql, {
         runAsync: true,
         ordinalParameters: params as DBSQLParameterValue[],
+        // Disable CloudFetch: on Databricks Apps the presigned result-download
+        // links come back as `http://`, which the driver rejects
+        // (ERR_INVALID_PROTOCOL). Inline arrow results avoid that download path.
+        useCloudFetch: false,
       });
 
       try {
