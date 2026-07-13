@@ -498,7 +498,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
         </div>
 
         {/* Cidades Negativas */}
-        <NegativeCitiesTable rows={negatives} />
+        <NegativeCitiesTable data={negatives} />
 
         <footer className="pt-6 text-center text-xs text-muted-foreground">
           Brisanet · Dashboard de Performance Cidades · v1

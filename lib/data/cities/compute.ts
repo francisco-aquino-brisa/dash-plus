@@ -244,12 +244,14 @@ export function growthByTech(rows: CityIndicatorRecord[], filters: Filters): Gro
   });
 }
 
-export interface NegativeCityRow {
-  cidade: string;
-  uf: string;
+export interface NegativeRow {
+  /** Entity name for the active level (gerência / coordenação / cidade). */
+  nome: string;
   gerencia: string;
   coordenacao: string;
   tecnologia: string;
+  /** Distinct cities consolidated into this row (1 at the cidade level). */
+  cidades: number;
   metaCrescimento: number;
   resultadoCrescimento: number;
   atingCresc: number;
@@ -259,37 +261,89 @@ export interface NegativeCityRow {
   status: "Negativa Crescimento" | "Negativa Base Ativa" | "Ambas";
 }
 
-export function negativeCities(rows: CityIndicatorRecord[], filters: Filters): NegativeCityRow[] {
-  const r = applyFilters(rows, filters);
-  const map = new Map<string, NegativeCityRow>();
+export type NegativesByLevel = Record<QuartileLevel, NegativeRow[]>;
 
-  for (const x of r) {
-    const key = `${x.id_cidade}-${x.tecnologia}`;
-    const negCresc = x.crescimento < 0 || x.crescimento < x.meta_crescimento * 0.5;
-    const negBase = x.base_ativa < x.meta_base_ativa;
+interface NegAcc {
+  nome: string;
+  gerencia: string;
+  coordenacao: string;
+  tecnologia: string;
+  ids: Set<string>;
+  metaC: number;
+  resC: number;
+  metaB: number;
+  resB: number;
+}
+
+/** Entities (at one level) below the growth or base-ativa meta, consolidated. */
+function negativesBy(rows: CityIndicatorRecord[], level: QuartileLevel): NegativeRow[] {
+  const acc = new Map<string, NegAcc>();
+
+  for (const x of rows) {
+    const key =
+      level === "gerencia"
+        ? x.gerencia || "Não registrado"
+        : level === "coordenacao"
+          ? x.coordenacao || "Não registrado"
+          : `${x.id_cidade}-${x.tecnologia}`;
+    const cur =
+      acc.get(key) ??
+      ({
+        nome: level === "cidade" ? x.cidade : key,
+        gerencia: x.gerencia,
+        coordenacao: x.coordenacao,
+        tecnologia: x.tecnologia,
+        ids: new Set<string>(),
+        metaC: 0,
+        resC: 0,
+        metaB: 0,
+        resB: 0,
+      } satisfies NegAcc);
+
+    cur.ids.add(x.id_cidade);
+    cur.metaC += x.meta_crescimento;
+    cur.resC += x.crescimento;
+    cur.metaB += x.meta_base_ativa;
+    cur.resB += x.base_ativa;
+    acc.set(key, cur);
+  }
+
+  const out: NegativeRow[] = [];
+
+  for (const a of acc.values()) {
+    const negCresc = a.resC < 0 || a.resC < a.metaC * 0.5;
+    const negBase = a.resB < a.metaB;
 
     if (!negCresc && !negBase) continue;
 
-    const status: NegativeCityRow["status"] =
-      negCresc && negBase ? "Ambas" : negCresc ? "Negativa Crescimento" : "Negativa Base Ativa";
-
-    map.set(key, {
-      cidade: x.cidade,
-      uf: x.uf,
-      gerencia: x.gerencia,
-      coordenacao: x.coordenacao,
-      tecnologia: x.tecnologia,
-      metaCrescimento: x.meta_crescimento,
-      resultadoCrescimento: x.crescimento,
-      atingCresc: x.meta_crescimento === 0 ? 0 : (x.crescimento / x.meta_crescimento) * 100,
-      metaBaseAtiva: x.meta_base_ativa,
-      resultadoBaseAtiva: x.base_ativa,
-      atingBaseAtiva: x.meta_base_ativa === 0 ? 0 : (x.base_ativa / x.meta_base_ativa) * 100,
-      status,
+    out.push({
+      nome: a.nome,
+      gerencia: a.gerencia,
+      coordenacao: a.coordenacao,
+      tecnologia: a.tecnologia,
+      cidades: a.ids.size,
+      metaCrescimento: a.metaC,
+      resultadoCrescimento: a.resC,
+      atingCresc: a.metaC === 0 ? 0 : (a.resC / a.metaC) * 100,
+      metaBaseAtiva: a.metaB,
+      resultadoBaseAtiva: a.resB,
+      atingBaseAtiva: a.metaB === 0 ? 0 : (a.resB / a.metaB) * 100,
+      status: negCresc && negBase ? "Ambas" : negCresc ? "Negativa Crescimento" : "Negativa Base Ativa",
     });
   }
 
-  return Array.from(map.values()).sort((a, b) => a.atingCresc - b.atingCresc);
+  return out.sort((a, b) => a.atingCresc - b.atingCresc);
+}
+
+/** Negative entities at the three drill levels (Gerência → Coordenação → Cidade). */
+export function negativeCities(rows: CityIndicatorRecord[], filters: Filters): NegativesByLevel {
+  const r = applyFilters(rows, filters);
+
+  return {
+    gerencia: negativesBy(r, "gerencia"),
+    coordenacao: negativesBy(r, "coordenacao"),
+    cidade: negativesBy(r, "cidade"),
+  };
 }
 
 /** One row of the quartile drill-down list (a gerência, coordenação or cidade). */
@@ -407,7 +461,7 @@ export interface DashboardView {
   months: string[];
   kpis: KpiSet;
   growth: GrowthByTech[];
-  negatives: NegativeCityRow[];
+  negatives: NegativesByLevel;
   quartis: QuartilesByLevel;
   history: { mes: string; valor: number; target?: number }[];
   coverage: { totalCidades: number; totalBase: number; totalHP: number; takeup: number };
