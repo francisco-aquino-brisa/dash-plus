@@ -120,7 +120,12 @@
       "Bash(git checkout *)",
       "Bash(curl -sI http://localhost:63600/login)",
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:63600/api/cities/freshness)",
-      "Bash(curl -s http://localhost:63600/api/cities/freshness)"
+      "Bash(curl -s http://localhost:63600/api/cities/freshness)",
+      "Bash(node scripts/describe-databricks.mjs inteligencia_comercial_e_mercado consolidado_5g_pedido)",
+      "Bash(node scripts/query-databricks.mjs \"SELECT * FROM \\\\`gdb_brisanet_comunidade_dev\\\\`.\\\\`inteligencia_comercial_e_mercado\\\\`.\\\\`consolidado_5g_pedido\\\\` LIMIT 1\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const m=d.match\\(/\\\\[[\\\\s\\\\S]*\\\\]/\\);if\\(m\\){const o=JSON.parse\\(m\\)[0];console.log\\(Object.keys\\(o\\).join\\('\\\\n'\\)\\);}}\\)\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT * FROM \\\\`gdb_brisanet_comunidade_dev\\\\`.\\\\`projeto_brisa_performance\\\\`.\\\\`indicadores_cidades_5g\\\\` WHERE date_format\\(data,'yyyy-MM'\\)='2026-05' LIMIT 1\")",
+      "Bash(python3 -c \"import sys,json; d=sys.stdin.read\\(\\); i=d.find\\('['\\); o=json.loads\\(d[i:d.rfind\\(']'\\)+1]\\)[0]; print\\('\\\\n'.join\\(o.keys\\(\\)\\)\\)\")"
     ]
   }
 }

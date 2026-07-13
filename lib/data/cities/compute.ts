@@ -344,11 +344,15 @@ export function historicSeries(
   months: string[],
   filters: Filters,
   picker: (r: CityIndicatorRecord) => number,
-): { mes: string; valor: number }[] {
+  targetPicker?: (r: CityIndicatorRecord) => number,
+): { mes: string; valor: number; target?: number }[] {
   return months.map((m) => {
     const r = applyFilters(rows, { ...filters, competencia: m });
+    const point = { mes: m, valor: sum(r, picker) };
 
-    return { mes: m, valor: sum(r, picker) };
+    if (targetPicker) return { ...point, target: sum(r, targetPicker) };
+
+    return point;
   });
 }
 
@@ -363,10 +367,10 @@ export interface DashboardView {
   growth: GrowthByTech[];
   negatives: NegativeCityRow[];
   quartis: QuartileBucket[];
-  history: { mes: string; valor: number }[];
+  history: { mes: string; valor: number; target?: number }[];
   coverage: { totalCidades: number; totalBase: number; totalHP: number; takeup: number };
   churn5g: { churnRate: number; cancelamentos: number; comConsumo: number; semConsumo: number };
-  desativados: { solicitados: number; automaticos: number };
+  desativados: { solicitados: number; automaticos: number; voluntarios: number; involuntarios: number };
   /** Per-KPI 12-month series + average, for the KPI detail modal. */
   modal: Record<KpiKey, { series: { mes: string; valor: number }[]; media: number }>;
   /** Selectable indicators per block; the client shows the user's chosen subset. */
@@ -427,7 +431,13 @@ export function buildDashboardView(
     growth: growthByTech(rows, filters),
     negatives: negativeCities(rows, filters),
     quartis: quartiles(rows, filters),
-    history: historicSeries(rows, months, filters, (r) => r.crescimento),
+    history: historicSeries(
+      rows,
+      months,
+      filters,
+      (r) => r.crescimento,
+      (r) => r.meta_crescimento,
+    ),
     coverage: { totalCidades, totalBase, totalHP, takeup },
     churn5g: {
       churnRate: base5g === 0 ? 0 : (cancel5g / base5g) * 100,
@@ -438,6 +448,8 @@ export function buildDashboardView(
     desativados: {
       solicitados: sum(nonFiveG, (r) => r.desativado_s),
       automaticos: sum(nonFiveG, (r) => r.desativado_auto),
+      voluntarios: sum(nonFiveG, (r) => r.cancelamentos_voluntarios),
+      involuntarios: sum(nonFiveG, (r) => r.cancelamentos_involuntarios),
     },
     modal,
     blocks: {

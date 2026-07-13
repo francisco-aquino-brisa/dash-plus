@@ -391,8 +391,8 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                 good={kpis.churnRate.resultado <= kpis.churnRate.meta}
               />
               <MiniStat label="Cancelamentos Mês" value={formatNumber(kpis.baseFechada.resultado)} />
-              <MiniStat label="Desativados Solicitados" value={formatNumber(desativados.solicitados)} />
-              <MiniStat label="Desativados Automáticos" value={formatNumber(desativados.automaticos)} />
+              <MiniStat label="Cancelamentos Voluntários" value={formatNumber(desativados.voluntarios)} />
+              <MiniStat label="Cancelamentos Involuntários" value={formatNumber(desativados.involuntarios)} />
             </div>
           </Section>
           <Section title="Bloco 5 · Churn 5G" subtitle="Cancelamentos com/sem consumo">
@@ -477,13 +477,6 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
                 label="Takeup Geral"
                 value={formatPct(coverage.takeup)}
                 good={coverage.takeup >= 25}
-              />
-              <MiniStat label="Bloqueados" value={formatNumber(kpis.bloqueados)} />
-              <MiniStat
-                label="Reativação"
-                value={formatPct(kpis.reativPct)}
-                good={kpis.reativPct >= 25}
-                hint={`${formatNumber(kpis.reativacao.resultado)} reativados`}
               />
               {filters.tecnologia !== "5G" && (
                 <MiniStat

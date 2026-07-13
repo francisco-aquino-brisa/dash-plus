@@ -81,8 +81,6 @@ export interface IndicatorDef {
   targetCompare?: { compute: IndicatorCompute; unit: IndicatorUnit };
   /** Footer columns for this card. Defaults to Meta · Projeção · Ating. */
   footer?: FooterSlot[];
-  /** Plot the meta as a second line in the detail chart (needs a meta). */
-  chartMeta?: boolean;
   /** Extra values shown in the detail chart tooltip (e.g. the ratio components). */
   chartExtras?: { label: string; compute: IndicatorCompute; unit?: IndicatorUnit; decimals?: number }[];
   /** Secondary metrics shown in the detail modal (clickable → chart swaps). */
@@ -350,7 +348,6 @@ const BANDA_LARGA: IndicatorDef[] = [
     targetId: "CA09",
     targetService: "Banda Larga",
     footer: ["target", "attainment"],
-    chartMeta: true,
     chartExtras: [
       { label: "Cancelados 4m", compute: { kind: "sum", field: "cancelados_4_mes" }, unit: "qtd" },
       { label: "Instalados 4m", compute: { kind: "sum", field: "instalados_4_mes" }, unit: "qtd" },

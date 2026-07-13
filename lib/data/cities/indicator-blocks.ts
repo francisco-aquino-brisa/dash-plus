@@ -414,12 +414,20 @@ export function computeIndicatorBlock(
     const projected = def.unit === "percent" ? value : projection(value, comp);
     const footer = resolveFooter(def, { target, attainment, projected, compute: curCtx });
 
-    // Enrich the main series with the meta line + tooltip extras when declared.
+    // Plot the target line whenever the indicator has a meta expressed in the
+    // SAME unit as the value (a %-target on a qtd value can't share the axis).
+    const targetUnit = def.targetCompare?.unit ?? def.unit;
+    const plotTarget = (def.targetId != null || def.targetCompute != null) && targetUnit === def.unit;
+
+    // Enrich the main series with the target line + tooltip extras.
     const series: SeriesPoint[] = months.map((m) => {
       const ctx = ctxFor(m);
       const point: SeriesPoint = { mes: m, valor: computeValue(def.compute, ctx) };
 
-      if (def.chartMeta) point.target = aggregateTarget(def, ctx.rows, metaRecords, m, servico);
+      if (plotTarget)
+        point.target = def.targetCompute
+          ? computeValue(def.targetCompute, ctx)
+          : aggregateTarget(def, ctx.rows, metaRecords, m, servico);
 
       if (def.chartExtras)
         point.extras = def.chartExtras.map((e) => {
