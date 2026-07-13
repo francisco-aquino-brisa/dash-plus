@@ -292,51 +292,93 @@ export function negativeCities(rows: CityIndicatorRecord[], filters: Filters): N
   return Array.from(map.values()).sort((a, b) => a.atingCresc - b.atingCresc);
 }
 
+/** One row of the quartile drill-down list (a gerência, coordenação or cidade). */
+export interface QuartileEntity {
+  nome: string;
+  real: number;
+  meta: number;
+  atingimento: number;
+}
+
 export interface QuartileBucket {
   label: string;
   range: string;
   count: number;
   pct: number;
-  cidades: { cidade: string; atingimento: number; tecnologia: string }[];
+  /** Sum of realizado / meta across the entities in this band. */
+  real: number;
+  meta: number;
+  itens: QuartileEntity[];
 }
 
-export function quartiles(rows: CityIndicatorRecord[], filters: Filters): QuartileBucket[] {
-  const r = applyFilters(rows, filters);
-  const byKey = new Map<string, { cidade: string; tec: string; atin: number }>();
+/** The aggregation level the user can switch between in the quartile widget. */
+export type QuartileLevel = "gerencia" | "coordenacao" | "cidade";
+export type QuartilesByLevel = Record<QuartileLevel, QuartileBucket[]>;
 
-  for (const x of r) {
-    const k = `${x.id_cidade}-${x.tecnologia}`;
-    const atin = x.meta_crescimento === 0 ? 0 : (x.crescimento / x.meta_crescimento) * 100;
-
-    byKey.set(k, { cidade: x.cidade, tec: x.tecnologia, atin });
-  }
-
-  const all = Array.from(byKey.values());
+/** Bucket a set of entities into the four attainment quartiles. */
+function bucketize(entities: QuartileEntity[]): QuartileBucket[] {
   const buckets: QuartileBucket[] = [
-    { label: "Q1 — Acima da meta", range: ">= 100%", count: 0, pct: 0, cidades: [] },
-    { label: "Q2 — Próximo da meta", range: "70% a 99%", count: 0, pct: 0, cidades: [] },
-    { label: "Q3 — Abaixo da meta", range: "0% a 69%", count: 0, pct: 0, cidades: [] },
-    { label: "Q4 — Negativa", range: "< 0%", count: 0, pct: 0, cidades: [] },
+    { label: "Q1 — Acima da meta", range: ">= 100%", count: 0, pct: 0, real: 0, meta: 0, itens: [] },
+    { label: "Q2 — Próximo da meta", range: "70% a 99%", count: 0, pct: 0, real: 0, meta: 0, itens: [] },
+    { label: "Q3 — Abaixo da meta", range: "0% a 69%", count: 0, pct: 0, real: 0, meta: 0, itens: [] },
+    { label: "Q4 — Negativa", range: "< 0%", count: 0, pct: 0, real: 0, meta: 0, itens: [] },
   ];
 
-  for (const c of all) {
+  for (const e of entities) {
     let idx = 2;
 
-    if (c.atin >= 100) idx = 0;
-    else if (c.atin >= 70) idx = 1;
-    else if (c.atin >= 0) idx = 2;
+    if (e.atingimento >= 100) idx = 0;
+    else if (e.atingimento >= 70) idx = 1;
+    else if (e.atingimento >= 0) idx = 2;
     else idx = 3;
 
     buckets[idx].count++;
-    buckets[idx].cidades.push({ cidade: c.cidade, atingimento: c.atin, tecnologia: c.tec });
+    buckets[idx].real += e.real;
+    buckets[idx].meta += e.meta;
+    buckets[idx].itens.push(e);
   }
 
-  const total = all.length || 1;
+  const total = entities.length || 1;
 
   buckets.forEach((b) => (b.pct = (b.count / total) * 100));
-  buckets.forEach((b) => b.cidades.sort((a, b) => b.atingimento - a.atingimento));
+  buckets.forEach((b) => b.itens.sort((a, b) => b.atingimento - a.atingimento));
 
   return buckets;
+}
+
+/** Aggregate crescimento vs meta_crescimento by a key, into quartile entities. */
+function aggregateBy(
+  rows: CityIndicatorRecord[],
+  name: (r: CityIndicatorRecord) => string,
+): QuartileEntity[] {
+  const acc = new Map<string, { nome: string; real: number; meta: number }>();
+
+  for (const x of rows) {
+    const nome = name(x) || "Não registrado";
+    const cur = acc.get(nome) ?? { nome, real: 0, meta: 0 };
+
+    cur.real += x.crescimento;
+    cur.meta += x.meta_crescimento;
+    acc.set(nome, cur);
+  }
+
+  return Array.from(acc.values()).map((e) => ({
+    nome: e.nome,
+    real: e.real,
+    meta: e.meta,
+    atingimento: e.meta === 0 ? 0 : (e.real / e.meta) * 100,
+  }));
+}
+
+/** Attainment quartiles at three drill levels (Gerência → Coordenação → Cidade). */
+export function quartiles(rows: CityIndicatorRecord[], filters: Filters): QuartilesByLevel {
+  const r = applyFilters(rows, filters);
+
+  return {
+    gerencia: bucketize(aggregateBy(r, (x) => x.gerencia)),
+    coordenacao: bucketize(aggregateBy(r, (x) => x.coordenacao)),
+    cidade: bucketize(aggregateBy(r, (x) => x.cidade)),
+  };
 }
 
 export function historicSeries(
@@ -366,7 +408,7 @@ export interface DashboardView {
   kpis: KpiSet;
   growth: GrowthByTech[];
   negatives: NegativeCityRow[];
-  quartis: QuartileBucket[];
+  quartis: QuartilesByLevel;
   history: { mes: string; valor: number; target?: number }[];
   coverage: { totalCidades: number; totalBase: number; totalHP: number; takeup: number };
   churn5g: { churnRate: number; cancelamentos: number; comConsumo: number; semConsumo: number };

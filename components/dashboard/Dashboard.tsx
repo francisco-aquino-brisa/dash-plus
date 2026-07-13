@@ -461,9 +461,9 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
         <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
           <Section
             title="Distribuição de Atingimento (Quartis)"
-            subtitle="Crescimento / Meta de Crescimento por cidade × tecnologia"
+            subtitle="Crescimento / Meta de Crescimento — por gerência, coordenação ou cidade"
           >
-            <QuartileChart buckets={quartis} />
+            <QuartileChart data={quartis} />
           </Section>
           <Section title="Cobertura & Penetração" subtitle="Visão consolidada do escopo filtrado">
             <div className="mb-2 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
