@@ -25,8 +25,12 @@ import type { CityDataset, CityIndicatorRecord, CityMetaRecord, Tecnologia, Tipo
 
 const CATALOG = process.env.DATABRICKS_CITIES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const SCHEMA = process.env.DATABRICKS_CITIES_SCHEMA ?? "projeto_brisa_performance";
+// Commercial-intelligence schema (ticket/faturamento, churn 5G, pedidos 5G).
+// Granted alongside the cities schema; sources verified read-only.
+const ICM_SCHEMA = process.env.DATABRICKS_ICM_SCHEMA ?? "inteligencia_comercial_e_mercado";
 const MONTHS_WINDOW = 12;
 const FQ = (t: string) => `\`${CATALOG}\`.\`${SCHEMA}\`.\`${t}\``;
+const FQ_ICM = (t: string) => `\`${CATALOG}\`.\`${ICM_SCHEMA}\`.\`${t}\``;
 const WINDOW = `add_months(date_trunc('MM', current_date()), -${MONTHS_WINDOW - 1})`;
 
 function str(v: unknown): string {
@@ -37,6 +41,18 @@ function ufFrom(cidade: string): string {
   const parts = cidade.split("/");
 
   return parts.length > 1 ? parts[parts.length - 1].trim() : "";
+}
+
+/**
+ * Canonical "Cidade / UF" key for joining the ICM sources to the cube. The cube
+ * and waves use "MARACANAU / CE" (spaces around the slash); consolidado_5g_pedido
+ * and churn_vendedor_5g use "MARACANAU/CE". Normalize both sides identically.
+ */
+function cityKey(cidade: string): string {
+  return str(cidade)
+    .replace(/\s*\/\s*/g, " / ")
+    .trim()
+    .toUpperCase();
 }
 
 function normTipo(v: unknown): TipoCidade {
@@ -116,6 +132,15 @@ async function fetchCitiesFTTHFWA(): Promise<CityIndicatorRecord[]> {
       vendas_instaladas: num(r.instalacoes),
       instalados_4_mes: num(r.instalados_4_mes),
       cancelados_4_mes: num(r.cancelados_4_mes),
+      // Enriched below from waves_consolidado_orcamento (per cidade/mês/tecnologia).
+      ticket_entrada_sum: 0,
+      ticket_oferta_sum: 0,
+      ticket_qtd: 0,
+      churn_entrantes: 0,
+      churn_cancelados: 0,
+      churn_bloqueados: 0,
+      ativacao_oficial: 0,
+      ativacao_avulso: 0,
       total_de_hp: num(r.total_de_hp),
       meta_crescimento: num(r.meta_crescimento),
       // No meta_base_ativa column → proxy (TODO: confirm real target source).
@@ -179,6 +204,15 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
       vendas_instaladas: 0,
       instalados_4_mes: num(r.instalacoes_4_mes),
       cancelados_4_mes: num(r.cancelamentos_4_mes),
+      // Enriched below from consolidado_5g_pedido + churn_vendedor_5g (per cidade/mês).
+      ticket_entrada_sum: 0,
+      ticket_oferta_sum: 0,
+      ticket_qtd: 0,
+      churn_entrantes: 0,
+      churn_cancelados: 0,
+      churn_bloqueados: 0,
+      ativacao_oficial: 0,
+      ativacao_avulso: 0,
       total_de_hp: 0,
       meta_crescimento: 0,
       meta_base_ativa: 0,
@@ -219,12 +253,175 @@ async function fetchMetas(): Promise<CityMetaRecord[]> {
   }));
 }
 
+/** Ticket/faturamento + funil per (competência, cidade, tecnologia) from waves. */
+interface TicketAgg {
+  entrada: number;
+  oferta: number;
+  qtd: number;
+  // Funil oficial (fonte de verdade do time de dados): distinct orcamento_id,
+  // status cumulativo. Criadas = todos; Efetivadas = EFETIVADO+INSTALADO;
+  // Instaladas = INSTALADO. Mês pela coluna `data`. Reconcilia ~3% com o cubo.
+  criadas: number;
+  efetivadas: number;
+  instaladas: number;
+}
+
+/**
+ * FTTH/FWA ticket, faturamento e FUNIL (Vendas Criadas/Efetivadas/Instaladas) de
+ * `waves_consolidado_orcamento`. Só orders não-corporativos INTERNET (→FTTH) /
+ * FWA. "entrada" = valor com desconto, "oferta" = valor cheio; o funil deduplica
+ * por orcamento_id. Keyed by "competência|cidade|tecnologia".
+ */
+async function fetchWavesTickets(): Promise<Map<string, TicketAgg>> {
+  const sql = `
+    SELECT
+      date_format(data, 'yyyy-MM-01') AS competencia,
+      cidade_venda,
+      CASE WHEN upper(servico) = 'INTERNET' THEN 'FTTH' ELSE 'FWA' END AS tecnologia,
+      SUM(try_cast(nullif(lower(trim(valor_com_desconto)), 'nan') AS DOUBLE)) AS entrada,
+      SUM(try_cast(nullif(lower(trim(valor)), 'nan') AS DOUBLE)) AS oferta,
+      COUNT(*) AS qtd,
+      COUNT(DISTINCT orcamento_id) AS criadas,
+      COUNT(DISTINCT CASE WHEN upper(status_venda) IN ('EFETIVADO', 'INSTALADO') THEN orcamento_id END) AS efetivadas,
+      COUNT(DISTINCT CASE WHEN upper(status_venda) = 'INSTALADO' THEN orcamento_id END) AS instaladas
+    FROM ${FQ_ICM("waves_consolidado_orcamento")}
+    WHERE data >= ${WINDOW}
+      AND upper(corporativo) = 'NAO'
+      AND upper(servico) IN ('INTERNET', 'FWA')
+      AND coalesce(cidade_venda, '') <> ''
+    GROUP BY 1, 2, 3
+  `;
+  const raw = await getDataClient().query<Record<string, unknown>>(sql);
+  const map = new Map<string, TicketAgg>();
+
+  for (const r of raw) {
+    const key = `${str(r.competencia)}|${cityKey(str(r.cidade_venda))}|${str(r.tecnologia)}`;
+
+    map.set(key, {
+      entrada: num(r.entrada),
+      oferta: num(r.oferta),
+      qtd: num(r.qtd),
+      criadas: num(r.criadas),
+      efetivadas: num(r.efetivadas),
+      instaladas: num(r.instaladas),
+    });
+  }
+
+  return map;
+}
+
+/** 5G ticket/faturamento + VE04/VE51 per (competência, cidade). */
+interface PedidoAgg {
+  entrada: number;
+  oferta: number;
+  qtd: number;
+  ve04: number;
+  ve51: number;
+}
+
+/**
+ * 5G orders from `consolidado_5g_pedido`, deduplicated by n_do_pedido (a pedido
+ * may span rows). "entrada" = preço promocional, "oferta" = preço de oferta
+ * (comma decimals, DD/MM/YYYY dates). VE04 = distinct pedidos; VE51 = distinct
+ * pedidos fora de combo (combo_ftth_5g = 'NAO'). Keyed by "competência|cidade".
+ */
+async function fetch5gPedidos(): Promise<Map<string, PedidoAgg>> {
+  const sql = `
+    WITH ped AS (
+      SELECT
+        date_format(to_date(data_assinatura, 'dd/MM/yyyy'), 'yyyy-MM-01') AS competencia,
+        cidade_venda,
+        n_do_pedido,
+        MAX(try_cast(nullif(replace(lower(trim(preco_promocional)), ',', '.'), 'nan') AS DOUBLE)) AS entrada,
+        MAX(try_cast(nullif(replace(lower(trim(preco_oferta)), ',', '.'), 'nan') AS DOUBLE)) AS oferta,
+        MAX(upper(trim(combo_ftth_5g))) AS combo
+      FROM ${FQ_ICM("consolidado_5g_pedido")}
+      WHERE to_date(data_assinatura, 'dd/MM/yyyy') >= ${WINDOW}
+        AND coalesce(cidade_venda, '') <> ''
+        AND coalesce(n_do_pedido, '') <> ''
+      GROUP BY 1, 2, 3
+    )
+    SELECT
+      competencia, cidade_venda,
+      SUM(entrada) AS entrada,
+      SUM(oferta) AS oferta,
+      COUNT(*) AS qtd,
+      COUNT(*) AS ve04,
+      COUNT(CASE WHEN combo = 'NAO' THEN 1 END) AS ve51
+    FROM ped
+    WHERE competencia IS NOT NULL
+    GROUP BY 1, 2
+  `;
+  const raw = await getDataClient().query<Record<string, unknown>>(sql);
+  const map = new Map<string, PedidoAgg>();
+
+  for (const r of raw) {
+    const key = `${str(r.competencia)}|${cityKey(str(r.cidade_venda))}`;
+
+    map.set(key, {
+      entrada: num(r.entrada),
+      oferta: num(r.oferta),
+      qtd: num(r.qtd),
+      ve04: num(r.ve04),
+      ve51: num(r.ve51),
+    });
+  }
+
+  return map;
+}
+
+/** 5G churn-safra components per (competência, cidade) from churn_vendedor_5g. */
+interface ChurnAgg {
+  entrantes: number;
+  cancelados: number;
+  bloqueados: number;
+}
+
+async function fetchChurn5g(): Promise<Map<string, ChurnAgg>> {
+  const sql = `
+    SELECT
+      date_format(data_churn, 'yyyy-MM-01') AS competencia,
+      cidade_uf_cliente,
+      SUM(entrantes) AS entrantes,
+      SUM(cancelados) AS cancelados,
+      SUM(bloqueados) AS bloqueados
+    FROM ${FQ_ICM("churn_vendedor_5g")}
+    WHERE data_churn >= ${WINDOW}
+      AND coalesce(cidade_uf_cliente, '') <> ''
+    GROUP BY 1, 2
+  `;
+  const raw = await getDataClient().query<Record<string, unknown>>(sql);
+  const map = new Map<string, ChurnAgg>();
+
+  for (const r of raw) {
+    const key = `${str(r.competencia)}|${cityKey(str(r.cidade_uf_cliente))}`;
+
+    map.set(key, {
+      entrantes: num(r.entrantes),
+      cancelados: num(r.cancelados),
+      bloqueados: num(r.bloqueados),
+    });
+  }
+
+  return map;
+}
+
+/** .catch handler for an isolated enrich source: log and yield an empty Map. */
+function emptyMapOnError<T>(label: string) {
+  return (e: unknown): T => {
+    console.warn(`[cities] ${label} indisponível:`, (e as Error).message);
+
+    return new Map() as T;
+  };
+}
+
 export async function databricksCityDataset(): Promise<CityDataset> {
   const watermark = await databricksWatermark();
-  // Banda Larga is the core source (propagates on failure). 5G and metas are
-  // isolated: if their source is missing/errors, the block degrades to "sem
-  // acesso" (empty) instead of taking the whole screen down. Never mock.
-  const [ftthFwa, fiveG, metaRecords] = await Promise.all([
+
+  // Banda Larga is the core source (propagates on failure). Everything else is
+  // isolated: if a source is missing/errors, that indicator degrades to empty
+  // (0 / "sem acesso") instead of taking the whole screen down. Never mock.
+  const [ftthFwa, fiveG, metaRecords, tickets, pedidos, churn] = await Promise.all([
     fetchCitiesFTTHFWA(),
     fetch5G().catch((e) => {
       console.warn("[cities] 5G indisponível (fonte ausente no Databricks):", (e as Error).message);
@@ -236,7 +433,56 @@ export async function databricksCityDataset(): Promise<CityDataset> {
 
       return [] as CityMetaRecord[];
     }),
+    fetchWavesTickets().catch(emptyMapOnError<Map<string, TicketAgg>>("tickets")),
+    fetch5gPedidos().catch(emptyMapOnError<Map<string, PedidoAgg>>("pedidos 5G")),
+    fetchChurn5g().catch(emptyMapOnError<Map<string, ChurnAgg>>("churn 5G")),
   ]);
+
+  // Enrich each record with the ticket/faturamento/churn/ativação aggregates
+  // joined on (competência, cidade[, tecnologia]).
+  // The FTTH/FWA funnel (Vendas Criadas/Efetivadas/Instaladas) becomes the
+  // official one from waves — but ONLY when that source actually loaded, so a
+  // transient failure falls back to the cube funnel instead of zeroing it.
+  const wavesLoaded = tickets.size > 0;
+
+  for (const r of ftthFwa) {
+    const t = tickets.get(`${r.competencia}|${cityKey(r.cidade)}|${r.tecnologia}`);
+
+    if (t) {
+      r.ticket_entrada_sum = t.entrada;
+      r.ticket_oferta_sum = t.oferta;
+      r.ticket_qtd = t.qtd;
+    }
+
+    // Official funnel from waves (0 for a cidade/mês with no waves orders).
+    if (wavesLoaded) {
+      r.vendas_criadas = t?.criadas ?? 0;
+      r.vendas_efetivadas = t?.efetivadas ?? 0;
+      r.vendas_instaladas = t?.instaladas ?? 0;
+    }
+  }
+
+  for (const r of fiveG) {
+    const key = `${r.competencia}|${cityKey(r.cidade)}`;
+    const p = pedidos.get(key);
+
+    if (p) {
+      r.ticket_entrada_sum = p.entrada;
+      r.ticket_oferta_sum = p.oferta;
+      r.ticket_qtd = p.qtd;
+      r.ativacao_oficial = p.ve04;
+      r.ativacao_avulso = p.ve51;
+    }
+
+    const c = churn.get(key);
+
+    if (c) {
+      r.churn_entrantes = c.entrantes;
+      r.churn_cancelados = c.cancelados;
+      r.churn_bloqueados = c.bloqueados;
+    }
+  }
+
   const records = [...ftthFwa, ...fiveG];
   const months = Array.from(new Set(records.map((r) => r.competencia)))
     .filter(Boolean)

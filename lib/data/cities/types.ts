@@ -61,6 +61,25 @@ export interface CityIndicatorRecord {
   instalados_4_mes: number;
   cancelados_4_mes: number;
 
+  // Ticket / faturamento (fonte: waves_consolidado_orcamento p/ FTTH/FWA;
+  // consolidado_5g_pedido — deduplicado por n_do_pedido — p/ 5G). "entrada" =
+  // valor com desconto/promocional; "oferta" = valor cheio. `ticket_qtd` é o nº
+  // de pedidos, denominador do ticket médio (compute "avg").
+  ticket_entrada_sum: number;
+  ticket_oferta_sum: number;
+  ticket_qtd: number;
+
+  // Churn safra 5G com bloqueio (fonte: churn_vendedor_5g). CA10 =
+  // (bloqueados + cancelados) / entrantes. Só 5G; 0 para FTTH/FWA.
+  churn_entrantes: number;
+  churn_cancelados: number;
+  churn_bloqueados: number;
+
+  // Ativações 5G oficiais (fonte: consolidado_5g_pedido, distinct n_do_pedido).
+  // `ativacao_oficial` = VE04 oficial; `ativacao_avulso` = VE51 (combo = 'NAO').
+  ativacao_oficial: number;
+  ativacao_avulso: number;
+
   // Coverage.
   total_de_hp: number;
 

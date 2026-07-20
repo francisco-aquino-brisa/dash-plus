@@ -123,6 +123,10 @@ function generate(months: string[]): CityIndicatorRecord[] {
         const canc4m = Math.round(inst4m * (0.02 + rng() * 0.05));
         const is5g = tec === "5G";
         const ativacaoMes = is5g ? Math.round(vInst * 0.8) : 0;
+        // Ticket / faturamento (mock parity with the enriched Databricks fields).
+        const ticketQtd = is5g ? ativacaoMes : vCriadas;
+        const ticketEntradaAvg = is5g ? 20 + rng() * 12 : 80 + rng() * 25;
+        const ticketOfertaAvg = is5g ? 30 + rng() * 12 : 95 + rng() * 30;
 
         out.push({
           competencia,
@@ -156,6 +160,14 @@ function generate(months: string[]): CityIndicatorRecord[] {
           vendas_instaladas: vInst,
           instalados_4_mes: inst4m,
           cancelados_4_mes: canc4m,
+          ticket_entrada_sum: Math.round(ticketQtd * ticketEntradaAvg),
+          ticket_oferta_sum: Math.round(ticketQtd * ticketOfertaAvg),
+          ticket_qtd: ticketQtd,
+          churn_entrantes: is5g ? inst4m : 0,
+          churn_cancelados: is5g ? canc4m : 0,
+          churn_bloqueados: is5g ? Math.round(inst4m * (0.2 + rng() * 0.2)) : 0,
+          ativacao_oficial: ativacaoMes,
+          ativacao_avulso: is5g ? Math.round(ativacaoMes * (0.6 + rng() * 0.2)) : 0,
           total_de_hp: baseHP,
           meta_crescimento: metaCresc,
           meta_base_ativa: metaBaseAtiva,
@@ -251,7 +263,8 @@ function buildMockMetas(records: CityIndicatorRecord[]): CityMetaRecord[] {
       emit(competencia, cidade, "5G", g5, [
         { id: "BA02", value: Math.max(20, Math.abs(s(g5, (r) => r.crescimento)) * j("BA02")) },
         { id: "CA03", value: +(0.02 * j("CA03")).toFixed(4), percent: true },
-        { id: "VE04", value: s(g5, (r) => r.ativacao_mes) * j("VE04") },
+        { id: "CA10", value: +(0.24 * j("CA10")).toFixed(4), percent: true },
+        { id: "VE04", value: s(g5, (r) => r.ativacao_oficial) * j("VE04") },
         { id: "CA12", value: s(g5, (r) => r.cancelamentos) * j("CA12") },
       ]);
     }

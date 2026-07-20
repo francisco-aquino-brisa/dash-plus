@@ -10,19 +10,39 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 
 ## Verification status (last audited via warehouse queries)
 
-| Object                      | Schema                                          | Type    | Exists        | Columns used by code |
-| --------------------------- | ----------------------------------------------- | ------- | ------------- | -------------------- |
-| `indicadores_cidades`       | `projeto_brisa_performance`                     | VIEW    | ✅            | all present ✅       |
-| `indicadores_cidades_5g`    | `projeto_brisa_performance`                     | VIEW    | ✅            | all present ✅       |
-| `metas_cidades`             | `projeto_brisa_performance`                     | VIEW    | ✅            | all present ✅       |
-| `cadastro_usuario`          | `projeto_brisa_performance`                     | MANAGED | ✅            | all present ✅       |
-| `desempenho_hc`             | `diego_barros_inteligencia_comercial_e_mercado` | MANAGED | ✅            | all present ✅       |
-| **`vw_hc_zerado_vendedor`** | (referenced as `projeto_brisa_performance`)     | —       | ❌ **absent** | —                    |
+| Object                        | Schema                                             | Type    | Exists            | Columns used by code           |
+| ----------------------------- | -------------------------------------------------- | ------- | ----------------- | ------------------------------ |
+| `indicadores_cidades`         | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                 |
+| `indicadores_cidades_5g`      | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                 |
+| `metas_cidades`               | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                 |
+| `cadastro_usuario`            | `projeto_brisa_performance`                        | MANAGED | ✅                | all present ✅                 |
+| `desempenho_hc`               | `diego_barros_inteligencia_comercial_e_mercado`    | MANAGED | ✅                | all present ✅                 |
+| `waves_consolidado_orcamento` | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | ticket/faturamento BL ✅       |
+| `consolidado_5g_pedido`       | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | ticket 5G, VE04, VE51 ✅       |
+| `churn_vendedor_5g`           | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | CA10 (churn safra 5G) ✅       |
+| `indicadores_servicos`        | `inteligencia_comercial_e_mercado_indicadores`     | —       | ✅ (2026-07)      | catálogo (fonte+fórmula) ✅    |
+| **`vw_hc_zerado_vendedor`**   | (referenced as `projeto_brisa_performance`)        | —       | ❌ **absent**     | —                              |
+| **`portabilidade_5g`**        | `gdb_brisanet_gd.inteligencia_comercial_e_mercado` | —       | ⛔ **sem acesso** | VE32–VE35 (USE CATALOG negado) |
+
+> **Acesso ampliado (2026-07):** antes o app só alcançava `projeto_brisa_performance`.
+> O time de dados liberou os demais schemas de `gdb_brisanet_comunidade_dev`
+> (`inteligencia_comercial_e_mercado`, `..._indicadores`, `looker_playground`).
+> Isso desbloqueou ticket/faturamento e churn-safra 5G (ver abaixo). O catálogo
+> **`inteligencia_comercial_e_mercado_indicadores.indicadores_servicos`** é a fonte
+> de verdade de "como calcular" cada indicador (colunas `tabela`/`colunas`/`metrica`/
+> `funcao`/`formato_dado`/`polaridade` por indicador×serviço) — mais rico que `metas_cidades`.
 
 > **`vw_hc_zerado_vendedor` does not exist in ANY accessible catalog**, and the
 > column it relies on — **`total_realizado`** — does not exist anywhere either
 > (checked across all catalogs). So the **PDU is broken** on every screen that
 > uses it. See "Known breakage" below.
+
+> **Portabilidade 5G (VE32–VE35) segue bloqueada:** o catálogo aponta a fonte
+> oficial para `gdb_brisanet_gd.inteligencia_comercial_e_mercado.portabilidade_5g`,
+> mas o app **não tem `USE CATALOG` em `gdb_brisanet_gd`**. As tabelas
+> `portabilidade`/`portabilidade_solicitado`/`portabilidade_portado` em
+> `inteligencia_comercial_e_mercado` têm estrutura diferente (orientada a venda/
+> consultor) — não são substituto direto. Ver [pending-data-team.md](./pending-data-team.md).
 
 ## Data sources per screen
 
@@ -75,7 +95,12 @@ Monthly 5G realizado per city. Wide, much narrower.
 - **Base:** `base_ativa`, `base_ativa_anterior`, `crescimento`
 - **Churn:** `cancelamento_mes`, `cancel_com_consumo`, `cancel_sem_consumo`, `cancelamentos_4_mes`, `instalacoes_4_mes`
 - **Activation:** `ativacao_mes`, `chips_combo`, `cpfs_unicos`
-- **Absent** (→ "Sem acesso aos dados"): portabilidade, ticket, faturamento, avulso.
+- **Não está neste cubo, mas AGORA disponível via enriquecimento** (schema
+  `inteligencia_comercial_e_mercado`, join por competência+cidade normalizada):
+  ticket/faturamento entrada e oferta (`consolidado_5g_pedido`), churn safra c/
+  bloqueio CA10 (`churn_vendedor_5g`), ativação avulsa VE51 e VE04 oficial
+  (`consolidado_5g_pedido`). Ver "Indicadores de Cidades desbloqueados" abaixo.
+- **Ainda ausente** (→ "Sem acesso aos dados"): portabilidade 5G (VE32–VE35).
 
 ### `metas_cidades` — metas + indicator catalog · VIEW
 
@@ -106,6 +131,42 @@ month, so it matches 1:1 (validated 161/161 cities on Banda Larga, May/2026).
 - **5G** = `indicadores_cidades_5g`; meta `servico = "5G"`. Independent base.
 - **Quantity** → sum realizado, sum per-city metas. **Percent/ratio** → recompute
   from summed components (Σnum ÷ Σden); weight the % meta by each city's denominator.
+
+## Indicadores de Cidades desbloqueados (2026-07, `lib/data/cities/databricks.ts`)
+
+Os registros do cubo são enriquecidos com agregados das fontes novas, unidos por
+**(competência, cidade normalizada[, tecnologia])** — `cityKey()` normaliza
+`"MARACANAU/CE"` ↔ `"MARACANAU / CE"`. Cada fonte é isolada (falha → 0, degrada
+o card, nunca derruba a tela). Números validados contra o warehouse (jun/2026).
+
+| Indicador (bloco)                    | Fonte                         | Cálculo                                                                         | Validação jun/2026  |
+| ------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------- | ------------------- |
+| RE01 Ticket Médio Entrada (BL)       | `waves_consolidado_orcamento` | Σ`valor_com_desconto` ÷ nº pedidos, `corporativo='NAO'`, servico∈{INTERNET,FWA} | R$ 87,61            |
+| RE04 Faturamento Entrada (BL)        | `waves_consolidado_orcamento` | Σ`valor_com_desconto` (mesmo filtro)                                            | R$ 11,16 mi         |
+| RE01/RE02 Ticket Entrada/Oferta (5G) | `consolidado_5g_pedido`       | média `preco_promocional`/`preco_oferta`, dedup `n_do_pedido`                   | R$ 25,87 / R$ 35,05 |
+| RE04/RE05 Faturamento Ent/Of (5G)    | `consolidado_5g_pedido`       | Σ `preco_promocional`/`preco_oferta`, dedup pedido                              | —                   |
+| CA10 Churn Safra c/ Bloqueio (5G)    | `churn_vendedor_5g`           | (Σ`bloqueados`+Σ`cancelados`) ÷ Σ`entrantes` × 100                              | ~46% Fortaleza      |
+| VE51 Ativação 5G Avulso              | `consolidado_5g_pedido`       | contagem distinta `n_do_pedido`, `combo_ftth_5g='NAO'`                          | 57.900              |
+| VE04 Vendas Ativadas (oficial)       | `consolidado_5g_pedido`       | contagem distinta `n_do_pedido` (troca o proxy `ativacao_mes`)                  | 80.642              |
+
+**Funil VE01/VE02/VE03 (Vendas Criadas/Efetivadas/Instaladas) — trocado para
+`waves_consolidado_orcamento` (2026-07, fonte oficial do time de dados).** Antes
+vinha de `indicadores_cidades` (`orcamentos`/`orcamentos_efetivados`/`instalacoes`).
+Definição: `COUNT(DISTINCT orcamento_id)`, **status cumulativo** (Criadas = todos;
+Efetivadas = `status_venda` ∈ {EFETIVADO, INSTALADO}; Instaladas = INSTALADO), mês
+pela coluna `data`, `corporativo='NAO'`, por tecnologia (INTERNET→FTTH). A coluna
+do cubo é mantida como **fallback** (só troca quando a waves carrega). Reconcilia
+~2–3% no total (jun/2026: 54.444/43.629/34.184 vs 52.934/42.742/35.435), mas **por
+cidade pode variar ±9%** (a waves atribui por `cidade_venda`; o cubo por sua própria
+lógica) — mudança esperada de fonte, não bug. **Não usar** `data_criado`/
+`data_efetivado`/`data_instalado` para o mês (diverge ~10%, estágios em meses
+diferentes). Vendas/Produtividade/Vendedor **não** foram trocadas (dimensões de
+filtro incompatíveis — ver [pending-data-team.md](./pending-data-team.md)).
+
+Metas: só **CA10** e **VE04** têm meta em `metas_cidades`; os demais exibem o
+valor sem meta/atingimento. **Formatos das fontes:** `waves.data` é timestamp;
+`consolidado_5g_pedido.data_assinatura` é `dd/MM/yyyy` e os preços usam vírgula
+decimal (`"29,99"`) — daí `to_date(...,'dd/MM/yyyy')` e `replace(',','.')`.
 
 ## Gotchas (verified, each cost a wrong number)
 

@@ -175,6 +175,12 @@ function computeValue(c: IndicatorCompute | undefined, ctx: ComputeCtx): number 
     return den === 0 ? 0 : (sumFields(ctx.rows, c.num) / den) * 100;
   }
 
+  if (c.kind === "avg") {
+    const den = sumFields(ctx.rows, c.den);
+
+    return den === 0 ? 0 : sumFields(ctx.rows, c.num) / den;
+  }
+
   if (c.kind === "metaSum") return sumMeta(ctx, c.targetId);
 
   if (c.kind === "cancelRate") {

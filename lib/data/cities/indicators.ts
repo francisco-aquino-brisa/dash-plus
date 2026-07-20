@@ -30,6 +30,9 @@ export type IndicatorCompute =
   /** (Σnum / Σden) × 100 — recomputed from summed components, never averaged.
    *  num/den may be a single field or several fields summed together. */
   | { kind: "ratio"; num: NumField | NumField[]; den: NumField | NumField[] }
+  /** Σnum / Σden — média ponderada SEM ×100 (ticket médio: Σvalor / Σpedidos).
+   *  Reconstrói a média a partir dos componentes somados (nunca média de médias). */
+  | { kind: "avg"; num: NumField | NumField[]; den: NumField | NumField[] }
   /** (base_ativa + fechados) − same of previous month. Needs prev-month rows. */
   | { kind: "growthBase" }
   /** Σ metas_cidades.meta for `targetId` over cities in scope (servico-aware). */
@@ -380,7 +383,8 @@ const BANDA_LARGA: IndicatorDef[] = [
     compute: { kind: "sum", field: "vendas_criadas" },
     targetId: "VE01",
     targetService: "Banda Larga",
-    description: "Contagem de pedidos criados no período (orcamentos).",
+    description:
+      "Contagem distinta de pedidos criados no mês (waves_consolidado_orcamento, não corporativo, por tecnologia).",
   },
   {
     id: "VE02",
@@ -392,7 +396,8 @@ const BANDA_LARGA: IndicatorDef[] = [
     compute: { kind: "sum", field: "vendas_efetivadas" },
     targetId: "VE02",
     targetService: "Banda Larga",
-    description: "Contagem de pedidos efetivados no período (orcamentos_efetivados).",
+    description:
+      "Contagem distinta de pedidos efetivados no mês (waves_consolidado_orcamento, status EFETIVADO ou INSTALADO).",
   },
   {
     id: "VE03",
@@ -404,7 +409,8 @@ const BANDA_LARGA: IndicatorDef[] = [
     compute: { kind: "sum", field: "vendas_instaladas" },
     targetId: "VE03",
     targetService: "Banda Larga",
-    description: "Contagem de instalações concluídas no período (instalacoes).",
+    description:
+      "Contagem distinta de pedidos instalados no mês (waves_consolidado_orcamento, status INSTALADO).",
   },
   {
     id: "VE05",
@@ -430,22 +436,41 @@ const BANDA_LARGA: IndicatorDef[] = [
     targetService: "Banda Larga",
     description: "Vendas Instaladas ÷ Vendas Efetivadas × 100.",
   },
-  BLOCKED(
-    "RE01",
-    "banda-larga",
-    "Ticket Médio Entrada",
-    "currency",
-    "up",
-    "Ticket médio de entrada. Fonte de dados ainda não disponível no cubo de cidades.",
-  ),
-  BLOCKED(
-    "RE04",
-    "banda-larga",
-    "Faturamento de Entrada",
-    "currency",
-    "up",
-    "Faturamento de entrada. Fonte de dados ainda não disponível no cubo de cidades.",
-  ),
+  {
+    id: "RE01",
+    block: "banda-larga",
+    label: "Ticket Médio Entrada",
+    unit: "currency",
+    polarity: "up",
+    available: true,
+    // Média do valor com desconto por pedido FTTH/FWA não corporativo.
+    compute: { kind: "avg", num: "ticket_entrada_sum", den: "ticket_qtd" },
+    footer: [
+      { label: "Faturamento", compute: { kind: "sum", field: "ticket_entrada_sum" }, unit: "currency" },
+      { label: "Pedidos", compute: { kind: "sum", field: "ticket_qtd" }, unit: "qtd" },
+    ],
+    description:
+      "Média do valor com desconto (entrada) dos pedidos FTTH/FWA não corporativos. Fonte: waves_consolidado_orcamento.",
+  },
+  {
+    id: "RE04",
+    block: "banda-larga",
+    label: "Faturamento de Entrada",
+    unit: "currency",
+    polarity: "up",
+    available: true,
+    compute: { kind: "sum", field: "ticket_entrada_sum" },
+    footer: [
+      {
+        label: "Ticket Médio",
+        compute: { kind: "avg", num: "ticket_entrada_sum", den: "ticket_qtd" },
+        unit: "currency",
+      },
+      "projection",
+    ],
+    description:
+      "Soma do valor com desconto (entrada) dos pedidos FTTH/FWA não corporativos. Fonte: waves_consolidado_orcamento.",
+  },
 ];
 
 // ── 5G ───────────────────────────────────────────────────────────────────────
@@ -511,10 +536,13 @@ const CINCO_G: IndicatorDef[] = [
     unit: "qtd",
     polarity: "up",
     available: true,
-    compute: { kind: "sum", field: "ativacao_mes" },
+    // Fonte oficial: contagem distinta de n_do_pedido (consolidado_5g_pedido),
+    // pré-agregada por cidade/mês em `ativacao_oficial`.
+    compute: { kind: "sum", field: "ativacao_oficial" },
     targetId: "VE04",
     targetService: "5G",
-    description: "Contagem de ativações 5G no mês (Soma[ativacao_mes]).",
+    description:
+      "Contagem distinta de pedidos 5G ativados no mês (consolidado_5g_pedido). Fonte oficial do catálogo.",
   },
   {
     id: "VE27",
@@ -570,54 +598,128 @@ const CINCO_G: IndicatorDef[] = [
     "up",
     "Portabilidades concluídas ÷ solicitadas × 100. Fonte portabilidade_5g ainda não integrada.",
   ),
-  BLOCKED(
-    "RE01",
-    "5g",
-    "Ticket Médio Entrada",
-    "currency",
-    "up",
-    "Ticket médio de entrada 5G. Fonte de dados ainda não disponível no cubo de cidades.",
-  ),
-  BLOCKED(
-    "RE02",
-    "5g",
-    "Ticket Médio Oferta",
-    "currency",
-    "up",
-    "Ticket médio de oferta 5G. Fonte de dados ainda não disponível no cubo de cidades.",
-  ),
-  BLOCKED(
-    "RE04",
-    "5g",
-    "Faturamento de Entrada",
-    "currency",
-    "up",
-    "Faturamento de entrada 5G. Fonte de dados ainda não disponível no cubo de cidades.",
-  ),
-  BLOCKED(
-    "RE05",
-    "5g",
-    "Faturamento de Oferta",
-    "currency",
-    "up",
-    "Faturamento de oferta 5G. Fonte de dados ainda não disponível no cubo de cidades.",
-  ),
-  BLOCKED(
-    "CA10",
-    "5g",
-    "Churn Safra com Bloqueio",
-    "percent",
-    "down",
-    "Churn safra 5G considerando bloqueios. Fonte churn_vendedor_5g ainda não integrada.",
-  ),
-  BLOCKED(
-    "VE51",
-    "5g",
-    "Ativação 5G Avulso",
-    "qtd",
-    "up",
-    "Ativações 5G avulsas (fora de combo). Fonte de dados ainda não disponível no cubo de cidades.",
-  ),
+  {
+    id: "RE01",
+    block: "5g",
+    label: "Ticket Médio Entrada",
+    unit: "currency",
+    polarity: "up",
+    available: true,
+    compute: { kind: "avg", num: "ticket_entrada_sum", den: "ticket_qtd" },
+    footer: [
+      { label: "Faturamento", compute: { kind: "sum", field: "ticket_entrada_sum" }, unit: "currency" },
+      { label: "Pedidos", compute: { kind: "sum", field: "ticket_qtd" }, unit: "qtd" },
+    ],
+    description:
+      "Média do preço promocional (entrada) por pedido 5G, deduplicado por n_do_pedido. Fonte: consolidado_5g_pedido.",
+  },
+  {
+    id: "RE02",
+    block: "5g",
+    label: "Ticket Médio Oferta",
+    unit: "currency",
+    polarity: "up",
+    available: true,
+    compute: { kind: "avg", num: "ticket_oferta_sum", den: "ticket_qtd" },
+    footer: [
+      { label: "Faturamento", compute: { kind: "sum", field: "ticket_oferta_sum" }, unit: "currency" },
+      { label: "Pedidos", compute: { kind: "sum", field: "ticket_qtd" }, unit: "qtd" },
+    ],
+    description:
+      "Média do preço de oferta por pedido 5G, deduplicado por n_do_pedido. Fonte: consolidado_5g_pedido.",
+  },
+  {
+    id: "RE04",
+    block: "5g",
+    label: "Faturamento de Entrada",
+    unit: "currency",
+    polarity: "up",
+    available: true,
+    compute: { kind: "sum", field: "ticket_entrada_sum" },
+    footer: [
+      {
+        label: "Ticket Médio",
+        compute: { kind: "avg", num: "ticket_entrada_sum", den: "ticket_qtd" },
+        unit: "currency",
+      },
+      "projection",
+    ],
+    description:
+      "Soma do preço promocional (entrada) dos pedidos 5G, deduplicado por n_do_pedido. Fonte: consolidado_5g_pedido.",
+  },
+  {
+    id: "RE05",
+    block: "5g",
+    label: "Faturamento de Oferta",
+    unit: "currency",
+    polarity: "up",
+    available: true,
+    compute: { kind: "sum", field: "ticket_oferta_sum" },
+    footer: [
+      {
+        label: "Ticket Médio",
+        compute: { kind: "avg", num: "ticket_oferta_sum", den: "ticket_qtd" },
+        unit: "currency",
+      },
+      "projection",
+    ],
+    description:
+      "Soma do preço de oferta dos pedidos 5G, deduplicado por n_do_pedido. Fonte: consolidado_5g_pedido.",
+  },
+  {
+    id: "CA10",
+    block: "5g",
+    label: "Churn Safra com Bloqueio",
+    unit: "percent",
+    polarity: "down",
+    available: true,
+    // (bloqueados + cancelados) / entrantes × 100.
+    compute: { kind: "ratio", num: ["churn_bloqueados", "churn_cancelados"], den: "churn_entrantes" },
+    targetId: "CA10",
+    targetService: "5G",
+    footer: ["target", "attainment"],
+    chartExtras: [
+      { label: "Entrantes", compute: { kind: "sum", field: "churn_entrantes" }, unit: "qtd" },
+      { label: "Cancelados", compute: { kind: "sum", field: "churn_cancelados" }, unit: "qtd" },
+      { label: "Bloqueados", compute: { kind: "sum", field: "churn_bloqueados" }, unit: "qtd" },
+    ],
+    related: [
+      {
+        id: "churn_entrantes",
+        label: "Entrantes (safra)",
+        unit: "qtd",
+        polarity: "up",
+        compute: { kind: "sum", field: "churn_entrantes" },
+      },
+      {
+        id: "churn_cancelados",
+        label: "Cancelados",
+        unit: "qtd",
+        polarity: "down",
+        compute: { kind: "sum", field: "churn_cancelados" },
+      },
+      {
+        id: "churn_bloqueados",
+        label: "Bloqueados",
+        unit: "qtd",
+        polarity: "down",
+        compute: { kind: "sum", field: "churn_bloqueados" },
+      },
+    ],
+    description:
+      "(Bloqueados + Cancelados) ÷ Entrantes da safra 5G × 100. Menor é melhor. Fonte: churn_vendedor_5g.",
+  },
+  {
+    id: "VE51",
+    block: "5g",
+    label: "Ativação 5G Avulso",
+    unit: "qtd",
+    polarity: "up",
+    available: true,
+    compute: { kind: "sum", field: "ativacao_avulso" },
+    description:
+      "Contagem distinta de pedidos 5G ativados fora de combo (combo_ftth_5g = 'NAO'). Fonte: consolidado_5g_pedido.",
+  },
 ];
 
 export const INDICATORS: IndicatorDef[] = [...BANDA_LARGA, ...CINCO_G];
