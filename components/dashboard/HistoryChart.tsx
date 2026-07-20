@@ -245,15 +245,13 @@ export function HistoryChart({
               strokeWidth={2}
               fill="url(#histGrad)"
             >
-              {!hasTarget && (
-                <LabelList
-                  dataKey="valor"
-                  position="top"
-                  offset={8}
-                  formatter={(v: number) => compactFormatter(v)}
-                  style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }}
-                />
-              )}
+              <LabelList
+                dataKey="valor"
+                position="top"
+                offset={8}
+                formatter={(v: number) => compactFormatter(v)}
+                style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }}
+              />
             </Area>
             {hasTarget && (
               <Line
