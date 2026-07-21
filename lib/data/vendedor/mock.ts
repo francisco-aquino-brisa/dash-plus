@@ -154,8 +154,10 @@ function mockServiceCards(
       mkInd("VE03", "Vendas Instaladas - FTTH", "qtd", "up", ...p(ftth.instalado)),
       mkInd("VE15", "Vendas instaladas Combo 1 Chip - FTTH", "qtd", "up", ...p(ftth.instalado * 0.5)),
       mkInd("VE49", "Vendas instaladas avulso - FTTH", "qtd", "up", ...p(ftth.instalado * 0.4)),
-      mkInd("RE02", "Ticket Médio Oferta - FTTH", "R$", "up", 85, 0, false),
-      mkInd("CA08", "Churn Safra - FTTH", "%", "down", 0.15, 0, false),
+      mkInd("VE30", "Renovação Geral", "qtd", "up", ...p(ftth.instalado * 0.9)),
+      mkInd("VE52", "Renovação Incremento de Receita", "R$", "up", 800, 620 + Math.round(rng() * 900)),
+      mkInd("RE02", "Ticket Médio Oferta - FTTH", "R$", "up", 85, 84 + Math.round(rng() * 14)),
+      mkInd("CA08", "Churn Safra - FTTH", "%", "down", 0.15, +(0.03 + rng() * 0.1).toFixed(3)),
     ]),
     mk("FWA", fwa, fwa.instalado, [
       mkInd("VE03", "Vendas Instaladas - FWA", "qtd", "up", ...p(fwa.instalado)),
@@ -163,12 +165,14 @@ function mockServiceCards(
     mk("5G", { criado: 0, efetivado: 0, instalado: ativ5g }, ativ5g, [
       mkInd("VE04", "Vendas Ativadas - 5G", "qtd", "up", ...p(ativ5g)),
       mkInd("VE51", "Ativação 5G avulso", "qtd", "up", ...p(ativ5g * 0.7)),
-      mkInd("RE02", "Ticket Médio Oferta - 5G", "R$", "up", 29, 0, false),
-      mkInd("CA10", "Churn Safra com Bloqueio - 5G", "%", "down", 0.15, 0, false),
+      mkInd("RE02", "Ticket Médio Oferta - 5G", "R$", "up", 29, 26 + Math.round(rng() * 10)),
+      mkInd("CA10", "Churn Safra com Bloqueio - 5G", "%", "down", 0.15, +(0.05 + rng() * 0.12).toFixed(3)),
+      // Portabilidade (VE32): fonte portabilidade_5g ainda sem acesso → indisponível.
       mkInd("VE32", "Portabilidade", "qtd", "up", 30, 0, false),
     ]),
     mk("Banda", bl, bl.instalado, [
       mkInd("VE49", "Vendas instaladas avulso - Banda Larga", "qtd", "up", ...p(bl.instalado)),
+      mkInd("RE01", "Ticket Médio Entrada - Banda Larga", "R$", "up", 80, 78 + Math.round(rng() * 14)),
     ]),
   ];
 

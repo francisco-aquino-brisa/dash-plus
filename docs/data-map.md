@@ -49,18 +49,30 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 > `projeto_brisa_performance.metas_vendedores_canais` (uma linha por indicador×serviço
 > com `meta` + `metrica`/`tabela`/`formato_dado`/`polaridade` — análogo a `metas_cidades`,
 > mas por consultor) e **calcula o realizado a partir das tabelas-fonte que o catálogo
-> nomeia**, ligando pelo `hash_user` (que o catálogo carrega por linha). Competência:
-> metas por `date_format(data,'yyyy-MM')`; fontes por `incremento = '01-MM-yyyy'`.
-> **Fase 1** (`lib/data/vendedor/indicadores.ts`): família de contagem de vendas —
-> VE03/VE46/VE47/VE48/VE49/VE09/VE12/VE15/VE53/VE54/VE55 (`waves_consolidado_orcamento`,
-> `COUNT(DISTINCT orcamento_id)`) e VE04/VE51 (`consolidado_5g_pedido`,
-> `COUNT(DISTINCT n_do_pedido)`), via agregação condicional (uma query por fonte).
-> **Fase 2** (a fazer): RE01/RE02 (ticket, média R$, com CAST), CA08/CA10 (churn),
-> VE30/VE50/VE52/VE56 (renovação em `gdb_brisanet_comercial.gestao_clientes.
-relatorio_chamados_fidelizacoes`, join por `matricula`) e VE32 (bloqueada). Indicadores
-> fora da Fase 1 aparecem com a meta e realizado "—" (`disponivel: false`). Ressalva: as
-> fórmulas em `metrica` são guia (têm typos e apontam `tabela` errada em alguns casos —
-> ex. RE02‑5G), não SQL executável.
+> nomeia**. Em `lib/data/vendedor/indicadores.ts` cada indicador declara um `aggExpr`
+> (expressão de agregação self-contained) sobre sua fonte; indicadores da mesma fonte são
+> batidos numa query só, e uma fonte só é consultada se o vendedor tiver algum indicador dela.
+> **Chaves de join e competência por fonte** (todas verificadas no warehouse com cross-check):
+>
+> | Indicadores                        | Fonte                                                                    | Join        | Competência             | Agregação                                                             |
+> | ---------------------------------- | ------------------------------------------------------------------------ | ----------- | ----------------------- | --------------------------------------------------------------------- |
+> | VE03/09/12/15/46/47/48/49/53/54/55 | `waves_consolidado_orcamento`                                            | `hash_user` | `incremento`=dd-MM-yyyy | `COUNT(DISTINCT orcamento_id)`                                        |
+> | RE01 (BL), RE02 (FTTH)             | `waves_consolidado_orcamento`                                            | `hash_user` | `incremento`            | `AVG(CAST(valor…))` (decimal ponto)                                   |
+> | VE04, VE51, RE02 (5G)              | `consolidado_5g_pedido`                                                  | `hash_user` | `incremento`            | count / `AVG(CAST(replace(preco_oferta,',','.')…))` (decimal vírgula) |
+> | CA08 (BL/FTTH)                     | `waves_churnsafra_consultor`                                             | `hash_user` | `incremento`            | `SUM(cancelamentos)/SUM(instalacoes)` (fração)                        |
+> | CA10 (5G)                          | `churn_vendedor_5g`                                                      | `hash_user` | `data_churn`            | `(SUM(bloqueados)+SUM(cancelados))/SUM(entrantes)`                    |
+> | VE30/VE50/VE52/VE56                | `gdb_brisanet_comercial.gestao_clientes.relatorio_chamados_fidelizacoes` | `matricula` | `data_efetivacao`       | count/`SUM(fibra_variacao_receita)`                                   |
+>
+> Ressalvas verificadas: (a) RE02-5G — o catálogo aponta `waves`, mas as colunas estão em
+> `consolidado_5g_pedido` (usamos essa); `preco_oferta` é decimal com vírgula. (b) `waves_churnsafra_consultor`
+> usa a coluna `cancelamentos` (não `cancelados`); FTTH = `servico='INTERNET'`; churn devolvido como fração
+> (as metas guardam % como fração). (c) VE52 — a `metrica` inverte o sinal; usamos `fibra_variacao_receita`
+> (atual − anterior). (d) **Renovação liga por `matricula`, NÃO por cpf** (formatos de cpf divergem:
+> metas `00552386340` vs fidelizações `055.238.634-08` → 0 overlap por cpf; matrícula liga a mesma pessoa).
+> Só ~147/868 vendedores/mês têm linhas de renovação (atividade específica de FTTH); os demais mostram 0
+> legítimo. **VE32** (Portabilidade) segue bloqueada (`portabilidade_5g` sem acesso) → `disponivel: false`.
+> **Quintil/histórico** ainda não implementados (exigem ranking contra pares — decisão de coorte pendente).
+> Indicadores não computáveis aparecem com a meta e realizado "—" (`disponivel: false`).
 
 ## Data sources per screen
 

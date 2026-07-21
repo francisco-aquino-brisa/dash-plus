@@ -3,23 +3,37 @@
 // The catalog (which indicators a consultant has this month, their metas and the
 // formula metadata) lives in `metas_vendedores_canais`. The realizado for each
 // indicator is computed from the source table named in that catalog, joined to
-// the vendedor by `hash_user` (which the catalog carries per row).
+// the vendedor by `hash_user` (or `matricula` for the renovação source).
 //
-// Phase 1 (this file) implements the "vendas" COUNT family over two sources:
-//   - waves_consolidado_orcamento → COUNT(DISTINCT orcamento_id) with filters
-//   - consolidado_5g_pedido       → COUNT(DISTINCT n_do_pedido) with filters
-// Indicators not yet in REALIZADO_DEFS render with `disponivel: false` (meta
-// shown, realizado "—"). Verified against Databricks (read-only): incremento is
-// `dd-MM-yyyy`, status_venda is UPPERCASE, servico ∈ {INTERNET, FWA, 5G}.
+// Each indicator declares a SELF-CONTAINED aggregation expression (`aggExpr`)
+// evaluated as `SELECT <aggExpr> FROM <table> WHERE <join> AND <competência>`.
+// Indicators sharing a source are batched into one query; a source is only
+// queried when the vendor actually carries one of its indicators. All formulas
+// were verified against Databricks (read-only) with independent cross-checks —
+// see docs/data-map.md. Known data quirks handled here:
+//   - status_venda is UPPERCASE; servico ∈ {INTERNET(=FTTH), FWA, 5G}.
+//   - competência: waves/consolidado_5g/churn_bl use `incremento` (dd-MM-yyyy);
+//     churn_5g uses `data_churn`; fidelizações use `data_efetivacao`.
+//   - RE02-5G: catalog names waves but the columns live in consolidado_5g_pedido
+//     (`preco_oferta` is comma-decimal → replace(',','.')). waves valor/valor_com_
+//     desconto are dot-decimal.
+//   - churn columns come back as fractions (0–1); the metas store % as fractions.
+//   - VE52 uses `fibra_variacao_receita` (atual − anterior); the catalog metrica
+//     had the sign inverted.
 
 import { getDataClient } from "../client";
 import { num } from "../_shared";
 import type { IndicadorFormato, IndicadorVM, MixOferta, ServicoKey, StatusVenda } from "./types";
 
 const CAT = process.env.DATABRICKS_SALES_CATALOG ?? "gdb_brisanet_comunidade_dev";
+const ICM = `\`${CAT}\`.\`inteligencia_comercial_e_mercado\``;
 const METAS = `\`${CAT}\`.\`projeto_brisa_performance\`.\`metas_vendedores_canais\``;
-const WAVES = `\`${CAT}\`.\`inteligencia_comercial_e_mercado\`.\`waves_consolidado_orcamento\``;
-const CINCO_G = `\`${CAT}\`.\`inteligencia_comercial_e_mercado\`.\`consolidado_5g_pedido\``;
+const WAVES = `${ICM}.\`waves_consolidado_orcamento\``;
+const CINCO_G = `${ICM}.\`consolidado_5g_pedido\``;
+const CHURN_BL = `${ICM}.\`waves_churnsafra_consultor\``;
+const CHURN_5G = `${ICM}.\`churn_vendedor_5g\``;
+// Renovações live in a different catalog and join by matricula (not hash_user).
+const FIDELIZACOES = "`gdb_brisanet_comercial`.`gestao_clientes`.`relatorio_chamados_fidelizacoes`";
 
 const q = <T = Record<string, unknown>>(sql: string) => getDataClient().query<T>(sql);
 const str = (v: unknown): string => (v == null ? "" : String(v));
@@ -42,99 +56,209 @@ const SERVICO_TO_CARD: Record<string, ServicoKey> = {
   "Banda Larga": "Banda",
 };
 
-type Fonte = "waves" | "cinco_g";
+type Fonte = "waves" | "cinco_g" | "churn_bl" | "churn_5g" | "fidelizacoes";
+
+interface SourceSpec {
+  fonte: Fonte;
+  table: string;
+  joinCol: "hash_user" | "matricula";
+  /** WHERE fragment for the competência; {INC}=dd-MM-yyyy, {YM}=yyyy-MM. */
+  period: string;
+}
+
+const SOURCES: SourceSpec[] = [
+  { fonte: "waves", table: WAVES, joinCol: "hash_user", period: "incremento = '{INC}'" },
+  { fonte: "cinco_g", table: CINCO_G, joinCol: "hash_user", period: "incremento = '{INC}'" },
+  { fonte: "churn_bl", table: CHURN_BL, joinCol: "hash_user", period: "incremento = '{INC}'" },
+  {
+    fonte: "churn_5g",
+    table: CHURN_5G,
+    joinCol: "hash_user",
+    period: "date_format(data_churn,'yyyy-MM') = '{YM}'",
+  },
+  {
+    fonte: "fidelizacoes",
+    table: FIDELIZACOES,
+    joinCol: "matricula",
+    period: "date_format(data_efetivacao,'yyyy-MM') = '{YM}'",
+  },
+];
 
 /**
- * Realizado formula per (id_indicador, servico), transcribed from the catalog's
- * `metrica`. `cond` is a SQL boolean over the source table (literals only — no
- * user input). Keyed on both id AND servico because several indicators (VE03,
- * VE49, …) filter differently per service.
+ * Realizado per (id_indicador, servico). `aggExpr` is a self-contained scalar
+ * over its source (all filters baked into CASE), so indicators sharing a source
+ * batch into one query. Keyed on id AND servico because several indicators
+ * (VE03, VE49, CA08, RE02) filter differently per service.
  */
 interface RealizadoDef {
   id: string;
   servico: CatalogServico;
   fonte: Fonte;
-  cond: string;
+  aggExpr: string;
 }
 
+const wavesCount = (cond: string) => `COUNT(DISTINCT CASE WHEN ${cond} THEN orcamento_id END)`;
+
 const REALIZADO_DEFS: RealizadoDef[] = [
-  // waves_consolidado_orcamento — COUNT(DISTINCT orcamento_id)
+  // ── waves_consolidado_orcamento — vendas (COUNT DISTINCT orcamento_id) ──────
   {
     id: "VE03",
     servico: "FTTH",
     fonte: "waves",
-    cond: "upper(status_venda)='INSTALADO' AND servico='INTERNET'",
+    aggExpr: wavesCount("upper(status_venda)='INSTALADO' AND servico='INTERNET'"),
   },
-  { id: "VE03", servico: "FWA", fonte: "waves", cond: "upper(status_venda)='INSTALADO' AND servico='FWA'" },
+  {
+    id: "VE03",
+    servico: "FWA",
+    fonte: "waves",
+    aggExpr: wavesCount("upper(status_venda)='INSTALADO' AND servico='FWA'"),
+  },
   {
     id: "VE47",
     servico: "FTTH",
     fonte: "waves",
-    cond: "upper(status_venda)='CRIADO' AND servico='INTERNET' AND upper(combo_5g)='NAO'",
+    aggExpr: wavesCount("upper(status_venda)='CRIADO' AND servico='INTERNET' AND upper(combo_5g)='NAO'"),
   },
   {
     id: "VE48",
     servico: "FTTH",
     fonte: "waves",
-    cond: "upper(status_venda)='EFETIVADO' AND servico='INTERNET' AND upper(combo_5g)='NAO'",
+    aggExpr: wavesCount("upper(status_venda)='EFETIVADO' AND servico='INTERNET' AND upper(combo_5g)='NAO'"),
   },
   {
     id: "VE49",
     servico: "FTTH",
     fonte: "waves",
-    cond: "upper(status_venda)='INSTALADO' AND servico='INTERNET' AND upper(combo_5g)='NAO'",
+    aggExpr: wavesCount("upper(status_venda)='INSTALADO' AND servico='INTERNET' AND upper(combo_5g)='NAO'"),
   },
   {
     id: "VE49",
     servico: "Banda Larga",
     fonte: "waves",
-    cond: "upper(status_venda)='INSTALADO' AND servico IN ('INTERNET','FWA') AND upper(combo_5g)='NAO'",
+    aggExpr: wavesCount(
+      "upper(status_venda)='INSTALADO' AND servico IN ('INTERNET','FWA') AND upper(combo_5g)='NAO'",
+    ),
   },
   {
     id: "VE09",
     servico: "FTTH",
     fonte: "waves",
-    cond: "upper(status_venda)='CRIADO' AND servico='INTERNET' AND upper(tipo_combo)='COMBO_1'",
+    aggExpr: wavesCount(
+      "upper(status_venda)='CRIADO' AND servico='INTERNET' AND upper(tipo_combo)='COMBO_1'",
+    ),
   },
   {
     id: "VE12",
     servico: "FTTH",
     fonte: "waves",
-    cond: "upper(status_venda)='EFETIVADO' AND servico='INTERNET' AND upper(tipo_combo)='COMBO_1'",
+    aggExpr: wavesCount(
+      "upper(status_venda)='EFETIVADO' AND servico='INTERNET' AND upper(tipo_combo)='COMBO_1'",
+    ),
   },
   {
     id: "VE15",
     servico: "FTTH",
     fonte: "waves",
-    cond: "upper(status_venda)='INSTALADO' AND servico='INTERNET' AND upper(tipo_combo)='COMBO_1'",
+    aggExpr: wavesCount(
+      "upper(status_venda)='INSTALADO' AND servico='INTERNET' AND upper(tipo_combo)='COMBO_1'",
+    ),
   },
   {
     id: "VE53",
     servico: "FTTH",
     fonte: "waves",
-    cond: "upper(status_venda)='CRIADO' AND servico='INTERNET' AND upper(tipo_combo) IN ('COMBO_2','COMBO_3')",
+    aggExpr: wavesCount(
+      "upper(status_venda)='CRIADO' AND servico='INTERNET' AND upper(tipo_combo) IN ('COMBO_2','COMBO_3')",
+    ),
   },
   {
     id: "VE54",
     servico: "FTTH",
     fonte: "waves",
-    cond: "upper(status_venda)='EFETIVADO' AND servico='INTERNET' AND upper(tipo_combo) IN ('COMBO_2','COMBO_3')",
+    aggExpr: wavesCount(
+      "upper(status_venda)='EFETIVADO' AND servico='INTERNET' AND upper(tipo_combo) IN ('COMBO_2','COMBO_3')",
+    ),
   },
   {
     id: "VE55",
     servico: "FTTH",
     fonte: "waves",
-    cond: "upper(status_venda)='INSTALADO' AND servico='INTERNET' AND upper(tipo_combo) IN ('COMBO_2','COMBO_3')",
+    aggExpr: wavesCount(
+      "upper(status_venda)='INSTALADO' AND servico='INTERNET' AND upper(tipo_combo) IN ('COMBO_2','COMBO_3')",
+    ),
   },
   {
     id: "VE46",
     servico: "FTTH",
     fonte: "waves",
-    cond: "upper(status_venda)='INSTALADO' AND servico='INTERNET' AND upper(combo_5g)='SIM'",
+    aggExpr: wavesCount("upper(status_venda)='INSTALADO' AND servico='INTERNET' AND upper(combo_5g)='SIM'"),
   },
-  // consolidado_5g_pedido — COUNT(DISTINCT n_do_pedido)
-  { id: "VE04", servico: "5G", fonte: "cinco_g", cond: "1 = 1" },
-  { id: "VE51", servico: "5G", fonte: "cinco_g", cond: "upper(combo_ftth_5g)='NAO'" },
+  // ── waves — ticket (média R$; valor/valor_com_desconto são decimal com ponto) ─
+  {
+    id: "RE01",
+    servico: "Banda Larga",
+    fonte: "waves",
+    aggExpr:
+      "AVG(CASE WHEN upper(corporativo)='NAO' AND servico IN ('INTERNET','FWA') THEN CAST(valor_com_desconto AS DOUBLE) END)",
+  },
+  {
+    id: "RE02",
+    servico: "FTTH",
+    fonte: "waves",
+    aggExpr: "AVG(CASE WHEN upper(corporativo)='NAO' AND servico='INTERNET' THEN CAST(valor AS DOUBLE) END)",
+  },
+  // ── consolidado_5g_pedido — vendas + ticket 5G (preco_oferta é vírgula-decimal) ─
+  { id: "VE04", servico: "5G", fonte: "cinco_g", aggExpr: "COUNT(DISTINCT n_do_pedido)" },
+  {
+    id: "VE51",
+    servico: "5G",
+    fonte: "cinco_g",
+    aggExpr: "COUNT(DISTINCT CASE WHEN upper(combo_ftth_5g)='NAO' THEN n_do_pedido END)",
+  },
+  {
+    id: "RE02",
+    servico: "5G",
+    fonte: "cinco_g",
+    aggExpr: "AVG(CAST(replace(preco_oferta,',','.') AS DOUBLE))",
+  },
+  // ── waves_churnsafra_consultor — churn safra BL (fração; coluna 'cancelamentos') ─
+  {
+    id: "CA08",
+    servico: "Banda Larga",
+    fonte: "churn_bl",
+    aggExpr: "SUM(CAST(cancelamentos AS DOUBLE))/NULLIF(SUM(CAST(instalacoes AS DOUBLE)),0)",
+  },
+  {
+    id: "CA08",
+    servico: "FTTH",
+    fonte: "churn_bl",
+    aggExpr:
+      "SUM(CASE WHEN servico='INTERNET' THEN CAST(cancelamentos AS DOUBLE) END)/NULLIF(SUM(CASE WHEN servico='INTERNET' THEN CAST(instalacoes AS DOUBLE) END),0)",
+  },
+  // ── churn_vendedor_5g — churn safra c/ bloqueio 5G (fração; colunas bigint) ────
+  {
+    id: "CA10",
+    servico: "5G",
+    fonte: "churn_5g",
+    aggExpr: "(SUM(bloqueados)+SUM(cancelados))/NULLIF(SUM(entrantes),0)",
+  },
+  // ── relatorio_chamados_fidelizacoes — renovação (join por matricula) ──────────
+  { id: "VE30", servico: "FTTH", fonte: "fidelizacoes", aggExpr: "COUNT(*)" },
+  {
+    id: "VE50",
+    servico: "FTTH",
+    fonte: "fidelizacoes",
+    aggExpr:
+      "COUNT(CASE WHEN upper(todos_servicos_anterior) NOT LIKE '%MOVEL%' AND upper(todos_servicos_atual) LIKE '%MOVEL%' THEN 1 END)",
+  },
+  { id: "VE52", servico: "FTTH", fonte: "fidelizacoes", aggExpr: "SUM(fibra_variacao_receita)" },
+  {
+    id: "VE56",
+    servico: "FTTH",
+    fonte: "fidelizacoes",
+    aggExpr:
+      "COUNT(CASE WHEN cross_up_fibra <> 'DOWNSELL' AND upper(todos_servicos_atual) LIKE '%FIBRA%' THEN 1 END)",
+  },
 ];
 
 const defKey = (id: string, servico: string) => `${id}|${servico}`;
@@ -171,33 +295,50 @@ async function fetchCatalogo(mat: number, ym: string): Promise<CatalogoRow[]> {
   }));
 }
 
-/** Realizado per (id|servico), computed from the source tables via one query each. */
-async function fetchRealizados(hashUser: string, ym: string): Promise<Map<string, number>> {
+/**
+ * Realizado per (id|servico). Batches by source into one query each; only
+ * queries a source the vendor actually needs. Each source degrades on its own —
+ * a failure or missing key leaves those indicators as `disponivel: false`.
+ */
+async function fetchRealizados(
+  needed: Set<string>,
+  hashUser: string,
+  mat: number,
+  ym: string,
+): Promise<Map<string, number>> {
   const out = new Map<string, number>();
 
-  if (!HASH_RE.test(hashUser) || !YM_RE.test(ym)) return out;
+  if (!YM_RE.test(ym)) return out;
 
   const [y, m] = ym.split("-");
-  const incremento = `01-${m}-${y}`; // sources store the month as dd-MM-yyyy
+  const inc = `01-${m}-${y}`;
+  const validHash = HASH_RE.test(hashUser);
+  const validMat = Number.isFinite(mat);
 
-  const run = async (fonte: Fonte, table: string, distinctCol: string) => {
-    const defs = REALIZADO_DEFS.filter((d) => d.fonte === fonte);
+  const runSource = async (src: SourceSpec) => {
+    const defs = REALIZADO_DEFS.filter((d) => d.fonte === src.fonte && needed.has(defKey(d.id, d.servico)));
 
     if (!defs.length) return;
 
-    const cols = defs
-      .map((d, i) => `COUNT(DISTINCT CASE WHEN ${d.cond} THEN ${distinctCol} END) a${i}`)
-      .join(", ");
-    const rows = await q(
-      `SELECT ${cols} FROM ${table}
-       WHERE hash_user = '${hashUser}' AND incremento = '${incremento}'`,
-    );
-    const r = rows[0] ?? {};
+    if (src.joinCol === "hash_user" && !validHash) return;
 
-    defs.forEach((d, i) => out.set(defKey(d.id, d.servico), num(r[`a${i}`])));
+    if (src.joinCol === "matricula" && !validMat) return;
+
+    const joinPred = src.joinCol === "matricula" ? `matricula = ${mat}` : `hash_user = '${hashUser}'`;
+    const period = src.period.replace("{INC}", inc).replace("{YM}", ym);
+    const cols = defs.map((d, i) => `${d.aggExpr} a${i}`).join(", ");
+
+    try {
+      const rows = await q(`SELECT ${cols} FROM ${src.table} WHERE ${joinPred} AND ${period}`);
+      const r = rows[0] ?? {};
+
+      defs.forEach((d, i) => out.set(defKey(d.id, d.servico), num(r[`a${i}`])));
+    } catch {
+      /* one source failing (e.g. permission) must not blank the others */
+    }
   };
 
-  await Promise.all([run("waves", WAVES, "orcamento_id"), run("cinco_g", CINCO_G, "n_do_pedido")]);
+  await Promise.all(SOURCES.map(runSource));
 
   return out;
 }
@@ -309,9 +450,13 @@ export async function fetchVendedorIndicadores(
     if (!catalogo.length) return empty;
 
     const hashUser = catalogo[0].hashUser;
+    const needed = new Set(catalogo.map((c) => defKey(c.id, c.servico)));
     // Realizado and Mix degrade independently — a hiccup in one still renders the
     // other (and the metas always render, with realizado deferred).
-    const [rz, mx] = await Promise.allSettled([fetchRealizados(hashUser, ym), fetchMixOfertas(hashUser, ym)]);
+    const [rz, mx] = await Promise.allSettled([
+      fetchRealizados(needed, hashUser, mat, ym),
+      fetchMixOfertas(hashUser, ym),
+    ]);
     const realizados = rz.status === "fulfilled" ? rz.value : new Map<string, number>();
     const mix = mx.status === "fulfilled" ? mx.value : [];
 
