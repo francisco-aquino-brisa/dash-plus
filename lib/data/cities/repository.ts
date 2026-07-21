@@ -7,7 +7,10 @@ import { isDatabricks } from "../client";
 import { mockCityDataset } from "./mock";
 import type { CityDataset, FilterOptions } from "./types";
 
-const CACHE_KEY = "cities:dataset:v1";
+// v2: cidade names are now slash-normalized ("CIDADE / UF") in the adapter, so
+// the cached dataset shape changed — bump the key to discard pre-normalization
+// entries instead of serving them until the watermark advances.
+const CACHE_KEY = "cities:dataset:v2";
 
 /** Cheap freshness probe used by the auto-refresh flag. */
 export async function getCitiesWatermark(): Promise<string> {
@@ -42,7 +45,7 @@ export function buildFilterOptions(dataset: CityDataset): FilterOptions {
   const PLACEHOLDER = new Set(["-", "NAO REGISTRADO", "NÃO REGISTRADO"]);
   const uniq = (xs: string[]) =>
     Array.from(new Set(xs))
-      .filter((v) => v && !PLACEHOLDER.has(v.toUpperCase()))
+      .filter((v) => v && v.trim() !== "" && !PLACEHOLDER.has(v.trim().toUpperCase()))
       .sort();
 
   return {

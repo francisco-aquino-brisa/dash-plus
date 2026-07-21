@@ -15,7 +15,7 @@ import {
 } from "recharts";
 import { Lock } from "lucide-react";
 import { formatChartLabel } from "@/lib/format";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { InfoHint } from "@/components/ui/info-hint";
 import { getIndicatorDef } from "@/lib/indicators/definitions";
 import { cn } from "@/lib/utils";
@@ -45,19 +45,19 @@ export function SelecaoLivre({
         </div>
         <div className="flex items-center gap-2">
           {selectedDef ? <InfoHint def={selectedDef} /> : null}
-          <Select value={selected} onValueChange={setSelected}>
-            <SelectTrigger className="h-9 min-w-[260px] bg-secondary/60 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {indicators.map((i) => (
-                <SelectItem key={i.nome} value={i.nome} disabled={!i.available}>
-                  {i.nome}
-                  {!i.available && " · sem acesso"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            value={selected}
+            onChange={setSelected}
+            options={indicators.map((i) => ({
+              value: i.nome,
+              label: i.nome,
+              disabled: !i.available,
+              hint: i.available ? undefined : "sem acesso",
+            }))}
+            aria-label="Indicador"
+            searchPlaceholder="Buscar indicador…"
+            triggerClassName="min-w-[260px] bg-secondary/60"
+          />
           <div className="flex gap-1 rounded-lg border border-border bg-secondary/40 p-0.5">
             {(["linha", "coluna"] as const).map((k) => (
               <button

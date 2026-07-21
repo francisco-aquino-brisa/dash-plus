@@ -44,15 +44,22 @@ function ufFrom(cidade: string): string {
 }
 
 /**
- * Canonical "Cidade / UF" key for joining the ICM sources to the cube. The cube
- * and waves use "MARACANAU / CE" (spaces around the slash); consolidado_5g_pedido
- * and churn_vendedor_5g use "MARACANAU/CE". Normalize both sides identically.
+ * Canonical "Cidade / UF" spacing for the display/filter name. The cube and
+ * waves use "MARACANAU / CE" (spaces around the slash); indicadores_cidades_5g,
+ * consolidado_5g_pedido and churn_vendedor_5g use "MARACANAU/CE". Collapsing the
+ * spacing keeps ONE option per city and makes the exact-match city filter hit
+ * every source (otherwise the 5G-format entry filters to 5G rows only). Case is
+ * preserved — the cube stores upper-case names.
  */
-function cityKey(cidade: string): string {
+function cityName(cidade: unknown): string {
   return str(cidade)
     .replace(/\s*\/\s*/g, " / ")
-    .trim()
-    .toUpperCase();
+    .trim();
+}
+
+/** Upper-cased variant, used only as a join key for the ICM sources. */
+function cityKey(cidade: unknown): string {
+  return cityName(cidade).toUpperCase();
 }
 
 function normTipo(v: unknown): TipoCidade {
@@ -96,7 +103,7 @@ async function fetchCitiesFTTHFWA(): Promise<CityIndicatorRecord[]> {
   const raw = await getDataClient().query<Record<string, unknown>>(sql);
 
   return raw.map((r) => {
-    const cidade = str(r.cidade);
+    const cidade = cityName(r.cidade);
     const tec = str(r.tecnologia).toUpperCase() as Tecnologia;
     const baseAtiva = num(r.base_ativa);
 
@@ -169,7 +176,7 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
   const raw = await getDataClient().query<Record<string, unknown>>(sql);
 
   return raw.map((r) => {
-    const cidade = str(r.cidade);
+    const cidade = cityName(r.cidade);
     const canc = num(r.cancelamento_mes);
 
     return {
@@ -245,7 +252,7 @@ async function fetchMetas(): Promise<CityMetaRecord[]> {
 
   return raw.map((r) => ({
     competencia: str(r.competencia),
-    cidade: str(r.cidade),
+    cidade: cityName(r.cidade),
     id_cidade: str(r.id_cidade),
     id_indicador: str(r.id_indicador),
     servico: str(r.servico),

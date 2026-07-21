@@ -1,10 +1,13 @@
 // Domain types for the Dashboard Vendedor screen (Tela 4).
 //
-// A drill-down of ONE vendedor, keyed by `matricula` (the join key shared by
-// desempenho_hc + vw_hc_zerado_vendedor). Sources (validated 2026-06-30):
-//   - desempenho_hc         → profile, per-tech funnel, renovação, ranking, mix
-//   - vw_hc_zerado_vendedor → official PDU + NDU (dias úteis) per serviço
-// Per-vendedor metas do not exist → Meta/%/Falta/Quintil render under a flag.
+// A drill-down of ONE vendedor, keyed by `matricula`. Sources:
+//   - desempenho_hc            → profile, per-tech funnel, ranking, mix, dias
+//   - vw_hc_zerado_vendedor    → official PDU + NDU (dias úteis) per serviço
+//   - metas_vendedores_canais  → the per-vendedor indicator catalog + metas
+//     (indicador/servico/meta + formula metadata); realizado per indicator is
+//     computed from the source tables named in that catalog (waves_consolidado_
+//     orcamento, consolidado_5g_pedido, …), joined by `hash_user`. See
+//     lib/data/vendedor/indicadores.ts and docs/data-map.md.
 // df_waves_vendas (orçamento grain) is frozen in 2025 → Pendências stays a
 // placeholder. See docs/pending-data-checklist.md.
 
@@ -37,12 +40,30 @@ export interface VendedorProfile {
   admissao: string; // yyyy-MM-dd or ""
 }
 
-/** A single indicator line inside a service card. */
-export interface ServicoIndicador {
+/** Display format for an indicator's value (from metas_vendedores_canais). */
+export type IndicadorFormato = "qtd" | "R$" | "%";
+
+/**
+ * One indicator line inside a service card, driven by the vendor's catalog in
+ * metas_vendedores_canais. `meta` is the catalog target; `realizado` is computed
+ * from the indicator's source table via its formula (see indicadores.ts).
+ */
+export interface IndicadorVM {
+  /** id_indicador (e.g. "VE03"). */
+  id: string;
+  /** Catalog label (`indicador`), e.g. "Vendas Instaladas - FTTH". */
   label: string;
+  meta: number;
   realizado: number;
-  /** null → no per-vendedor meta (renders as "—" under the flag). */
-  meta: number | null;
+  /** Attainment % (realizado ÷ meta × 100). */
+  atingimento: number;
+  /** Remaining to the meta (0 when met or when "menor melhor"). */
+  falta: number;
+  formato: IndicadorFormato;
+  /** "up" = maior melhor, "down" = menor melhor. */
+  polaridade: "up" | "down";
+  /** false → realizado not yet computable (deferred/blocked source) → shows "—". */
+  disponivel: boolean;
 }
 
 export interface ServicoCard {
@@ -57,12 +78,8 @@ export interface ServicoCard {
   criado: number;
   efetivado: number;
   instalado: number;
-  /** Real indicators we can show for this service. */
-  indicadores: ServicoIndicador[];
-  /** Labels grouped under "outros indicadores aguardando meta/fonte". */
-  aguardando: string[];
-  /** false → Meta/%/Falta/Quintil disabled ("aguardando meta por vendedor"). */
-  metaAvailable: boolean;
+  /** The vendor's catalog indicators for this service (meta × realizado). */
+  indicadores: IndicadorVM[];
 }
 
 /** Per-day state for the Dias Zerados calendar. */
@@ -104,8 +121,11 @@ export interface RankingView {
 
 export type StatusVenda = "Criado" | "Efetivado" | "Instalado";
 
-export interface MixItem {
-  servico: ServicoKey | "Renovação";
+/** One sales offer (a `plano`) in the Mix de Vendas list. */
+export interface MixOferta {
+  /** Plan/offer name (`plano` from waves_consolidado_orcamento). */
+  titulo: string;
+  servico: "FTTH" | "FWA" | "5G";
   status: StatusVenda;
   vendas: number;
 }
@@ -119,7 +139,7 @@ export interface VendedorView {
   servicos: ServicoCard[];
   diasZerados: DiasZeradosView;
   ranking: RankingView;
-  mix: MixItem[];
+  mix: MixOferta[];
   /** Pendências source (df_waves_vendas) is frozen in 2025 → always false. */
   pendenciasAvailable: boolean;
   watermark: string;
@@ -143,11 +163,3 @@ export const SERVICOS: { key: ServicoKey; label: string; chart: string }[] = [
   { key: "5G", label: "5G", chart: "chart-3" },
   { key: "Banda", label: "Banda", chart: "chart-4" },
 ];
-
-/** Indicators with no accessible source/meta, grouped per service. */
-export const AGUARDANDO_POR_SERVICO: Record<ServicoKey, string[]> = {
-  FTTH: ["Ticket Médio Oferta", "Churn Safra"],
-  FWA: ["Ticket Médio Entrada", "Churn Safra"],
-  "5G": ["% Portabilidade", "Churn Safra c/ Bloqueio", "Ticket Médio 5G", "Chip pago/grátis"],
-  Banda: ["Ticket Médio Entrada", "Churn Safra"],
-};

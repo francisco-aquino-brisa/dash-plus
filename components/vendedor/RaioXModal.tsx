@@ -51,42 +51,43 @@ export function RaioXModal({
             </p>
 
             <div className="max-h-[60vh] space-y-3 overflow-y-auto">
+              {card.indicadores.length === 0 && (
+                <p className="rounded-xl border border-dashed border-border bg-secondary/20 p-3 text-center text-[11px] text-muted-foreground">
+                  Sem indicadores neste mês.
+                </p>
+              )}
               {card.indicadores.map((ind) => {
                 const projReal = Math.round(ind.realizado * factor);
+                const ating = ind.disponivel && ind.meta > 0 ? `${Math.round(ind.atingimento)}%` : "—";
 
                 return (
-                  <div key={ind.label} className="rounded-xl border border-border bg-secondary/30 p-3">
+                  <div
+                    key={`${ind.id}-${ind.label}`}
+                    className="rounded-xl border border-border bg-secondary/30 p-3"
+                  >
                     <h4 className="mb-2 text-sm font-semibold text-foreground">{ind.label}</h4>
                     <div className="grid grid-cols-3 gap-2">
-                      <Box label="Realizado" value={formatNumber(ind.realizado)} accent />
-                      <Box label="Projeção" value={formatNumber(projReal)} />
-                      <Box label="Atingimento" value="—" muted />
+                      <Box
+                        label="Realizado"
+                        value={ind.disponivel ? formatNumber(ind.realizado) : "—"}
+                        accent={ind.disponivel}
+                        muted={!ind.disponivel}
+                      />
+                      <Box
+                        label="Projeção"
+                        value={ind.disponivel ? formatNumber(projReal) : "—"}
+                        muted={!ind.disponivel}
+                      />
+                      <Box label="Atingimento" value={ating} muted={!ind.disponivel} />
                     </div>
-                    <div className="mt-2 flex items-center gap-1.5 rounded-md border border-dashed border-border bg-card px-2 py-1.5 text-[10px] text-muted-foreground">
-                      <Lock className="h-3 w-3" /> Atingimento estimado e quintil aguardando meta por
-                      vendedor.
-                    </div>
+                    {!ind.disponivel && (
+                      <div className="mt-2 flex items-center gap-1.5 rounded-md border border-dashed border-border bg-card px-2 py-1.5 text-[10px] text-muted-foreground">
+                        <Lock className="h-3 w-3" /> Realizado aguardando fonte/fórmula.
+                      </div>
+                    )}
                   </div>
                 );
               })}
-
-              {card.aguardando.length > 0 && (
-                <div className="rounded-xl border border-dashed border-border bg-secondary/20 p-3">
-                  <div className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
-                    Outros indicadores aguardando meta/fonte
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {card.aguardando.map((a) => (
-                      <span
-                        key={a}
-                        className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                      >
-                        {a}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </>
         )}

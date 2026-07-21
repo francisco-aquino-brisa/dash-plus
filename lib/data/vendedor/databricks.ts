@@ -9,13 +9,13 @@
 import { getDataClient } from "../client";
 import { num } from "../_shared";
 import { resolveCompetencia } from "./dates";
+import { fetchVendedorIndicadores } from "./indicadores";
 import {
-  AGUARDANDO_POR_SERVICO,
-  SERVICOS,
   type DiasZeradosView,
-  type MixItem,
+  type IndicadorVM,
   type RankingView,
   type ServicoCard,
+  type ServicoKey,
   type VendedorFilterOptions,
   type VendedorFilters,
   type VendedorProfile,
@@ -147,15 +147,15 @@ async function fetchPdu(
 function buildServiceCards(
   agg: ServiceAgg,
   pdu: Record<string, { pdu: number; ndu: number }>,
+  indicadores: Record<ServicoKey, IndicadorVM[]>,
 ): ServicoCard[] {
   const nduAny = pdu.FTTH?.ndu || pdu.FWA?.ndu || pdu["5G"]?.ndu || 0;
   const mk = (
-    key: ServicoCard["key"],
+    key: ServicoKey,
     criado: number,
     efetivado: number,
     instalado: number,
     pduKey: string,
-    indicadores: ServicoCard["indicadores"],
   ): ServicoCard => ({
     key,
     label: key,
@@ -165,38 +165,15 @@ function buildServiceCards(
     criado,
     efetivado,
     instalado,
-    indicadores,
-    aguardando: AGUARDANDO_POR_SERVICO[key],
-    metaAvailable: false,
+    indicadores: indicadores[key] ?? [],
   });
 
-  const funnel = (c: number, e: number, i: number) => [
-    { label: "Vendas Criadas", realizado: c, meta: null },
-    { label: "Vendas Efetivadas", realizado: e, meta: null },
-    { label: "Vendas Instaladas", realizado: i, meta: null },
-  ];
-
   return [
-    mk("FTTH", agg.cFtth, agg.eFtth, agg.iFtth, "FTTH", funnel(agg.cFtth, agg.eFtth, agg.iFtth)),
-    mk("FWA", agg.cFwa, agg.eFwa, agg.iFwa, "FWA", funnel(agg.cFwa, agg.eFwa, agg.iFwa)),
-    mk("5G", 0, 0, agg.ativ5g, "5G", [{ label: "Vendas Ativadas 5G", realizado: agg.ativ5g, meta: null }]),
-    mk("Banda", agg.cBl, agg.eBl, agg.iBl, "Banda", funnel(agg.cBl, agg.eBl, agg.iBl)),
+    mk("FTTH", agg.cFtth, agg.eFtth, agg.iFtth, "FTTH"),
+    mk("FWA", agg.cFwa, agg.eFwa, agg.iFwa, "FWA"),
+    mk("5G", 0, 0, agg.ativ5g, "5G"),
+    mk("Banda", agg.cBl, agg.eBl, agg.iBl, "Banda"),
   ];
-}
-
-function buildMix(agg: ServiceAgg): MixItem[] {
-  const items: MixItem[] = [
-    { servico: "FTTH", status: "Criado", vendas: agg.cFtth },
-    { servico: "FTTH", status: "Efetivado", vendas: agg.eFtth },
-    { servico: "FTTH", status: "Instalado", vendas: agg.iFtth },
-    { servico: "FWA", status: "Criado", vendas: agg.cFwa },
-    { servico: "FWA", status: "Efetivado", vendas: agg.eFwa },
-    { servico: "FWA", status: "Instalado", vendas: agg.iFwa },
-    { servico: "5G", status: "Instalado", vendas: agg.ativ5g },
-    { servico: "Renovação", status: "Instalado", vendas: agg.renov },
-  ];
-
-  return items.filter((i) => i.vendas > 0);
 }
 
 async function fetchDiasZerados(
@@ -354,11 +331,12 @@ export async function databricksVendedorView(filters: VendedorFilters): Promise<
 
   if (!profile) return empty; // matricula not present in this competência
 
-  const [agg, pdu, diasZerados, ranking] = await Promise.all([
+  const [agg, pdu, diasZerados, ranking, vend] = await Promise.all([
     fetchServiceAgg(mat, period.from, period.to),
     fetchPdu(mat, period.ym),
     fetchDiasZerados(mat, period.from, period.to, period.ym, period.hojeDia),
     fetchRanking(mat, period.from, period.to),
+    fetchVendedorIndicadores(mat, period.ym),
   ]);
 
   return {
@@ -366,10 +344,10 @@ export async function databricksVendedorView(filters: VendedorFilters): Promise<
     filters,
     competenciaLabel: period.label,
     profile,
-    servicos: buildServiceCards(agg, pdu),
+    servicos: buildServiceCards(agg, pdu, vend.indicadores),
     diasZerados,
     ranking,
-    mix: buildMix(agg),
+    mix: vend.mix,
     pendenciasAvailable: false,
     watermark,
   };

@@ -15,6 +15,7 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 | `indicadores_cidades`         | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                 |
 | `indicadores_cidades_5g`      | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                 |
 | `metas_cidades`               | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                 |
+| `metas_vendedores_canais`     | `projeto_brisa_performance`                        | MANAGED | ✅ (2026-07)      | catálogo+metas por vendedor ✅ |
 | `cadastro_usuario`            | `projeto_brisa_performance`                        | MANAGED | ✅                | all present ✅                 |
 | `desempenho_hc`               | `diego_barros_inteligencia_comercial_e_mercado`    | MANAGED | ✅                | all present ✅                 |
 | `waves_consolidado_orcamento` | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | ticket/faturamento BL ✅       |
@@ -44,17 +45,34 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 > `inteligencia_comercial_e_mercado` têm estrutura diferente (orientada a venda/
 > consultor) — não são substituto direto. Ver [pending-data-team.md](./pending-data-team.md).
 
+> **Indicadores por vendedor (Tela Vendedor, 2026-07):** a tela lê o catálogo
+> `projeto_brisa_performance.metas_vendedores_canais` (uma linha por indicador×serviço
+> com `meta` + `metrica`/`tabela`/`formato_dado`/`polaridade` — análogo a `metas_cidades`,
+> mas por consultor) e **calcula o realizado a partir das tabelas-fonte que o catálogo
+> nomeia**, ligando pelo `hash_user` (que o catálogo carrega por linha). Competência:
+> metas por `date_format(data,'yyyy-MM')`; fontes por `incremento = '01-MM-yyyy'`.
+> **Fase 1** (`lib/data/vendedor/indicadores.ts`): família de contagem de vendas —
+> VE03/VE46/VE47/VE48/VE49/VE09/VE12/VE15/VE53/VE54/VE55 (`waves_consolidado_orcamento`,
+> `COUNT(DISTINCT orcamento_id)`) e VE04/VE51 (`consolidado_5g_pedido`,
+> `COUNT(DISTINCT n_do_pedido)`), via agregação condicional (uma query por fonte).
+> **Fase 2** (a fazer): RE01/RE02 (ticket, média R$, com CAST), CA08/CA10 (churn),
+> VE30/VE50/VE52/VE56 (renovação em `gdb_brisanet_comercial.gestao_clientes.
+relatorio_chamados_fidelizacoes`, join por `matricula`) e VE32 (bloqueada). Indicadores
+> fora da Fase 1 aparecem com a meta e realizado "—" (`disponivel: false`). Ressalva: as
+> fórmulas em `metrica` são guia (têm typos e apontam `tabela` errada em alguns casos —
+> ex. RE02‑5G), não SQL executável.
+
 ## Data sources per screen
 
 **Not every screen reads from `projeto_brisa_performance`.** Only Cities does.
 
-| Screen (route)                         | Primary schema                                  | Tables (verified)                                                         |
-| -------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------- |
-| **Performance Cidades** (`/dashboard`) | `projeto_brisa_performance`                     | `indicadores_cidades`, `indicadores_cidades_5g`, `metas_cidades` — all ✅ |
-| **Vendas · Canais** (`/vendas`)        | `diego_barros_inteligencia_comercial_e_mercado` | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU)                     |
-| **Produtividade** (`/produtividade`)   | `diego_barros_inteligencia_comercial_e_mercado` | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU)                     |
-| **Vendedor** (`/vendedor`)             | `diego_barros_inteligencia_comercial_e_mercado` | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU)                     |
-| Auth (all screens)                     | `projeto_brisa_performance`                     | `cadastro_usuario` ✅                                                     |
+| Screen (route)                         | Primary schema                                                   | Tables (verified)                                                                                                                                                                                       |
+| -------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Performance Cidades** (`/dashboard`) | `projeto_brisa_performance`                                      | `indicadores_cidades`, `indicadores_cidades_5g`, `metas_cidades` — all ✅                                                                                                                               |
+| **Vendas · Canais** (`/vendas`)        | `diego_barros_inteligencia_comercial_e_mercado`                  | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU)                                                                                                                                                   |
+| **Produtividade** (`/produtividade`)   | `diego_barros_inteligencia_comercial_e_mercado`                  | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU)                                                                                                                                                   |
+| **Vendedor** (`/vendedor`)             | `projeto_brisa_performance` + `inteligencia_comercial_e_mercado` | `metas_vendedores_canais` (catálogo+metas) ✅ · realizado de `waves_consolidado_orcamento` / `consolidado_5g_pedido` ✅ · `desempenho_hc` (perfil/mix/dias/ranking) ✅ · PDU `vw_hc_zerado_vendedor` ❌ |
+| Auth (all screens)                     | `projeto_brisa_performance`                                      | `cadastro_usuario` ✅                                                                                                                                                                                   |
 
 Schemas overridable via env: `DATABRICKS_CITIES_SCHEMA` (Cities + auth) and
 `DATABRICKS_SALES_SCHEMA` (the other three). All within catalog

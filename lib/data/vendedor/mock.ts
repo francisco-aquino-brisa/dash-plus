@@ -6,15 +6,33 @@
 import { hashStr, mulberry32 } from "../_random";
 import { resolveCompetencia, lastCompetencias } from "./dates";
 import {
-  AGUARDANDO_POR_SERVICO,
   type DiasZeradosView,
-  type MixItem,
+  type IndicadorFormato,
+  type IndicadorVM,
+  type MixOferta,
   type ServicoCard,
   type VendedorFilterOptions,
   type VendedorFilters,
   type VendedorProfile,
   type VendedorView,
 } from "./types";
+
+/** Build a mock IndicadorVM, mirroring the shape the Databricks path returns. */
+function mkInd(
+  id: string,
+  label: string,
+  formato: IndicadorFormato,
+  polaridade: "up" | "down",
+  meta: number,
+  realizado: number,
+  disponivel = true,
+): IndicadorVM {
+  const real = disponivel ? realizado : 0;
+  const atingimento = disponivel && meta > 0 ? (real / meta) * 100 : 0;
+  const falta = disponivel && polaridade === "up" ? Math.max(meta - real, 0) : 0;
+
+  return { id, label, meta, realizado: real, atingimento, falta, formato, polaridade, disponivel };
+}
 
 const NOMES = [
   "Ana Lima",
@@ -111,7 +129,7 @@ function mockServiceCards(
     key: ServicoCard["key"],
     f: { criado: number; efetivado: number; instalado: number },
     realizadoForPdu: number,
-    indicadores: ServicoCard["indicadores"],
+    indicadores: IndicadorVM[],
   ): ServicoCard => ({
     key,
     label: key,
@@ -122,22 +140,36 @@ function mockServiceCards(
     efetivado: f.efetivado,
     instalado: f.instalado,
     indicadores,
-    aguardando: AGUARDANDO_POR_SERVICO[key],
-    metaAvailable: false,
   });
-  const funnel = (f: { criado: number; efetivado: number; instalado: number }) => [
-    { label: "Vendas Criadas", realizado: f.criado, meta: null },
-    { label: "Vendas Efetivadas", realizado: f.efetivado, meta: null },
-    { label: "Vendas Instaladas", realizado: f.instalado, meta: null },
-  ];
+
+  // meta ≈ base value, realizado a fraction/multiple of it (deterministic rng).
+  const p = (base: number) => {
+    const meta = Math.max(1, Math.round(base));
+
+    return [meta, Math.round(meta * (0.4 + rng() * 0.9))] as const;
+  };
 
   const servicos = [
-    mk("FTTH", ftth, ftth.instalado, funnel(ftth)),
-    mk("FWA", fwa, fwa.instalado, funnel(fwa)),
-    mk("5G", { criado: 0, efetivado: 0, instalado: ativ5g }, ativ5g, [
-      { label: "Vendas Ativadas 5G", realizado: ativ5g, meta: null },
+    mk("FTTH", ftth, ftth.instalado, [
+      mkInd("VE03", "Vendas Instaladas - FTTH", "qtd", "up", ...p(ftth.instalado)),
+      mkInd("VE15", "Vendas instaladas Combo 1 Chip - FTTH", "qtd", "up", ...p(ftth.instalado * 0.5)),
+      mkInd("VE49", "Vendas instaladas avulso - FTTH", "qtd", "up", ...p(ftth.instalado * 0.4)),
+      mkInd("RE02", "Ticket Médio Oferta - FTTH", "R$", "up", 85, 0, false),
+      mkInd("CA08", "Churn Safra - FTTH", "%", "down", 0.15, 0, false),
     ]),
-    mk("Banda", bl, bl.instalado, funnel(bl)),
+    mk("FWA", fwa, fwa.instalado, [
+      mkInd("VE03", "Vendas Instaladas - FWA", "qtd", "up", ...p(fwa.instalado)),
+    ]),
+    mk("5G", { criado: 0, efetivado: 0, instalado: ativ5g }, ativ5g, [
+      mkInd("VE04", "Vendas Ativadas - 5G", "qtd", "up", ...p(ativ5g)),
+      mkInd("VE51", "Ativação 5G avulso", "qtd", "up", ...p(ativ5g * 0.7)),
+      mkInd("RE02", "Ticket Médio Oferta - 5G", "R$", "up", 29, 0, false),
+      mkInd("CA10", "Churn Safra com Bloqueio - 5G", "%", "down", 0.15, 0, false),
+      mkInd("VE32", "Portabilidade", "qtd", "up", 30, 0, false),
+    ]),
+    mk("Banda", bl, bl.instalado, [
+      mkInd("VE49", "Vendas instaladas avulso - Banda Larga", "qtd", "up", ...p(bl.instalado)),
+    ]),
   ];
 
   return {
@@ -155,17 +187,22 @@ function mockServiceCards(
   };
 }
 
-function mockMix(agg: Record<string, number>): MixItem[] {
-  return [
-    { servico: "FTTH", status: "Criado", vendas: agg.cFtth },
-    { servico: "FTTH", status: "Efetivado", vendas: agg.eFtth },
-    { servico: "FTTH", status: "Instalado", vendas: agg.iFtth },
-    { servico: "FWA", status: "Criado", vendas: agg.cFwa },
-    { servico: "FWA", status: "Efetivado", vendas: agg.eFwa },
-    { servico: "FWA", status: "Instalado", vendas: agg.iFwa },
-    { servico: "5G", status: "Instalado", vendas: agg.ativ5g },
-    { servico: "Renovação", status: "Instalado", vendas: agg.renov },
-  ].filter((i) => i.vendas > 0) as MixItem[];
+function mockMix(agg: Record<string, number>): MixOferta[] {
+  const out: MixOferta[] = [];
+
+  const add = (titulo: string, servico: MixOferta["servico"], c: number, e: number, i: number) => {
+    if (c > 0) out.push({ titulo, servico, status: "Criado", vendas: c });
+
+    if (e > 0) out.push({ titulo, servico, status: "Efetivado", vendas: e });
+
+    if (i > 0) out.push({ titulo, servico, status: "Instalado", vendas: i });
+  };
+
+  add("OFERTA COMBO 500MB ESSENCIAL C/ APPS", "FTTH", agg.cFtth, agg.eFtth, agg.iFtth);
+  add("OFERTA PF 700MB COMBO FAMÍLIA", "FWA", agg.cFwa, agg.eFwa, agg.iFwa);
+  add("OFERTA COMBO 20GB ESSENCIAL", "5G", 0, 0, agg.ativ5g);
+
+  return out;
 }
 
 function mockDiasZerados(

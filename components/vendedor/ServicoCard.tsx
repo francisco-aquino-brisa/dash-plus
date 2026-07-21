@@ -1,9 +1,9 @@
 "use client";
 
-import { ChevronRight, Clock, Globe, Lock, Radio, Smartphone, Wifi } from "lucide-react";
-import { formatNumber } from "@/lib/format";
+import { ChevronRight, Globe, Radio, Smartphone, Wifi } from "lucide-react";
+import { formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { ServicoCard as ServicoCardType, ServicoKey } from "@/lib/data/vendedor/types";
+import type { IndicadorVM, ServicoCard as ServicoCardType, ServicoKey } from "@/lib/data/vendedor/types";
 
 const ICONS: Record<ServicoKey, React.ElementType> = {
   FTTH: Wifi,
@@ -11,6 +11,17 @@ const ICONS: Record<ServicoKey, React.ElementType> = {
   "5G": Smartphone,
   Banda: Globe,
 };
+
+/** Format an indicator value per its catalog `formato` (qtd / R$ / %). */
+function fmtValor(v: number, formato: IndicadorVM["formato"]): string {
+  if (formato === "R$")
+    return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+
+  // "%" metas are stored as a fraction (0.15 → 15%).
+  if (formato === "%") return formatPct(v * 100, 0);
+
+  return formatNumber(v);
+}
 
 /** Small labeled stat used for NDU / PDU. */
 function MiniStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
@@ -59,46 +70,35 @@ export function ServicoCard({
         </div>
       </div>
 
-      {/* Real indicators (funnel / ativação) */}
+      {/* Catalog indicators (meta × realizado) from metas_vendedores_canais */}
       <div className="mt-3 space-y-2">
-        {card.indicadores.map((ind) => (
-          <div key={ind.label} className="rounded-lg border border-border bg-secondary/30 p-2.5">
-            <p className="mb-1.5 text-[11px] font-semibold text-foreground">{ind.label}</p>
-            <div className="grid grid-cols-4 gap-1.5">
-              <Cell label="Meta" value="—" muted />
-              <Cell label="Real" value={formatNumber(ind.realizado)} accent />
-              <Cell label="%" value="—" muted />
-              <Cell label="Falta" value="—" muted />
-            </div>
-          </div>
-        ))}
-      </div>
+        {card.indicadores.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border bg-secondary/20 px-2.5 py-3 text-center text-[11px] text-muted-foreground">
+            Sem indicadores neste mês.
+          </p>
+        ) : (
+          card.indicadores.map((ind) => {
+            const pct = ind.disponivel && ind.meta > 0 ? `${Math.round(ind.atingimento)}%` : "—";
+            const real = ind.disponivel ? fmtValor(ind.realizado, ind.formato) : "—";
+            const falta = ind.disponivel && ind.polaridade === "up" ? formatNumber(ind.falta) : "—";
 
-      {/* Meta flag */}
-      {!card.metaAvailable && (
-        <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed border-border bg-secondary/20 px-2.5 py-2 text-[11px] text-muted-foreground">
-          <Lock className="h-3.5 w-3.5" /> Meta, %, Falta e Quintil aguardando meta por vendedor.
-        </div>
-      )}
-
-      {/* Grouped "aguardando" indicators */}
-      {card.aguardando.length > 0 && (
-        <div className="mt-2 rounded-lg border border-dashed border-border bg-secondary/20 px-2.5 py-2">
-          <div className="flex items-center gap-1.5 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
-            <Clock className="h-3.5 w-3.5" /> Outros indicadores aguardando meta/fonte
-          </div>
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {card.aguardando.map((a) => (
-              <span
-                key={a}
-                className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground"
+            return (
+              <div
+                key={`${ind.id}-${ind.label}`}
+                className="rounded-lg border border-border bg-secondary/30 p-2.5"
               >
-                {a}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+                <p className="mb-1.5 text-[11px] font-semibold text-foreground">{ind.label}</p>
+                <div className="grid grid-cols-4 gap-1.5">
+                  <Cell label="Meta" value={fmtValor(ind.meta, ind.formato)} />
+                  <Cell label="Real" value={real} accent={ind.disponivel} muted={!ind.disponivel} />
+                  <Cell label="%" value={pct} muted={!ind.disponivel} />
+                  <Cell label="Falta" value={falta} muted={falta === "—"} />
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
 
       <span className="mt-3 flex items-center justify-end gap-1 text-[11px] font-medium text-primary">
         Ver raio-X <ChevronRight className="h-3.5 w-3.5" />

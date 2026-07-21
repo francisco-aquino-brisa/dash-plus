@@ -28,8 +28,11 @@ type NumField = {
 export type IndicatorCompute =
   | { kind: "sum"; field: NumField }
   /** (Σnum / Σden) × 100 — recomputed from summed components, never averaged.
-   *  num/den may be a single field or several fields summed together. */
-  | { kind: "ratio"; num: NumField | NumField[]; den: NumField | NumField[] }
+   *  num/den may be a single field or several fields summed together.
+   *  `denPrev` sums the denominator over the PREVIOUS month's rows (the numerator
+   *  stays on the current month) — required by Churn rate, whose base geral is
+   *  "base_ativa/fechados filtrando [data] == mês anterior" (metas_cidades CA03). */
+  | { kind: "ratio"; num: NumField | NumField[]; den: NumField | NumField[]; denPrev?: boolean }
   /** Σnum / Σden — média ponderada SEM ×100 (ticket médio: Σvalor / Σpedidos).
    *  Reconstrói a média a partir dos componentes somados (nunca média de médias). */
   | { kind: "avg"; num: NumField | NumField[]; den: NumField | NumField[] }
@@ -296,8 +299,9 @@ const BANDA_LARGA: IndicatorDef[] = [
     unit: "percent",
     polarity: "down",
     available: true,
-    // Churn = cancelamentos ÷ base geral (base_ativa + fechados) × 100.
-    compute: { kind: "ratio", num: "cancelamentos", den: ["base_ativa", "fechados"] },
+    // Churn = cancelamentos (mês) ÷ base geral do mês ANTERIOR (base_ativa +
+    // fechados, filtrando [data] == mês anterior) × 100 — metas_cidades CA03.
+    compute: { kind: "ratio", num: "cancelamentos", den: ["base_ativa", "fechados"], denPrev: true },
     // Meta = meta de cancelamento (CA12) ÷ base geral projetada (base geral do mês
     // anterior + meta de crescimento base BA04) × 100.
     targetCompute: {
@@ -327,17 +331,28 @@ const BANDA_LARGA: IndicatorDef[] = [
         label: "% Cancelamento Voluntário",
         unit: "percent",
         polarity: "down",
-        compute: { kind: "ratio", num: "cancelamentos_voluntarios", den: ["base_ativa", "fechados"] },
+        compute: {
+          kind: "ratio",
+          num: "cancelamentos_voluntarios",
+          den: ["base_ativa", "fechados"],
+          denPrev: true,
+        },
       },
       {
         id: "cancel_invol",
         label: "% Cancelamento Involuntário",
         unit: "percent",
         polarity: "down",
-        compute: { kind: "ratio", num: "cancelamentos_involuntarios", den: ["base_ativa", "fechados"] },
+        compute: {
+          kind: "ratio",
+          num: "cancelamentos_involuntarios",
+          den: ["base_ativa", "fechados"],
+          denPrev: true,
+        },
       },
     ],
-    description: "Cancelamentos do mês ÷ base geral (base ativa + fechados) × 100. Menor é melhor.",
+    description:
+      "Cancelamentos do mês ÷ base geral do mês anterior (base ativa + fechados) × 100. Menor é melhor.",
   },
   {
     id: "CA04",

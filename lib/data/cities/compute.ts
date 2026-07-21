@@ -5,7 +5,7 @@
 //
 // Business rule: "Banda Larga" = FTTH + FWA. 5G is an independent base.
 
-import type { CityIndicatorRecord, CityMetaRecord, Filters } from "./types";
+import type { CityIndicatorRecord, CityMetaRecord, Filters, Tecnologia } from "./types";
 import { computeIndicatorBlock, type IndicatorCardVM } from "./indicator-blocks";
 
 export const DEFAULT_FILTERS: Omit<Filters, "competencia"> = {
@@ -143,9 +143,21 @@ export function computeKpis(rows: CityIndicatorRecord[], months: string[], filte
   const fechados = sum(main, (r) => r.fechados);
   const fechadosPrev = sum(mainPrev, (r) => r.fechados);
   const baseAtivaTotal = sum(main, (r) => r.base_ativa);
-  const churnRate = baseAtivaTotal === 0 ? 0 : (fechados / baseAtivaTotal) * 100;
   const baseAtivaPrev = sum(mainPrev, (r) => r.base_ativa);
-  const churnRatePrev = baseAtivaPrev === 0 ? 0 : (fechadosPrev / baseAtivaPrev) * 100;
+  // Churn Rate = cancelamentos do mês ÷ base geral do mês ANTERIOR (base_ativa +
+  // fechados), conforme metas_cidades CA03 — não é fechados ÷ base_ativa. O valor
+  // do mês anterior (referência do delta) usa o mês retrasado como base geral.
+  const prevPrevMes = prevMes ? previousMonth(months, prevMes) : null;
+  const mainPrevPrev = prevPrevMes
+    ? applyFilters(rows, { ...filters, competencia: prevPrevMes }).filter((r) =>
+        isFiveGScope ? r.tecnologia === "5G" : r.tecnologia !== "5G",
+      )
+    : [];
+  const baseGeralPrev = baseAtivaPrev + fechadosPrev;
+  const baseGeralPrevPrev = sum(mainPrevPrev, (r) => r.base_ativa) + sum(mainPrevPrev, (r) => r.fechados);
+  const churnRate = baseGeralPrev === 0 ? 0 : (sum(main, (r) => r.cancelamentos) / baseGeralPrev) * 100;
+  const churnRatePrev =
+    baseGeralPrevPrev === 0 ? 0 : (sum(mainPrev, (r) => r.cancelamentos) / baseGeralPrevPrev) * 100;
 
   const reativacoes = sum(main, (r) => r.reativacoes_bloqueados);
   const bloqueados = sum(main, (r) => r.bloqueados);
@@ -210,6 +222,44 @@ export function computeKpis(rows: CityIndicatorRecord[], months: string[], filte
   };
 }
 
+// ── Growth attainment scope ──────────────────────────────────────────────────
+// The growth panels (per-tech cards + quartiles) measure the OFFICIAL growth
+// indicator against its meta from `metas_cidades`: BA04 "Crescimento Base" for
+// Banda Larga / FTTH / FWA, BA02 "Crescimento Base Ativa" for 5G. A city only
+// counts when it carries that meta (i.e. actually operates the product) — that
+// is what "cidades com meta" / "Cidades Ativas" means. An empty Tec filter falls
+// back to Banda Larga (the main scope); 5G stays independent, never summed in.
+interface GrowthScope {
+  servico: string;
+  indicador: string;
+  techs: Tecnologia[];
+}
+
+function growthScope(tecnologia: string): GrowthScope {
+  if (tecnologia === "5G") return { servico: "5G", indicador: "BA02", techs: ["5G"] };
+
+  if (tecnologia === "FTTH") return { servico: "FTTH", indicador: "BA04", techs: ["FTTH"] };
+
+  if (tecnologia === "FWA") return { servico: "FWA", indicador: "BA04", techs: ["FWA"] };
+
+  return { servico: "Banda Larga", indicador: "BA04", techs: ["FTTH", "FWA"] };
+}
+
+/** Σ metas_cidades.meta per source city (id_cidade_src) for the scope's indicator + servico + month. */
+function growthMetaByCity(
+  metaRecords: CityMetaRecord[],
+  scope: GrowthScope,
+  competencia: string,
+): Map<string, number> {
+  const out = new Map<string, number>();
+
+  for (const m of metaRecords)
+    if (m.id_indicador === scope.indicador && m.servico === scope.servico && m.competencia === competencia)
+      out.set(m.id_cidade, (out.get(m.id_cidade) ?? 0) + m.meta);
+
+  return out;
+}
+
 export interface GrowthByTech {
   tecnologia: TecFiltroLabel;
   baseClientes: number;
@@ -220,14 +270,22 @@ export interface GrowthByTech {
 }
 type TecFiltroLabel = "FTTH" | "FWA" | "Banda Larga" | "5G";
 
-export function growthByTech(rows: CityIndicatorRecord[], filters: Filters): GrowthByTech[] {
+export function growthByTech(
+  rows: CityIndicatorRecord[],
+  metaRecords: CityMetaRecord[],
+  filters: Filters,
+): GrowthByTech[] {
   const techs: TecFiltroLabel[] = ["FTTH", "FWA", "Banda Larga", "5G"];
 
   return techs.map((t) => {
     const r = applyFilters(rows, { ...filters, tecnologia: t });
+    const metaCity = growthMetaByCity(metaRecords, growthScope(t), filters.competencia);
+    // "Cidades Ativas" = cities that operate the product, i.e. carry an official
+    // growth meta this month. "Negativas" = those same cities with net decline.
+    const comMeta = r.filter((x) => metaCity.has(x.id_cidade_src));
     const baseClientes = sum(r, (x) => x.base_ativa);
-    const cidadesAtivas = new Set(r.filter((x) => x.crescimento >= 0).map((x) => x.id_cidade)).size;
-    const cidadesNeg = new Set(r.filter((x) => x.crescimento < 0).map((x) => x.id_cidade)).size;
+    const cidadesAtivas = new Set(comMeta.map((x) => x.id_cidade_src)).size;
+    const cidadesNeg = new Set(comMeta.filter((x) => x.crescimento < 0).map((x) => x.id_cidade_src)).size;
     const hp = sum(r, (x) => x.total_de_hp);
     const fechados = sum(r, (x) => x.fechados);
     const takeup = hp === 0 ? 0 : ((baseClientes + fechados) / hp) * 100;
@@ -270,22 +328,38 @@ interface NegAcc {
   tecnologia: string;
   ids: Set<string>;
   metaC: number;
-  resC: number;
+  curBF: number;
   metaB: number;
   resB: number;
 }
 
 /** Entities (at one level) below the growth or base-ativa meta, consolidated. */
-function negativesBy(rows: CityIndicatorRecord[], level: QuartileLevel): NegativeRow[] {
+function negativesBy(
+  rows: CityIndicatorRecord[],
+  prevRows: CityIndicatorRecord[],
+  level: QuartileLevel,
+): NegativeRow[] {
+  const keyOf = (x: CityIndicatorRecord) =>
+    level === "gerencia"
+      ? x.gerencia || "Não registrado"
+      : level === "coordenacao"
+        ? x.coordenacao || "Não registrado"
+        : `${x.id_cidade}-${x.tecnologia}`;
+
+  // Previous-month (Base Ativa + Fechados) per entity — the baseline for
+  // Crescimento Base (BA04): (Base Ativa + Fechados) do mês − o do mês anterior.
+  const prevBF = new Map<string, number>();
+
+  for (const x of prevRows) {
+    const key = keyOf(x);
+
+    prevBF.set(key, (prevBF.get(key) ?? 0) + x.base_ativa + x.fechados);
+  }
+
   const acc = new Map<string, NegAcc>();
 
   for (const x of rows) {
-    const key =
-      level === "gerencia"
-        ? x.gerencia || "Não registrado"
-        : level === "coordenacao"
-          ? x.coordenacao || "Não registrado"
-          : `${x.id_cidade}-${x.tecnologia}`;
+    const key = keyOf(x);
     const cur =
       acc.get(key) ??
       ({
@@ -295,14 +369,14 @@ function negativesBy(rows: CityIndicatorRecord[], level: QuartileLevel): Negativ
         tecnologia: x.tecnologia,
         ids: new Set<string>(),
         metaC: 0,
-        resC: 0,
+        curBF: 0,
         metaB: 0,
         resB: 0,
       } satisfies NegAcc);
 
     cur.ids.add(x.id_cidade);
     cur.metaC += x.meta_crescimento;
-    cur.resC += x.crescimento;
+    cur.curBF += x.base_ativa + x.fechados;
     cur.metaB += x.meta_base_ativa;
     cur.resB += x.base_ativa;
     acc.set(key, cur);
@@ -310,8 +384,11 @@ function negativesBy(rows: CityIndicatorRecord[], level: QuartileLevel): Negativ
 
   const out: NegativeRow[] = [];
 
-  for (const a of acc.values()) {
-    const negCresc = a.resC < 0 || a.resC < a.metaC * 0.5;
+  for (const [key, a] of acc) {
+    // Crescimento Base = (Base Ativa + Fechados) atual − mês anterior — NÃO a
+    // soma de `crescimento` (que é Crescimento Base Ativa).
+    const resC = a.curBF - (prevBF.get(key) ?? 0);
+    const negCresc = resC < 0 || resC < a.metaC * 0.5;
     const negBase = a.resB < a.metaB;
 
     if (!negCresc && !negBase) continue;
@@ -323,8 +400,8 @@ function negativesBy(rows: CityIndicatorRecord[], level: QuartileLevel): Negativ
       tecnologia: a.tecnologia,
       cidades: a.ids.size,
       metaCrescimento: a.metaC,
-      resultadoCrescimento: a.resC,
-      atingCresc: a.metaC === 0 ? 0 : (a.resC / a.metaC) * 100,
+      resultadoCrescimento: resC,
+      atingCresc: a.metaC === 0 ? 0 : (resC / a.metaC) * 100,
       metaBaseAtiva: a.metaB,
       resultadoBaseAtiva: a.resB,
       atingBaseAtiva: a.metaB === 0 ? 0 : (a.resB / a.metaB) * 100,
@@ -336,13 +413,19 @@ function negativesBy(rows: CityIndicatorRecord[], level: QuartileLevel): Negativ
 }
 
 /** Negative entities at the three drill levels (Gerência → Coordenação → Cidade). */
-export function negativeCities(rows: CityIndicatorRecord[], filters: Filters): NegativesByLevel {
+export function negativeCities(
+  rows: CityIndicatorRecord[],
+  months: string[],
+  filters: Filters,
+): NegativesByLevel {
   const r = applyFilters(rows, filters);
+  const prevMes = previousMonth(months, filters.competencia);
+  const prev = prevMes ? applyFilters(rows, { ...filters, competencia: prevMes }) : [];
 
   return {
-    gerencia: negativesBy(r, "gerencia"),
-    coordenacao: negativesBy(r, "coordenacao"),
-    cidade: negativesBy(r, "cidade"),
+    gerencia: negativesBy(r, prev, "gerencia"),
+    coordenacao: negativesBy(r, prev, "coordenacao"),
+    cidade: negativesBy(r, prev, "cidade"),
   };
 }
 
@@ -400,19 +483,31 @@ function bucketize(entities: QuartileEntity[]): QuartileBucket[] {
   return buckets;
 }
 
-/** Aggregate crescimento vs meta_crescimento by a key, into quartile entities. */
+/** Aggregate crescimento (real) vs the official growth meta by a key, keeping ONLY
+ *  cities that carry that meta. The meta is added once per city so grouping levels
+ *  that merge a city's FTTH+FWA rows never double-count it. */
 function aggregateBy(
   rows: CityIndicatorRecord[],
+  metaCity: Map<string, number>,
   name: (r: CityIndicatorRecord) => string,
 ): QuartileEntity[] {
-  const acc = new Map<string, { nome: string; real: number; meta: number }>();
+  const acc = new Map<string, { nome: string; real: number; meta: number; cities: Set<string> }>();
 
   for (const x of rows) {
+    const meta = metaCity.get(x.id_cidade_src);
+
+    if (meta === undefined) continue;
+
     const nome = name(x) || "Não registrado";
-    const cur = acc.get(nome) ?? { nome, real: 0, meta: 0 };
+    const cur = acc.get(nome) ?? { nome, real: 0, meta: 0, cities: new Set<string>() };
 
     cur.real += x.crescimento;
-    cur.meta += x.meta_crescimento;
+
+    if (!cur.cities.has(x.id_cidade_src)) {
+      cur.meta += meta;
+      cur.cities.add(x.id_cidade_src);
+    }
+
     acc.set(nome, cur);
   }
 
@@ -424,14 +519,23 @@ function aggregateBy(
   }));
 }
 
-/** Attainment quartiles at three drill levels (Gerência → Coordenação → Cidade). */
-export function quartiles(rows: CityIndicatorRecord[], filters: Filters): QuartilesByLevel {
-  const r = applyFilters(rows, filters);
+/** Attainment quartiles at three drill levels (Gerência → Coordenação → Cidade),
+ *  over the cities that carry the official growth meta for the scope. */
+export function quartiles(
+  rows: CityIndicatorRecord[],
+  metaRecords: CityMetaRecord[],
+  filters: Filters,
+): QuartilesByLevel {
+  const scope = growthScope(filters.tecnologia);
+  const techs = new Set<Tecnologia>(scope.techs);
+  // The scope owns the technology dimension; drop the Tec filter and restrict here.
+  const r = applyFilters(rows, { ...filters, tecnologia: "" }).filter((x) => techs.has(x.tecnologia));
+  const metaCity = growthMetaByCity(metaRecords, scope, filters.competencia);
 
   return {
-    gerencia: bucketize(aggregateBy(r, (x) => x.gerencia)),
-    coordenacao: bucketize(aggregateBy(r, (x) => x.coordenacao)),
-    cidade: bucketize(aggregateBy(r, (x) => x.cidade)),
+    gerencia: bucketize(aggregateBy(r, metaCity, (x) => x.gerencia)),
+    coordenacao: bucketize(aggregateBy(r, metaCity, (x) => x.coordenacao)),
+    cidade: bucketize(aggregateBy(r, metaCity, (x) => x.cidade)),
   };
 }
 
@@ -524,9 +628,9 @@ export function buildDashboardView(
     filters,
     months,
     kpis,
-    growth: growthByTech(rows, filters),
-    negatives: negativeCities(rows, filters),
-    quartis: quartiles(rows, filters),
+    growth: growthByTech(rows, metaRecords, filters),
+    negatives: negativeCities(rows, months, filters),
+    quartis: quartiles(rows, metaRecords, filters),
     history: historicSeries(
       rows,
       months,

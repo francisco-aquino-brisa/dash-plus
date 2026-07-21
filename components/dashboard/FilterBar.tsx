@@ -2,7 +2,7 @@
 
 import { formatMonth } from "@/lib/format";
 import type { Filters, FilterOptions } from "@/lib/data/cities/types";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { RotateCcw } from "lucide-react";
@@ -21,18 +21,14 @@ export function FilterBar({ filters, options, onChange, onReset }: Props) {
         <label className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
           Competência
         </label>
-        <Select value={filters.competencia} onValueChange={(v) => onChange({ ...filters, competencia: v })}>
-          <SelectTrigger className="h-9 min-w-[140px] bg-secondary/60 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {[...options.meses].reverse().map((m) => (
-              <SelectItem key={m} value={m}>
-                {formatMonth(m)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Combobox
+          value={filters.competencia}
+          onChange={(v) => onChange({ ...filters, competencia: v })}
+          options={[...options.meses].reverse().map((m) => ({ value: m, label: formatMonth(m) }))}
+          aria-label="Competência"
+          searchPlaceholder="Buscar competência…"
+          triggerClassName="min-w-[140px] bg-secondary/60"
+        />
       </div>
       <FilterSelect
         label="Gerência"

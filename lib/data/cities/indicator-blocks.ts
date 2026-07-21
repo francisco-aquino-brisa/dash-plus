@@ -170,7 +170,11 @@ function computeValue(c: IndicatorCompute | undefined, ctx: ComputeCtx): number 
   if (c.kind === "sum") return sum(ctx.rows, (r) => r[c.field] as number);
 
   if (c.kind === "ratio") {
-    const den = sumFields(ctx.rows, c.den);
+    // Churn's base geral is the PRIOR month's base_ativa + fechados (metas_cidades
+    // CA03: "filtrando [data] == mês anterior"). The oldest loaded month has no
+    // predecessor in scope, so fall back to its own rows instead of showing 0.
+    const denRows = c.denPrev && ctx.prevRows.length > 0 ? ctx.prevRows : ctx.rows;
+    const den = sumFields(denRows, c.den);
 
     return den === 0 ? 0 : (sumFields(ctx.rows, c.num) / den) * 100;
   }
