@@ -215,6 +215,15 @@ const BANDA_LARGA: IndicatorDef[] = [
     targetId: "BA04",
     targetService: "Banda Larga",
     footer: ["target", "attainment"],
+    related: [
+      {
+        id: "crescimento",
+        label: "Crescimento Base Ativa",
+        unit: "qtd",
+        polarity: "up",
+        compute: { kind: "sum", field: "crescimento" },
+      },
+    ],
     description: "(Base Ativa + Fechados) do mês − (Base Ativa + Fechados) do mês anterior.",
   },
   {
