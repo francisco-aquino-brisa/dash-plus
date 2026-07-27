@@ -96,10 +96,10 @@ async function fetchCitiesFTTHFWA(): Promise<CityIndicatorRecord[]> {
     FROM ${FQ("indicadores_cidades")}
     WHERE data >= ${WINDOW}
       AND upper(tecnologia) IN ('FTTH', 'FWA')
-      AND coalesce(cidade, '') <> ''
   `;
-  // NOTE: cities with no gerência ('-') are kept — the official panel counts them
-  // when no filter is applied. The Gerência dropdown filters '-' out separately.
+  // NOTE: cities with no gerência ('-') and rows with an empty/'/' cidade name are
+  // kept — the official panel counts them when no filter is applied. The Gerência
+  // dropdown filters placeholders out separately (see buildFilterOptions).
   const raw = await getDataClient().query<Record<string, unknown>>(sql);
 
   return raw.map((r) => {
@@ -170,9 +170,9 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
       instalacoes_4_mes, cancelamentos_4_mes
     FROM ${FQ("indicadores_cidades_5g")}
     WHERE data >= ${WINDOW}
-      AND trim(coalesce(cidade, '')) NOT IN ('', '/')
   `;
-  // Cities with no gerência are kept (counted when no filter is applied).
+  // Cities with no gerência and rows with an empty/'/' cidade name are kept
+  // (counted when no filter is applied).
   const raw = await getDataClient().query<Record<string, unknown>>(sql);
 
   return raw.map((r) => {

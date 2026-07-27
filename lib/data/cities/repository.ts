@@ -10,7 +10,9 @@ import type { CityDataset, FilterOptions } from "./types";
 // v2: cidade names are now slash-normalized ("CIDADE / UF") in the adapter, so
 // the cached dataset shape changed — bump the key to discard pre-normalization
 // entries instead of serving them until the watermark advances.
-const CACHE_KEY = "cities:dataset:v2";
+// v3: dropped the empty/'/'-cidade WHERE filters so unassigned rows are counted
+// again when no filter is applied — bump to discard the filtered dataset.
+const CACHE_KEY = "cities:dataset:v3";
 
 /** Cheap freshness probe used by the auto-refresh flag. */
 export async function getCitiesWatermark(): Promise<string> {
