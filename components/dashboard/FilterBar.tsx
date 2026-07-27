@@ -1,10 +1,9 @@
 "use client";
 
-import { formatMonth } from "@/lib/format";
 import type { Filters, FilterOptions } from "@/lib/data/cities/types";
-import { Combobox } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
 import { FilterSelect } from "@/components/ui/filter-select";
+import { CompetenciaPicker } from "@/components/vendedor/CompetenciaPicker";
 import { RotateCcw } from "lucide-react";
 
 interface Props {
@@ -17,19 +16,12 @@ interface Props {
 export function FilterBar({ filters, options, onChange, onReset }: Props) {
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card/60 p-3 backdrop-blur">
-      <div className="flex flex-col gap-1">
-        <label className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
-          Competência
-        </label>
-        <Combobox
-          value={filters.competencia}
-          onChange={(v) => onChange({ ...filters, competencia: v })}
-          options={[...options.meses].reverse().map((m) => ({ value: m, label: formatMonth(m) }))}
-          aria-label="Competência"
-          searchPlaceholder="Buscar competência…"
-          triggerClassName="min-w-[140px] bg-secondary/60"
-        />
-      </div>
+      <CompetenciaPicker
+        variant="field"
+        value={filters.competencia}
+        available={options.meses}
+        onChange={(v) => onChange({ ...filters, competencia: v })}
+      />
       <FilterSelect
         label="Gerência"
         value={filters.gerencia}
