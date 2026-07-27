@@ -1,34 +1,57 @@
 // Databricks adapter for the Sales · Channels screen (real, read-only, aggregated
-// in SQL — ADR 0002). Sources (all accessible):
-//   - desempenho_hc        → funnel per vendedor/day (criado/efetivado/instalado
-//                            per service + 5g_ativacao) + canal/nicho/hierarchy
-//   - vw_hc_zerado_vendedor → official PDU (total_realizado / hc_ativos / dias úteis)
+// in SQL — ADR 0002). Sources:
+//   - Selectable blocks (Banda Larga + 5G): the OFICIAL, channel-grained tables
+//     named in indicators.ts (waves_consolidado_orcamento, consolidado_5g_pedido,
+//     waves_churnsafra_consultor, churn_vendedor_5g) + channel metas
+//     (meta_geral_canais, metas_canais_ticket_oferta). desempenho_hc is NOT used
+//     for the blocks — it subconta the funnel/ativações vs the official counts the
+//     metas are calibrated against (see indicators.ts).
+//   - PDU / Análise por Canal / Seleção Livre: desempenho_hc (+ the absent PDU view).
 //
-// Blocked/unavailable (official current source denied): Ticket de Entrada,
-// Churn Safra, % Portabilidade, Churn Safra 5G c/ bloqueio, chip pago/grátis
-// → rendered as "sem acesso" (see docs/pending-data-checklist.md).
-//
-// Dates are app-generated ISO strings (safe to inline); dimension filter values
-// are parameterized.
+// Indicators without a channel-grained source (churn por cidade, portabilidade 5G
+// oficial) carry available:false in the catalog → "sem acesso". Dates are
+// app-generated ISO strings (safe to inline); dimension filter values are
+// parameterized. Each block source is isolated (failure → its cards degrade).
 
 import { getDataClient } from "../client";
-import { FUNNEL_COLS, blocked, num, pct } from "../_shared";
+import { num, pct } from "../_shared";
 import { formatMonth } from "../../format";
 import { resolvePeriod } from "./dates";
 import type {
   CanalDelta,
   FreeIndicator,
-  KpiBlock,
   PduPoint,
   SalesFilters,
   SalesFilterOptions,
   SalesView,
 } from "./types";
 
+import {
+  SALES_INDICATORS,
+  buildSalesVM,
+  type SalesBlock,
+  type SalesIndicatorDef,
+  type SalesIndicatorVM,
+  type SalesSource,
+} from "./indicators";
+
 const CAT = process.env.DATABRICKS_SALES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const DBX = `\`${CAT}\`.\`${process.env.DATABRICKS_SALES_SCHEMA ?? "diego_barros_inteligencia_comercial_e_mercado"}\``;
 const VW = `\`${CAT}\`.\`projeto_brisa_performance\`.\`vw_hc_zerado_vendedor\``;
 const DH = `${DBX}.\`desempenho_hc\``;
+
+// Official, channel-grained sources for the selectable blocks (see indicators.ts
+// and docs/data-map.md). All read-only; every formula validated vs the warehouse.
+const ICM = `\`${CAT}\`.\`inteligencia_comercial_e_mercado\``;
+const PBP = `\`${CAT}\`.\`projeto_brisa_performance\``;
+const WAVES = `${ICM}.\`waves_consolidado_orcamento\``;
+const CINCO_G_T = `${ICM}.\`consolidado_5g_pedido\``;
+const CHURN_BL_T = `${ICM}.\`waves_churnsafra_consultor\``;
+const CHURN_5G_T = `${ICM}.\`churn_vendedor_5g\``;
+const META_CANAIS = `${PBP}.\`meta_geral_canais\``;
+const TICKET_OFERTA = `${ICM}.\`metas_canais_ticket_oferta\``;
+
+const q13 = "add_months(date_trunc('MM', current_date()), -11)"; // início da janela de 12 meses
 
 /** Dimension WHERE for desempenho_hc. Pushes params; returns SQL fragment. */
 function dimWhereDH(
@@ -61,78 +84,6 @@ export async function databricksSalesWatermark(): Promise<string> {
   } catch {
     return "unknown";
   }
-}
-
-async function funnelKpis(f: SalesFilters): Promise<{ bl: KpiBlock[]; g5: KpiBlock[] }> {
-  const p = resolvePeriod(f);
-  const scope = f.servico === "INTERNET" ? "INTERNET" : f.servico === "FWA" ? "FWA" : "BL";
-  const [cC, cE, cI] = FUNNEL_COLS[scope];
-  const tag = scope === "BL" ? "Banda Larga (INTERNET + FWA)" : scope;
-
-  const params: unknown[] = [];
-  const win = (col: string, from: string, to: string) =>
-    `SUM(CASE WHEN data BETWEEN DATE'${from}' AND DATE'${to}' THEN ${col} END)`;
-  const sql = `
-    SELECT
-      ${win(cC, p.from, p.to)} cur_c, ${win(cC, p.prevFrom, p.prevTo)} prev_c,
-      ${win(cE, p.from, p.to)} cur_e, ${win(cE, p.prevFrom, p.prevTo)} prev_e,
-      ${win(cI, p.from, p.to)} cur_i, ${win(cI, p.prevFrom, p.prevTo)} prev_i,
-      ${win("`5g_ativacao`", p.from, p.to)} cur_g, ${win("`5g_ativacao`", p.prevFrom, p.prevTo)} prev_g
-    FROM ${DH}
-    WHERE data BETWEEN DATE'${p.prevFrom}' AND DATE'${p.to}'${dimWhereDH(f, params)}
-  `;
-  const r = (await getDataClient().query<Record<string, unknown>>(sql, params))[0] ?? {};
-  const cri = num(r.cur_c),
-    efe = num(r.cur_e),
-    ins = num(r.cur_i),
-    g5 = num(r.cur_g);
-  const efetXCri = cri ? ((efe / cri) * 100).toFixed(1).replace(".", ",") : "0";
-  const instXEfe = efe ? ((ins / efe) * 100).toFixed(1).replace(".", ",") : "0";
-
-  return {
-    bl: [
-      {
-        label: "Vendas Criadas",
-        value: cri,
-        meta: 0,
-        delta: pct(cri, num(r.prev_c)),
-        available: true,
-        helper: tag,
-      },
-      {
-        label: "Vendas Efetivadas",
-        value: efe,
-        meta: 0,
-        delta: pct(efe, num(r.prev_e)),
-        available: true,
-        helper: `Efetivados x Criados: ${efetXCri}%`,
-      },
-      {
-        label: "Vendas Instaladas",
-        value: ins,
-        meta: 0,
-        delta: pct(ins, num(r.prev_i)),
-        available: true,
-        helper: `Instalados x Efetivados: ${instXEfe}%`,
-      },
-      blocked("Ticket de Entrada"),
-      blocked("Churn Safra"),
-    ],
-    g5: [
-      {
-        label: "Vendas Ativadas 5G",
-        value: g5,
-        meta: 0,
-        delta: pct(g5, num(r.prev_g)),
-        available: true,
-        helper: "Chip pago/grátis: sem acesso",
-      },
-      blocked("% Portabilidade (Concluída x Ativ.)"),
-      blocked("% Portabilidade (Concluída x Solic.)"),
-      blocked("Ticket Médio Entrada 5G"),
-      blocked("Churn Safra 5G c/ Bloqueio"),
-    ],
-  };
 }
 
 /**
@@ -297,9 +248,231 @@ async function freeData(
   };
 }
 
+// ── Selectable indicator blocks (Banda Larga + 5G) ───────────────────────────
+// One query per source returns, per month over the last 12, every indicator of
+// that source (self-contained `valueExpr` from the catalog). Each source applies
+// only the filter dimensions it actually carries — the ones it lacks are ignored
+// for its cards (documented per source below). Sources are isolated: a failure
+// drops its indicators to "sem acesso" for that render, never the whole screen.
+
+interface SourceSpec {
+  table: string;
+  /** Source-level WHERE (besides the 12-month window); '' when none. */
+  scope: string;
+  /** Expression yielding the month key (yyyy-MM). */
+  monthExpr: string;
+  /** 12-month window predicate. */
+  window: string;
+  /** filter key → SQL column/expression it maps to on this source. */
+  dims: Partial<Record<keyof SalesFilters, string>>;
+}
+
+const INC_MONTH = "date_format(to_date(incremento, 'dd-MM-yyyy'), 'yyyy-MM')";
+const INC_WINDOW = `to_date(incremento, 'dd-MM-yyyy') >= ${q13}`;
+
+const BLOCK_SOURCES: Record<SalesSource, SourceSpec> = {
+  // waves cobre TODOS os filtros (canal/gerente/nicho/tipo/cidade/uf).
+  waves: {
+    table: WAVES,
+    scope: "corporativo = 'NAO'", // servico é acrescido dinamicamente (INTERNET/FWA + filtro)
+    monthExpr: INC_MONTH,
+    window: INC_WINDOW,
+    dims: {
+      canal: "CANAL_GERAL",
+      gerente: "GERENTE_CANAIS",
+      nicho: "nicho",
+      tipo: "TIPO_CIDADE",
+      cidade: "cidade_venda",
+      uf: "TRIM(RIGHT(cidade_venda, 2))",
+    },
+  },
+  // churn_bl: só canal/gerente/nicho (não tem tipo/cidade/uf confiáveis).
+  churn_bl: {
+    table: CHURN_BL_T,
+    scope: "servico IN ('INTERNET', 'FWA')",
+    monthExpr: INC_MONTH,
+    window: INC_WINDOW,
+    dims: { canal: "canal_geral", gerente: "gerente_canais", nicho: "nicho" },
+  },
+  // cinco_g: canal_de_vendas é CÓDIGO (10/55/A1…) — incompatível com o dropdown;
+  // ignoramos canal/gerente/tipo, escopamos por nicho/cidade/uf.
+  cinco_g: {
+    table: CINCO_G_T,
+    scope: "",
+    monthExpr: INC_MONTH,
+    window: INC_WINDOW,
+    dims: { nicho: "nicho", cidade: "cidade_venda", uf: "TRIM(RIGHT(cidade_venda, 2))" },
+  },
+  // churn_5g: só gerente casa com o dropdown; canal tem vocabulário próprio.
+  churn_5g: {
+    table: CHURN_5G_T,
+    scope: "",
+    monthExpr: "date_format(data_churn, 'yyyy-MM')",
+    window: `data_churn >= ${q13}`,
+    dims: { gerente: "GERENTE" },
+  },
+};
+
+/** waves servico scope from the filter (BL = INTERNET + FWA). */
+function wavesServico(f: SalesFilters): string {
+  if (f.servico === "INTERNET") return "servico = 'INTERNET'";
+
+  if (f.servico === "FWA") return "servico = 'FWA'";
+
+  return "servico IN ('INTERNET', 'FWA')";
+}
+
+/** Run one source: Map<indicatorId, Map<yyyy-MM, value>>, or null on failure. */
+async function sourceMonthly(
+  source: SalesSource,
+  defs: SalesIndicatorDef[],
+  filters: SalesFilters,
+): Promise<Map<string, Map<string, number>> | null> {
+  const spec = BLOCK_SOURCES[source];
+  const params: unknown[] = [];
+  const where = [spec.window];
+
+  if (spec.scope) where.push(spec.scope);
+
+  if (source === "waves") where.push(wavesServico(filters));
+
+  for (const [key, col] of Object.entries(spec.dims)) {
+    const v = filters[key as keyof SalesFilters];
+
+    if (v) (where.push(`${col} = ?`), params.push(v));
+  }
+
+  const cols = defs.map((d) => `${d.valueExpr} AS \`${d.id}\``).join(", ");
+  const sql = `SELECT ${spec.monthExpr} ym, ${cols} FROM ${spec.table} WHERE ${where.join(" AND ")} GROUP BY 1 ORDER BY 1`;
+
+  try {
+    const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
+    const out = new Map<string, Map<string, number>>();
+
+    for (const d of defs) out.set(d.id, new Map());
+
+    for (const r of rows) {
+      const ym = String(r.ym);
+
+      for (const d of defs) out.get(d.id)!.set(ym, num(r[d.id]));
+    }
+
+    return out;
+  } catch (e) {
+    console.warn(`[sales] bloco: fonte indisponível (${spec.table}):`, (e as Error).message);
+
+    return null;
+  }
+}
+
+/** Funnel metas from meta_geral_canais: Map<indicador, Map<yyyy-MM, meta>>. */
+async function funnelMetas(
+  filters: SalesFilters,
+  block: SalesBlock,
+): Promise<Map<string, Map<string, number>>> {
+  const out = new Map<string, Map<string, number>>();
+
+  try {
+    const servicos = block === "banda-larga" ? ["FTTH", "FWA"] : ["5G"];
+    const params: unknown[] = [...servicos];
+    const where = [
+      `date_format(data, 'yyyy-MM') >= date_format(${q13}, 'yyyy-MM')`,
+      `servico IN (${servicos.map(() => "?").join(", ")})`,
+    ];
+
+    if (filters.canal) (where.push("canal = ?"), params.push(filters.canal));
+
+    if (filters.gerente) (where.push("gerente = ?"), params.push(filters.gerente));
+
+    const sql = `SELECT date_format(data, 'yyyy-MM') ym, id_indicador, SUM(meta) meta FROM ${META_CANAIS} WHERE ${where.join(" AND ")} GROUP BY 1, 2`;
+    const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
+
+    for (const r of rows) {
+      const ind = String(r.id_indicador);
+
+      if (!out.has(ind)) out.set(ind, new Map());
+
+      out.get(ind)!.set(String(r.ym), num(r.meta));
+    }
+  } catch (e) {
+    console.warn("[sales] metas de funil indisponíveis:", (e as Error).message);
+  }
+
+  return out;
+}
+
+/** Ticket-oferta metas (tipo GERAL) from metas_canais_ticket_oferta. */
+async function ticketOfertaMetas(block: SalesBlock): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+
+  try {
+    const servico = block === "banda-larga" ? "BANDA LARGA" : "5G";
+    const sql = `SELECT date_format(data, 'yyyy-MM') ym, AVG(meta) meta FROM ${TICKET_OFERTA}
+      WHERE indicador = 'TICKET OFERTA' AND tipo = 'GERAL' AND servico = ?
+        AND date_format(data, 'yyyy-MM') >= date_format(${q13}, 'yyyy-MM') GROUP BY 1`;
+    const rows = await getDataClient().query<Record<string, unknown>>(sql, [servico]);
+
+    for (const r of rows) out.set(String(r.ym), num(r.meta));
+  } catch (e) {
+    console.warn("[sales] metas de ticket oferta indisponíveis:", (e as Error).message);
+  }
+
+  return out;
+}
+
+async function computeBlock(
+  block: SalesBlock,
+  filters: SalesFilters,
+  competencia: string,
+): Promise<SalesIndicatorVM[]> {
+  const defs = SALES_INDICATORS[block];
+  const bySource = new Map<SalesSource, SalesIndicatorDef[]>();
+
+  for (const d of defs) {
+    if (d.available && d.source) {
+      if (!bySource.has(d.source)) bySource.set(d.source, []);
+
+      bySource.get(d.source)!.push(d);
+    }
+  }
+
+  const sources = [...bySource.keys()];
+  const [results, funnel, ticket] = await Promise.all([
+    Promise.all(sources.map((s) => sourceMonthly(s, bySource.get(s)!, filters))),
+    funnelMetas(filters, block),
+    ticketOfertaMetas(block),
+  ]);
+  const resBySource = new Map<SalesSource, Map<string, Map<string, number>> | null>();
+
+  sources.forEach((s, i) => resBySource.set(s, results[i]));
+
+  const empty = new Map<string, number>();
+
+  return defs.map((d) => {
+    if (!d.available || !d.source) return buildSalesVM(d, empty, empty, competencia);
+
+    const res = resBySource.get(d.source);
+
+    // Fonte falhou → degrada este card para "sem acesso" neste render.
+    if (!res) return buildSalesVM({ ...d, available: false }, empty, empty, competencia);
+
+    const real = res.get(d.id) ?? empty;
+    const meta =
+      d.meta?.kind === "funnel"
+        ? (funnel.get(d.meta.indicador) ?? empty)
+        : d.meta?.kind === "ticketOferta"
+          ? ticket
+          : empty;
+
+    return buildSalesVM(d, real, meta, competencia);
+  });
+}
+
 export async function databricksSalesView(filters: SalesFilters): Promise<SalesView> {
-  const [{ bl, g5 }, pdu, canalBL, canal5G, nichoBL, nicho5G, free, watermark] = await Promise.all([
-    funnelKpis(filters),
+  const competencia = resolvePeriod(filters).to.slice(0, 7); // yyyy-MM do mês do período
+  const [blocksBL, blocks5G, pdu, canalBL, canal5G, nichoBL, nicho5G, free, watermark] = await Promise.all([
+    computeBlock("banda-larga", filters, competencia),
+    computeBlock("5g", filters, competencia),
     pduSeries(filters),
     canalAnalysis(filters, "criado_bl", "canal_waves"),
     canalAnalysis(filters, "`5g_ativacao`", "canal_waves"),
@@ -313,9 +486,10 @@ export async function databricksSalesView(filters: SalesFilters): Promise<SalesV
     filters,
     source: "databricks",
     periodLabel: resolvePeriod(filters).label,
+    competencia,
     meses: pdu.map((p) => p.mes),
-    kpisBL: bl,
-    kpis5G: g5,
+    blocksBL,
+    blocks5G,
     pdu,
     canais: { canal: { bl: canalBL, g5: canal5G }, nicho: { bl: nichoBL, g5: nicho5G } },
     freeIndicators: free.indicators,
