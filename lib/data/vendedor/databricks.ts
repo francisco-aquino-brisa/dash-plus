@@ -1,15 +1,16 @@
 // Databricks adapter for the Dashboard Vendedor screen (Tela 4). Read-only,
 // aggregated in SQL (ADR 0002), scoped to a single vendedor by matricula.
 // Sources:
-//   - desempenho_hc         → profile, per-tech funnel, renovação, ranking, mix, dias
+//   - desempenho_hc         → profile (+ hash_user_jwas), per-tech funnel, renovação, ranking, dias
 //   - vw_hc_zerado_vendedor → official PDU + NDU (dias úteis) per serviço
+//   - waves_consolidado_orcamento → indicadores, mix e Pendências (via indicadores.ts)
 // matricula is a validated integer and dates are app-generated ISO → safe to
 // inline (same convention as the produtividade adapter).
 
 import { getDataClient } from "../client";
 import { num } from "../_shared";
 import { resolveCompetencia } from "./dates";
-import { fetchVendedorIndicadores } from "./indicadores";
+import { fetchPendencias, fetchVendedorIndicadores } from "./indicadores";
 import {
   type DiasZeradosView,
   type IndicadorVM,
@@ -40,12 +41,17 @@ export async function databricksVendedorWatermark(): Promise<string> {
   }
 }
 
-async function fetchProfile(mat: number, from: string, to: string): Promise<VendedorProfile | null> {
+async function fetchProfile(
+  mat: number,
+  from: string,
+  to: string,
+): Promise<{ profile: VendedorProfile; hashUser: string } | null> {
   const rows = await q(`
     SELECT MATRICULA, NOME, cidade_atuacao_jwas cidade, UF,
       COALESCE(GERENTE_CANAL, GERENTE_ORG) gerente, COORDENACAO, GERENCIA,
       RESPSUPERVISAO supervisao, nicho, COALESCE(canal_jwas, canal_waves) canal,
       nivel, situacao_jwas situacao, TIPO_CIDADE, TEMPO_EMPRESA,
+      hash_user_jwas,
       CAST(CAST(ADMISSAO AS DATE) AS STRING) admissao
     FROM ${DH}
     WHERE MATRICULA = ${mat} AND data BETWEEN DATE'${from}' AND DATE'${to}'
@@ -56,21 +62,24 @@ async function fetchProfile(mat: number, from: string, to: string): Promise<Vend
   if (!r) return null;
 
   return {
-    matricula: num(r.MATRICULA),
-    nome: str(r.NOME) || "—",
-    cidade: str(r.cidade) || "—",
-    uf: str(r.UF),
-    canal: str(r.canal) || "—",
-    gerente: str(r.gerente) || "—",
-    coordenacao: str(r.COORDENACAO) || "—",
-    gerencia: str(r.GERENCIA) || "—",
-    supervisao: str(r.supervisao) || "—",
-    nicho: str(r.nicho) || "—",
-    nivel: str(r.nivel) || "—",
-    situacao: str(r.situacao) || "—",
-    tipoCidade: str(r.TIPO_CIDADE) || "—",
-    tempoEmpresa: str(r.TEMPO_EMPRESA) || "—",
-    admissao: str(r.admissao),
+    profile: {
+      matricula: num(r.MATRICULA),
+      nome: str(r.NOME) || "—",
+      cidade: str(r.cidade) || "—",
+      uf: str(r.UF),
+      canal: str(r.canal) || "—",
+      gerente: str(r.gerente) || "—",
+      coordenacao: str(r.COORDENACAO) || "—",
+      gerencia: str(r.GERENCIA) || "—",
+      supervisao: str(r.supervisao) || "—",
+      nicho: str(r.nicho) || "—",
+      nivel: str(r.nivel) || "—",
+      situacao: str(r.situacao) || "—",
+      tipoCidade: str(r.TIPO_CIDADE) || "—",
+      tempoEmpresa: str(r.TEMPO_EMPRESA) || "—",
+      admissao: str(r.admissao),
+    },
+    hashUser: str(r.hash_user_jwas),
   };
 }
 
@@ -321,22 +330,26 @@ export async function databricksVendedorView(filters: VendedorFilters): Promise<
     },
     ranking: { available: false, metrica: "", escopos: [] },
     mix: [],
+    pendencias: [],
     pendenciasAvailable: false,
     watermark,
   };
 
   if (!Number.isFinite(mat)) return empty;
 
-  const profile = await fetchProfile(mat, period.from, period.to);
+  const found = await fetchProfile(mat, period.from, period.to);
 
-  if (!profile) return empty; // matricula not present in this competência
+  if (!found) return empty; // matricula not present in this competência
 
-  const [agg, pdu, diasZerados, ranking, vend] = await Promise.all([
+  const { profile, hashUser } = found;
+
+  const [agg, pdu, diasZerados, ranking, vend, pendencias] = await Promise.all([
     fetchServiceAgg(mat, period.from, period.to),
     fetchPdu(mat, period.ym),
     fetchDiasZerados(mat, period.from, period.to, period.ym, period.hojeDia),
     fetchRanking(mat, period.from, period.to),
     fetchVendedorIndicadores(mat, period.ym),
+    fetchPendencias(hashUser, period.ym).catch(() => null),
   ]);
 
   return {
@@ -348,7 +361,8 @@ export async function databricksVendedorView(filters: VendedorFilters): Promise<
     diasZerados,
     ranking,
     mix: vend.mix,
-    pendenciasAvailable: false,
+    pendencias: pendencias ?? [],
+    pendenciasAvailable: pendencias != null,
     watermark,
   };
 }

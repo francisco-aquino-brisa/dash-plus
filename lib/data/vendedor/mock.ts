@@ -10,6 +10,7 @@ import {
   type IndicadorFormato,
   type IndicadorVM,
   type MixOferta,
+  type PendenciaOrcamento,
   type ServicoCard,
   type VendedorFilterOptions,
   type VendedorFilters,
@@ -247,6 +248,41 @@ function mockDiasZerados(
   return { ano, mes, hoje: hojeDia, resumo, zeradosPorServico, comVendaPorServico };
 }
 
+/** A few deterministic pending orçamentos, mirroring the Databricks shape. */
+function mockPendencias(mat: number, rng: () => number): PendenciaOrcamento[] {
+  const clientes = [
+    "ROBERVALDA URBANA FERREIRA DE ANDRADE",
+    "VINICIUS HENRIQUE DA SILVA",
+    "MARIA JOSÉ DA CONCEIÇÃO",
+    "ANTÔNIO CARLOS PEREIRA",
+    "FRANCISCA DAS CHAGAS SOUZA",
+  ];
+  const planos = [
+    "OFERTA 300MB RELAMPAGO COM APPS",
+    "OFERTA PF 500MB ESSENCIAL COM APPS",
+    "OFERTA 700MB ESSENCIAL COM APPS V2",
+    "OFERTA COMBO 20GB ESSENCIAL",
+  ];
+  const servicos: PendenciaOrcamento["servico"][] = ["FTTH", "FTTH", "FWA", "5G"];
+  const n = 2 + Math.floor(rng() * 4);
+  const out: PendenciaOrcamento[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const servico = servicos[Math.floor(rng() * servicos.length)];
+
+    out.push({
+      orcamentoId: String(12000000 + Math.floor(hashStr(`${mat}-${i}`) * 999999)),
+      cliente: clientes[i % clientes.length],
+      servico,
+      plano: planos[i % planos.length],
+      avulso: servico !== "5G" ? rng() > 0.3 : rng() > 0.6,
+      status: rng() > 0.5 ? "aguardando_instalacao" : "aguardando_efetivacao",
+    });
+  }
+
+  return out;
+}
+
 function mockRanking(mat: number, profile: VendedorProfile) {
   const s = hashStr(String(mat));
   const pos = (n: number) => Math.max(1, Math.round(s * n));
@@ -294,6 +330,7 @@ export function mockVendedorView(filters: VendedorFilters): VendedorView {
     },
     ranking: { available: false, metrica: "", escopos: [] },
     mix: [],
+    pendencias: [],
     pendenciasAvailable: false,
     watermark: "mock:vendedor",
   };
@@ -313,7 +350,8 @@ export function mockVendedorView(filters: VendedorFilters): VendedorView {
     diasZerados: mockDiasZerados(mat, period.ano, period.mes, period.hojeDia, rng),
     ranking: mockRanking(mat, profile),
     mix: mockMix(agg),
-    pendenciasAvailable: false,
+    pendencias: mockPendencias(mat, rng),
+    pendenciasAvailable: true,
     watermark: "mock:vendedor",
   };
 }

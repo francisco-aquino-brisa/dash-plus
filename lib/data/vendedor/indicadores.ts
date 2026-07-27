@@ -23,7 +23,14 @@
 
 import { getDataClient } from "../client";
 import { num } from "../_shared";
-import type { IndicadorFormato, IndicadorVM, MixOferta, ServicoKey, StatusVenda } from "./types";
+import type {
+  IndicadorFormato,
+  IndicadorVM,
+  MixOferta,
+  PendenciaOrcamento,
+  ServicoKey,
+  StatusVenda,
+} from "./types";
 
 const CAT = process.env.DATABRICKS_SALES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const ICM = `\`${CAT}\`.\`inteligencia_comercial_e_mercado\``;
@@ -427,6 +434,53 @@ async function fetchMixOfertas(hashUser: string, ym: string): Promise<MixOferta[
     if (!servico || !status) continue;
 
     out.push({ titulo: str(r.titulo) || "—", servico, status, vendas: num(r.vendas) });
+  }
+
+  return out;
+}
+
+/**
+ * Pendências: the vendor's orçamentos that reached CRIADO/EFETIVADO in the
+ * competência but have no INSTALADO event. One row per orcamento_id; the furthest
+ * status reached buckets it (EFETIVADO → aguardando instalação, CRIADO → aguardando
+ * efetivação). `incremento` is per status-event month, matching the rest of the
+ * screen. Joined by `hash_user` (the vendor's hash_user_jwas from desempenho_hc).
+ */
+export async function fetchPendencias(hashUser: string, ym: string): Promise<PendenciaOrcamento[]> {
+  if (!HASH_RE.test(hashUser) || !YM_RE.test(ym)) return [];
+
+  const [y, m] = ym.split("-");
+  const incremento = `01-${m}-${y}`;
+  const rows = await q(
+    `SELECT orcamento_id,
+       MAX(cliente_nome) cliente, MAX(servico) servico, MAX(plano) plano,
+       MAX(upper(combo_5g)) combo_5g,
+       MAX(CASE WHEN upper(status_venda)='EFETIVADO' THEN 2
+                WHEN upper(status_venda)='CRIADO' THEN 1 ELSE 0 END) rk
+     FROM ${WAVES}
+     WHERE hash_user = '${hashUser}' AND incremento = '${incremento}'
+       AND servico IN ('INTERNET','FWA','5G')
+     GROUP BY orcamento_id
+     HAVING MAX(CASE WHEN upper(status_venda)='INSTALADO' THEN 1 ELSE 0 END) = 0 AND rk >= 1
+     ORDER BY rk, cliente
+     LIMIT 500`,
+  );
+
+  const out: PendenciaOrcamento[] = [];
+
+  for (const r of rows) {
+    const servico = WAVES_SERVICO[str(r.servico)];
+
+    if (!servico) continue;
+
+    out.push({
+      orcamentoId: str(r.orcamento_id),
+      cliente: str(r.cliente) || "—",
+      servico,
+      plano: str(r.plano) || "—",
+      avulso: str(r.combo_5g) !== "SIM",
+      status: num(r.rk) >= 2 ? "aguardando_instalacao" : "aguardando_efetivacao",
+    });
   }
 
   return out;

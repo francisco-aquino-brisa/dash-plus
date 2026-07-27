@@ -8,8 +8,8 @@
 //     computed from the source tables named in that catalog (waves_consolidado_
 //     orcamento, consolidado_5g_pedido, …), joined by `hash_user`. See
 //     lib/data/vendedor/indicadores.ts and docs/data-map.md.
-// df_waves_vendas (orçamento grain) is frozen in 2025 → Pendências stays a
-// placeholder. See docs/pending-data-checklist.md.
+//   - waves_consolidado_orcamento → also feeds Pendências: the vendor's orçamentos
+//     that reached CRIADO/EFETIVADO in the competência but not INSTALADO.
 
 /** Service buckets shown as cards (Banda = BL = FTTH + FWA combined). */
 export type ServicoKey = "FTTH" | "FWA" | "5G" | "Banda";
@@ -121,6 +121,24 @@ export interface RankingView {
 
 export type StatusVenda = "Criado" | "Efetivado" | "Instalado";
 
+/** A pending orçamento's current stage (never yet INSTALADO). */
+export type PendenciaStatus = "aguardando_efetivacao" | "aguardando_instalacao";
+
+/** One pending orçamento in the Pendências tab (waves_consolidado_orcamento). */
+export interface PendenciaOrcamento {
+  /** `orcamento_id` — shown as "Nº 12444800". */
+  orcamentoId: string;
+  /** `cliente_nome`. */
+  cliente: string;
+  servico: "FTTH" | "FWA" | "5G";
+  /** Plan/offer name (`plano`). */
+  plano: string;
+  /** true when the sale is not a 5G combo (`combo_5g <> 'SIM'`) → badge "Avulso". */
+  avulso: boolean;
+  /** CRIADO → aguardando_efetivacao; EFETIVADO → aguardando_instalacao. */
+  status: PendenciaStatus;
+}
+
 /** One sales offer (a `plano`) in the Mix de Vendas list. */
 export interface MixOferta {
   /** Plan/offer name (`plano` from waves_consolidado_orcamento). */
@@ -140,7 +158,9 @@ export interface VendedorView {
   diasZerados: DiasZeradosView;
   ranking: RankingView;
   mix: MixOferta[];
-  /** Pendências source (df_waves_vendas) is frozen in 2025 → always false. */
+  /** Orçamentos pendentes (não instalados) do vendedor na competência. */
+  pendencias: PendenciaOrcamento[];
+  /** false → source not queryable this render → tab shows a waiting state. */
   pendenciasAvailable: boolean;
   watermark: string;
 }

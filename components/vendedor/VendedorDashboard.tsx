@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, ClipboardList, Clock, Search, UserRound } from "lucide-react";
+import { BarChart3, ClipboardList, Clock, Radio, Search, Smartphone, UserRound, Wifi } from "lucide-react";
 import { MockDataBadge } from "@/components/ui/mock-data-badge";
 import { cn } from "@/lib/utils";
 import { VendedorSearch } from "./VendedorSearch";
@@ -16,6 +16,7 @@ import { MixVendasBlock } from "./MixVendasBlock";
 import { RaioXModal } from "./RaioXModal";
 import {
   SERVICOS,
+  type PendenciaOrcamento,
   type ServicoKey,
   type VendedorFilterOptions,
   type VendedorFilters,
@@ -56,7 +57,17 @@ export function VendedorDashboard({
   const [raioX, setRaioX] = useState<ServicoKey | null>(null);
   const [vis, setVis] = useState<Visibility>(INITIAL_VIS);
 
-  const { filters, profile, servicos, diasZerados, ranking, mix, competenciaLabel } = view;
+  const {
+    filters,
+    profile,
+    servicos,
+    diasZerados,
+    ranking,
+    mix,
+    pendencias,
+    pendenciasAvailable,
+    competenciaLabel,
+  } = view;
 
   const navigate = useCallback(
     (next: VendedorFilters) => {
@@ -144,7 +155,7 @@ export function VendedorDashboard({
             {vis.mix && <MixVendasBlock mix={mix} />}
           </div>
         ) : (
-          <PendenciasTab />
+          <PendenciasTab pendencias={pendencias} available={pendenciasAvailable} />
         )}
 
         <footer className="pt-6 text-center text-xs text-muted-foreground">
@@ -239,17 +250,121 @@ function EmptyState() {
   );
 }
 
-function PendenciasTab() {
+const PENDENCIA_ICONS: Record<PendenciaOrcamento["servico"], React.ElementType> = {
+  FTTH: Wifi,
+  FWA: Radio,
+  "5G": Smartphone,
+};
+
+const PENDENCIA_STATUS: Record<PendenciaOrcamento["status"], { label: string; className: string }> = {
+  aguardando_efetivacao: { label: "Aguardando Efetivação", className: "bg-accent text-accent-foreground" },
+  aguardando_instalacao: { label: "Aguardando Instalação", className: "bg-warning text-warning-foreground" },
+};
+
+type PendenciaFiltro = "todos" | PendenciaOrcamento["status"];
+
+const PENDENCIA_FILTROS: { key: PendenciaFiltro; label: string }[] = [
+  { key: "todos", label: "Todos" },
+  { key: "aguardando_efetivacao", label: "Aguardando Efetivação" },
+  { key: "aguardando_instalacao", label: "Aguardando Instalação" },
+];
+
+function PendenciasTab({ pendencias, available }: { pendencias: PendenciaOrcamento[]; available: boolean }) {
+  const [filtro, setFiltro] = useState<PendenciaFiltro>("todos");
+
+  if (!available) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-card/30 px-6 py-20 text-center">
+        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-warning/10 text-warning">
+          <Clock className="h-7 w-7" />
+        </span>
+        <h2 className="text-lg font-semibold text-foreground">Orçamentos Pendentes</h2>
+        <p className="max-w-md text-sm text-muted-foreground">
+          Não foi possível carregar os orçamentos pendentes agora. Tente novamente em instantes.
+        </p>
+      </div>
+    );
+  }
+
+  const filtered = pendencias.filter((p) => filtro === "todos" || p.status === filtro);
+
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-card/30 px-6 py-20 text-center">
-      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-warning/10 text-warning">
-        <Clock className="h-7 w-7" />
-      </span>
-      <h2 className="text-lg font-semibold text-foreground">Orçamentos Pendentes</h2>
-      <p className="max-w-md text-sm text-muted-foreground">
-        Aguardando fonte atualizada de orçamentos. A base disponível de orçamentos por cliente está congelada
-        em 2025 — o bloco acende automaticamente quando o time de dados liberar a fonte atual.
-      </p>
-    </div>
+    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
+      <header className="mb-4 flex items-center gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-warning/10 text-warning">
+          <ClipboardList className="h-5 w-5" />
+        </span>
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Orçamentos Pendentes</h2>
+          <p className="text-sm text-muted-foreground">{pendencias.length} orçamento(s) aguardando ação</p>
+        </div>
+      </header>
+
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {PENDENCIA_FILTROS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setFiltro(f.key)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-[10px] font-medium tracking-wider uppercase transition-colors",
+              filtro === f.key
+                ? "border-primary/40 bg-primary/15 text-primary"
+                : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-border bg-secondary/20 px-3 py-10 text-center text-sm text-muted-foreground">
+          {pendencias.length === 0
+            ? "Nenhum orçamento pendente na competência."
+            : "Nenhum orçamento para o filtro atual."}
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((p) => {
+            const Icon = PENDENCIA_ICONS[p.servico] ?? Wifi;
+            const status = PENDENCIA_STATUS[p.status];
+
+            return (
+              <div
+                key={p.orcamentoId}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary/30 p-3"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="bg-gradient-primary grid h-11 w-11 shrink-0 place-items-center rounded-xl text-primary-foreground">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-foreground">{p.cliente}</div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                      <span className="rounded bg-card px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {p.servico}
+                      </span>
+                      <span className="rounded bg-card px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {p.avulso ? "Avulso" : "Combo"}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">Nº {p.orcamentoId}</span>
+                    </div>
+                    <div className="mt-0.5 truncate text-xs text-muted-foreground">{p.plano}</div>
+                  </div>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold",
+                    status.className,
+                  )}
+                >
+                  {status.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
