@@ -2,17 +2,23 @@
 // result the Databricks adapter will return (see ADR 0002 — large fact, aggregated
 // in SQL). Numbers mirror the prototype; blocked indicators are marked unavailable.
 
-import { blocked } from "../_shared";
 import { hashStr, mulberry32 } from "../_random";
 import { resolvePeriod } from "./dates";
 import {
   BLOCKED_INDICATORS,
   type CanalDelta,
-  type KpiBlock,
   type PduPoint,
   type SalesFilters,
   type SalesView,
 } from "./types";
+import {
+  SALES_INDICATORS,
+  buildSalesVM,
+  decimalsFor,
+  type SalesBlock,
+  type SalesIndicatorDef,
+  type SalesIndicatorVM,
+} from "./indicators";
 
 const GERENTES = [
   "Ana Souza",
@@ -94,92 +100,94 @@ function filterFactor(f: SalesFilters): number {
   return dim(f.gerente) * dim(f.canal) * dim(f.nicho) * dim(f.uf) * dim(f.cidade) * dim(f.tipo) * timeMul;
 }
 
-function kpisBL(f: SalesFilters): KpiBlock[] {
-  const escopo = f.servico === "INTERNET" ? "INTERNET" : f.servico === "FWA" ? "FWA" : "Banda Larga";
-  const svcFactor = escopo === "Banda Larga" ? 1 : escopo === "INTERNET" ? BL_SPLIT.INTERNET : BL_SPLIT.FWA;
-  const factor = filterFactor(f) * svcFactor;
-  const tag = escopo === "Banda Larga" ? "Banda Larga (INTERNET + FWA)" : escopo;
+// Base value per indicator (mês típico, escala validada vs warehouse). Faturamento
+// em R$; contagens em unidades; percentuais/razões em %. Escalado por filterFactor.
+const MOCK_BASE: Record<string, number> = {
+  "banda-larga:VE01": 54_000,
+  "banda-larga:VE02": 43_600,
+  "banda-larga:VE03": 34_200,
+  "banda-larga:VE05": 80.1,
+  "banda-larga:VE06": 78.4,
+  "banda-larga:RE01": 87.6,
+  "banda-larga:RE02": 93.0,
+  "banda-larga:RE03": 90.8,
+  "banda-larga:RE04": 11_160_000,
+  "banda-larga:RE05": 11_850_000,
+  "banda-larga:RE03f": 11_040_000,
+  "banda-larga:CA08": 9.4,
+  "5g:VE04": 80_600,
+  "5g:VE27": 22_700,
+  "5g:VE51": 57_900,
+  "5g:VE28": 78_000,
+  "5g:VE29": 2_560,
+  "5g:VE32": 13_600, // portabilidade concluída/mês
+  "5g:VE33": 6_000, // portabilidade pendente/mês
+  "5g:VE34": 16.9, // % concluída × ativações 5G
+  "5g:VE35": 70.0, // % concluída × solicitada
+  "5g:RE01": 25.9,
+  "5g:RE02": 35.0,
+  "5g:RE04": 2_060_000,
+  "5g:RE05": 2_820_000,
+  "5g:CA10": 45.0,
+  "5g:CA09": 4.1,
+};
 
-  const criadas = Math.round(184_220 * factor);
-  const efet = Math.round(132_540 * factor);
-  const inst = Math.round(118_980 * factor);
-  const ticket = escopo === "FWA" ? 91.8 : escopo === "INTERNET" ? 119.2 : 119.2 * 0.63 + 91.8 * 0.37;
-  const churn = escopo === "FWA" ? 5.8 : escopo === "INTERNET" ? 4.1 : 4.1 * 0.63 + 5.8 * 0.37;
-  const efetXCri = criadas ? +((efet / criadas) * 100).toFixed(1) : 0;
-  const instXEfet = efet ? +((inst / efet) * 100).toFixed(1) : 0;
-  const fatEntrada = (efet * ticket) / 1_000_000;
+/** Trailing 12 month keys (yyyy-MM) ending at `endYm` (inclusive). */
+function monthKeys(endYm: string, n = 12): string[] {
+  const [y, m] = endYm.split("-").map(Number);
+  const out: string[] = [];
 
-  return [
-    {
-      label: "Vendas Criadas",
-      value: criadas,
-      meta: Math.round(175_000 * factor),
-      delta: 6.3,
-      available: true,
-      helper: tag,
-    },
-    {
-      label: "Vendas Efetivadas",
-      value: efet,
-      meta: Math.round(130_000 * factor),
-      delta: 4.2,
-      available: true,
-      helper: `Efetivados x Criados: ${efetXCri}%`.replace(".", ","),
-    },
-    {
-      label: "Vendas Instaladas",
-      value: inst,
-      meta: Math.round(122_000 * factor),
-      delta: -2.1,
-      available: true,
-      helper: `Instalados x Efetivados: ${instXEfet}%`.replace(".", ","),
-    },
-    {
-      label: "Ticket de Entrada",
-      value: +ticket.toFixed(1),
-      meta: 105,
-      unit: "currency",
-      delta: 4.2,
-      available: true,
-      helper: `Faturamento entrada: R$ ${fatEntrada.toFixed(1)}M`.replace(".", ","),
-    },
-    {
-      label: "Churn Safra",
-      value: +churn.toFixed(1),
-      meta: 5.5,
-      unit: "percent",
-      delta: -0.8,
-      available: true,
-      helper: tag,
-    },
-  ];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(y, m - 1 - i, 1);
+
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  return out;
 }
 
-function kpis5G(f: SalesFilters): KpiBlock[] {
-  const factor = filterFactor(f);
+function roundUnit(unit: SalesIndicatorDef["unit"], v: number): number {
+  if (unit === "qtd") return Math.round(v);
 
-  return [
-    {
-      label: "Vendas Ativadas 5G",
-      value: Math.round(41_320 * factor),
-      meta: Math.round(38_000 * factor),
-      delta: 8.7,
-      available: true,
-      helper: "Chip pago/grátis: sem acesso",
-    },
-    blocked("% Portabilidade (Concluída x Ativ.)"),
-    blocked("% Portabilidade (Concluída x Solic.)"),
-    {
-      label: "Ticket Médio Entrada 5G",
-      value: 49.9,
-      meta: 47,
-      unit: "currency",
-      delta: 6.1,
-      available: true,
-      helper: "Fat. entrada: R$ 2,06M",
-    },
-    blocked("Churn Safra 5G c/ Bloqueio"),
-  ];
+  if (unit === "percent") return +v.toFixed(decimalsFor(unit));
+
+  return v >= 1000 ? Math.round(v) : +v.toFixed(2);
+}
+
+/** Deterministic block VMs mirroring the real (value + série 12m + meta). */
+function mockBlock(block: SalesBlock, f: SalesFilters, competencia: string): SalesIndicatorVM[] {
+  const months = monthKeys(competencia);
+  const svc =
+    block === "5g"
+      ? 1
+      : f.servico === "INTERNET"
+        ? BL_SPLIT.INTERNET
+        : f.servico === "FWA"
+          ? BL_SPLIT.FWA
+          : 1;
+  // Percentuais/razões não escalam com o tamanho do universo; contagens/receita sim.
+  const factor = filterFactor(f) * svc;
+
+  return SALES_INDICATORS[block].map((def) => {
+    if (!def.available) return buildSalesVM(def, new Map(), new Map(), competencia);
+
+    const rng = mulberry32(hashStr(`${block}:${def.id}`) * 7 + 3);
+    const scale = def.unit === "percent" ? 1 : factor;
+    const base = (MOCK_BASE[`${block}:${def.id}`] ?? 1000) * scale;
+    const real = new Map<string, number>();
+    const meta = new Map<string, number>();
+
+    months.forEach((ym, i) => {
+      const wobble = 0.85 + rng() * 0.3;
+
+      real.set(ym, roundUnit(def.unit, base * wobble * (1 + i * 0.008)));
+
+      if (def.meta)
+        meta.set(ym, roundUnit(def.unit, base * (def.meta.kind === "ticketOferta" ? 0.95 : 1.08)));
+    });
+
+    return buildSalesVM(def, real, meta, competencia);
+  });
 }
 
 function pduSeries(seed: number): PduPoint[] {
@@ -251,14 +259,16 @@ function freeSeries(): Record<string, { mes: string; valor: number }[]> {
 
 export function mockSalesView(filters: SalesFilters): SalesView {
   const seed = Math.floor(filterFactor(filters) * 1000);
+  const competencia = resolvePeriod(filters).to.slice(0, 7);
 
   return {
     filters,
     source: "mock",
     periodLabel: resolvePeriod(filters).label,
+    competencia,
     meses: MESES,
-    kpisBL: kpisBL(filters),
-    kpis5G: kpis5G(filters),
+    blocksBL: mockBlock("banda-larga", filters, competencia),
+    blocks5G: mockBlock("5g", filters, competencia),
     pdu: pduSeries(seed),
     canais: {
       canal: { bl: canalDeltas(CANAIS, 11 + seed, 220), g5: canalDeltas(CANAIS.slice(0, 9), 23 + seed, 90) },

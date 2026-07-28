@@ -1,14 +1,20 @@
 "use client";
 
-import { useCallback, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingCart } from "lucide-react";
 import { SalesFiltersBar } from "@/components/sales/SalesFiltersBar";
-import { SalesKpiCard } from "@/components/sales/SalesKpiCard";
+import { SalesIndicatorCard } from "@/components/sales/SalesIndicatorCard";
 import { PduBlock } from "@/components/sales/PduBlock";
 import { AnaliseCanais } from "@/components/sales/AnaliseCanais";
 import { SelecaoLivre } from "@/components/sales/SelecaoLivre";
+import { IndicatorPicker } from "@/components/dashboard/IndicatorPicker";
+import { HistoryChart } from "@/components/dashboard/HistoryChart";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { MockDataBadge } from "@/components/ui/mock-data-badge";
+import { usePreference } from "@/lib/preferences/use-preference";
+import { DEFAULT_SELECTION, SELECTION_PREF_KEY, type SalesIndicatorVM } from "@/lib/data/sales/indicators";
+import { formatChartLabel, formatMonth, formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SalesFilters, SalesFilterOptions, SalesView } from "@/lib/data/sales/types";
 
@@ -42,19 +48,41 @@ function Section({
   title,
   subtitle,
   children,
+  right,
 }: {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
+  right?: React.ReactNode;
 }) {
   return (
     <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
-      <header className="mb-4">
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-        {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+      <header className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+        </div>
+        {right}
       </header>
       {children}
     </section>
+  );
+}
+
+function MiniStat({ label, value, good }: { label: string; value: string; good?: boolean | null }) {
+  return (
+    <div className="h-full rounded-lg border border-border bg-secondary/30 p-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div
+        className={cn(
+          "mt-1 text-xl font-bold tracking-tight",
+          good === true && "text-success",
+          good === false && "text-destructive",
+        )}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -69,7 +97,17 @@ export function SalesDashboard({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const { filters, kpisBL, kpis5G, pdu, canais, freeIndicators, freeSeries } = view;
+  const { filters, competencia, blocksBL, blocks5G, pdu, canais, freeIndicators, freeSeries } = view;
+
+  const [selected, setSelected] = useState<SalesIndicatorVM | null>(null);
+  const [blSelection, setBlSelection] = usePreference<string[]>(
+    SELECTION_PREF_KEY["banda-larga"],
+    DEFAULT_SELECTION["banda-larga"],
+  );
+  const [g5Selection, setG5Selection] = usePreference<string[]>(
+    SELECTION_PREF_KEY["5g"],
+    DEFAULT_SELECTION["5g"],
+  );
 
   const navigate = useCallback(
     (f: SalesFilters) => {
@@ -80,6 +118,41 @@ export function SalesDashboard({
     [router],
   );
   const reset = useCallback(() => startTransition(() => router.push("/vendas", { scroll: false })), [router]);
+
+  const renderBlock = (
+    title: string,
+    subtitle: string,
+    vms: SalesIndicatorVM[],
+    selection: string[],
+    setSelection: (next: string[]) => void,
+  ) => {
+    const pickerOptions = vms.map((v) => ({ id: v.id, label: v.label, available: v.available }));
+    const cards = vms.filter((v) => selection.includes(v.id));
+
+    return (
+      <Section
+        title={title}
+        subtitle={subtitle}
+        right={<IndicatorPicker options={pickerOptions} selected={selection} onChange={setSelection} />}
+      >
+        {cards.length === 0 ? (
+          <p className="py-4 text-sm text-muted-foreground">
+            Nenhum indicador selecionado. Use “Indicadores” para escolher.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {cards.map((vm) => (
+              <SalesIndicatorCard
+                key={vm.id}
+                vm={vm}
+                onClick={vm.available ? () => setSelected(vm) : undefined}
+              />
+            ))}
+          </div>
+        )}
+      </Section>
+    );
+  };
 
   return (
     <div className="min-h-screen pb-12">
@@ -110,21 +183,20 @@ export function SalesDashboard({
           <SalesFiltersBar filters={filters} options={options} onChange={navigate} onReset={reset} />
         </div>
 
-        <Section title="Banda Larga (INTERNET + FWA)" subtitle="Meta x Realizado">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {kpisBL.map((k) => (
-              <SalesKpiCard key={k.label} kpi={k} />
-            ))}
-          </div>
-        </Section>
-
-        <Section title="5G" subtitle="Ativações, portabilidade, ticket e churn">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {kpis5G.map((k) => (
-              <SalesKpiCard key={k.label} kpi={k} />
-            ))}
-          </div>
-        </Section>
+        {renderBlock(
+          "Banda Larga (INTERNET + FWA)",
+          `Meta x Realizado · ${formatMonth(competencia)}`,
+          blocksBL,
+          blSelection,
+          setBlSelection,
+        )}
+        {renderBlock(
+          "5G",
+          `Ativações, portabilidade, ticket e churn · ${formatMonth(competencia)}`,
+          blocks5G,
+          g5Selection,
+          setG5Selection,
+        )}
 
         <PduBlock pdu={pdu} />
         <AnaliseCanais canais={canais} />
@@ -134,6 +206,64 @@ export function SalesDashboard({
           Brisanet · Vendas · Acompanhamento de Canais · v1
         </footer>
       </main>
+
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent className="max-w-3xl">
+          {selected &&
+            (() => {
+              const vm = selected;
+              const fmtU = (v: number) =>
+                vm.unit === "currency"
+                  ? `R$ ${formatNumber(+v.toFixed(vm.decimals))}`
+                  : vm.unit === "percent"
+                    ? formatPct(v, vm.decimals)
+                    : formatNumber(v);
+              const compact = (v: number) =>
+                vm.unit === "currency"
+                  ? `R$ ${formatChartLabel(v)}`
+                  : vm.unit === "percent"
+                    ? formatPct(v, 0)
+                    : formatChartLabel(v);
+              const atinGood =
+                vm.attainment === null
+                  ? undefined
+                  : vm.polarity === "down"
+                    ? vm.attainment <= 100
+                    : vm.attainment >= 100;
+
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle>{vm.label} · Histórico</DialogTitle>
+                    <DialogDescription>
+                      Evolução mensal (Real{vm.meta !== null ? " × Meta" : ""}) no escopo filtrado.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div
+                    className={cn(
+                      "grid grid-cols-2 gap-3",
+                      vm.meta !== null ? "sm:grid-cols-3" : "sm:grid-cols-1",
+                    )}
+                  >
+                    <MiniStat label={`Atual · ${formatMonth(competencia)}`} value={fmtU(vm.value)} />
+                    {vm.meta !== null && <MiniStat label="Meta" value={fmtU(vm.meta)} />}
+                    {vm.attainment !== null && (
+                      <MiniStat label="Atingimento" value={formatPct(vm.attainment, 0)} good={atinGood} />
+                    )}
+                  </div>
+
+                  <HistoryChart
+                    data={vm.series}
+                    unit={vm.unit}
+                    valueFormatter={fmtU}
+                    compactFormatter={compact}
+                  />
+                </>
+              );
+            })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

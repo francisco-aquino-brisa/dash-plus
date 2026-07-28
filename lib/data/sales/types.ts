@@ -4,6 +4,8 @@
 // KPIs whose real source is blocked/missing carry `available: false` and render
 // as "sem acesso aos dados" (see docs/pending-data-checklist.md).
 
+import type { SalesIndicatorVM } from "./indicators";
+
 export type Unit = "n" | "currency" | "percent";
 export type StatusVenda = "criado" | "efetivado" | "instalado";
 
@@ -70,8 +72,12 @@ export interface SalesView {
   meses: string[];
   source: "mock" | "databricks";
   periodLabel: string;
-  kpisBL: KpiBlock[];
-  kpis5G: KpiBlock[];
+  /** Competência (yyyy-MM) que os cards dos blocos exibem (mês do período). */
+  competencia: string;
+  /** Selectable indicator cards — Banda Larga (INTERNET + FWA). */
+  blocksBL: SalesIndicatorVM[];
+  /** Selectable indicator cards — 5G. */
+  blocks5G: SalesIndicatorVM[];
   /** PDU (produção realizada / HC ativo / dia útil) by technology, per month. */
   pdu: PduPoint[];
   canais: {

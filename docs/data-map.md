@@ -10,20 +10,21 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 
 ## Verification status (last audited via warehouse queries)
 
-| Object                        | Schema                                             | Type    | Exists            | Columns used by code           |
-| ----------------------------- | -------------------------------------------------- | ------- | ----------------- | ------------------------------ |
-| `indicadores_cidades`         | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                 |
-| `indicadores_cidades_5g`      | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                 |
-| `metas_cidades`               | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                 |
-| `metas_vendedores_canais`     | `projeto_brisa_performance`                        | MANAGED | ✅ (2026-07)      | catálogo+metas por vendedor ✅ |
-| `cadastro_usuario`            | `projeto_brisa_performance`                        | MANAGED | ✅                | all present ✅                 |
-| `desempenho_hc`               | `diego_barros_inteligencia_comercial_e_mercado`    | MANAGED | ✅                | all present ✅                 |
-| `waves_consolidado_orcamento` | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | ticket/faturamento BL ✅       |
-| `consolidado_5g_pedido`       | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | ticket 5G, VE04, VE51 ✅       |
-| `churn_vendedor_5g`           | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | CA10 (churn safra 5G) ✅       |
-| `indicadores_servicos`        | `inteligencia_comercial_e_mercado_indicadores`     | —       | ✅ (2026-07)      | catálogo (fonte+fórmula) ✅    |
-| **`vw_hc_zerado_vendedor`**   | (referenced as `projeto_brisa_performance`)        | —       | ❌ **absent**     | —                              |
-| **`portabilidade_5g`**        | `gdb_brisanet_gd.inteligencia_comercial_e_mercado` | —       | ⛔ **sem acesso** | VE32–VE35 (USE CATALOG negado) |
+| Object                        | Schema                                             | Type    | Exists            | Columns used by code               |
+| ----------------------------- | -------------------------------------------------- | ------- | ----------------- | ---------------------------------- |
+| `indicadores_cidades`         | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                     |
+| `indicadores_cidades_5g`      | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                     |
+| `metas_cidades`               | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                     |
+| `metas_vendedores_canais`     | `projeto_brisa_performance`                        | MANAGED | ✅ (2026-07)      | catálogo+metas por vendedor ✅     |
+| `cadastro_usuario`            | `projeto_brisa_performance`                        | MANAGED | ✅                | all present ✅                     |
+| `desempenho_hc`               | `diego_barros_inteligencia_comercial_e_mercado`    | MANAGED | ✅                | all present ✅                     |
+| `waves_consolidado_orcamento` | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | ticket/faturamento BL ✅           |
+| `consolidado_5g_pedido`       | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | ticket 5G, VE04, VE51 ✅           |
+| `churn_vendedor_5g`           | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | CA10 (churn safra 5G) ✅           |
+| `indicadores_servicos`        | `inteligencia_comercial_e_mercado_indicadores`     | —       | ✅ (2026-07)      | catálogo (fonte+fórmula) ✅        |
+| **`vw_hc_zerado_vendedor`**   | (referenced as `projeto_brisa_performance`)        | —       | ❌ **absent**     | —                                  |
+| `portabilidade`               | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | VE32–VE35 (Cidades + Vendas) ✅    |
+| **`portabilidade_5g`**        | `gdb_brisanet_gd.inteligencia_comercial_e_mercado` | —       | ⛔ **sem acesso** | fonte oficial antiga (substituída) |
 
 > **Acesso ampliado (2026-07):** antes o app só alcançava `projeto_brisa_performance`.
 > O time de dados liberou os demais schemas de `gdb_brisanet_comunidade_dev`
@@ -38,12 +39,17 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 > (checked across all catalogs). So the **PDU is broken** on every screen that
 > uses it. See "Known breakage" below.
 
-> **Portabilidade 5G (VE32–VE35) segue bloqueada:** o catálogo aponta a fonte
-> oficial para `gdb_brisanet_gd.inteligencia_comercial_e_mercado.portabilidade_5g`,
-> mas o app **não tem `USE CATALOG` em `gdb_brisanet_gd`**. As tabelas
-> `portabilidade`/`portabilidade_solicitado`/`portabilidade_portado` em
-> `inteligencia_comercial_e_mercado` têm estrutura diferente (orientada a venda/
-> consultor) — não são substituto direto. Ver [pending-data-team.md](./pending-data-team.md).
+> **Portabilidade 5G (VE32–VE35) DESBLOQUEADA (2026-07):** a fonte oficial antiga
+> `gdb_brisanet_gd…portabilidade_5g` continua sem `USE CATALOG`, mas a tabela
+> **`inteligencia_comercial_e_mercado.portabilidade`** (acessível) a substitui. É
+> transacional e **espelha cada pedido em várias linhas** (SOLICITADO + PORTADO,
+> com/sem detalhe de linha), então **deduplicamos por `N_do_pedido`**: 1 linha por
+> pedido, competência do evento mais recente, `portado` = teve alguma linha PORTADO.
+> Daí: **VE32** = concluídas (Σ portado), **VE33** = pendentes (Σ 1−portado, menor é
+> melhor), **VE35** = concluídas ÷ solicitadas (total de pedidos) × 100 ≈ 70%/mês,
+> **VE34** = concluídas ÷ ativações 5G (VE04, `consolidado_5g_pedido`) × 100 — este
+> é **cross-source**. Join por competência+cidade (Cidades) / batch por `CANAL_GERAL`,
+> `nicho`, `cidade_venda`, `uf` (Vendas · Canais). Sem meta no catálogo (só Real).
 
 > **Indicadores por vendedor (Tela Vendedor, 2026-07):** a tela lê o catálogo
 > `projeto_brisa_performance.metas_vendedores_canais` (uma linha por indicador×serviço
@@ -62,6 +68,7 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 > | CA08 (BL/FTTH)                     | `waves_churnsafra_consultor`                                             | `hash_user` | `incremento`            | `SUM(cancelamentos)/SUM(instalacoes)` (fração)                        |
 > | CA10 (5G)                          | `churn_vendedor_5g`                                                      | `hash_user` | `data_churn`            | `(SUM(bloqueados)+SUM(cancelados))/SUM(entrantes)`                    |
 > | VE30/VE50/VE52/VE56                | `gdb_brisanet_comercial.gestao_clientes.relatorio_chamados_fidelizacoes` | `matricula` | `data_efetivacao`       | count/`SUM(fibra_variacao_receita)`                                   |
+> | VE32 (5G)                          | `portabilidade` (dedup por `N_do_pedido`)                                | `hash_user` | `data` → `ym`           | `SUM(portado)` (concluídas)                                           |
 >
 > Ressalvas verificadas: (a) RE02-5G — o catálogo aponta `waves`, mas as colunas estão em
 > `consolidado_5g_pedido` (usamos essa); `preco_oferta` é decimal com vírgula. (b) `waves_churnsafra_consultor`
@@ -70,7 +77,8 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 > (atual − anterior). (d) **Renovação liga por `matricula`, NÃO por cpf** (formatos de cpf divergem:
 > metas `00552386340` vs fidelizações `055.238.634-08` → 0 overlap por cpf; matrícula liga a mesma pessoa).
 > Só ~147/868 vendedores/mês têm linhas de renovação (atividade específica de FTTH); os demais mostram 0
-> legítimo. **VE32** (Portabilidade) segue bloqueada (`portabilidade_5g` sem acesso) → `disponivel: false`.
+> legítimo. **VE32** (Portabilidade 5G) foi DESBLOQUEADA (2026-07-27) via `portabilidade`
+> deduplicada por `N_do_pedido`, join por `hash_user` (overlap 100% com quem tem meta) → `SUM(portado)`.
 > **Quintil/histórico** ainda não implementados (exigem ranking contra pares — decisão de coorte pendente).
 > Indicadores não computáveis aparecem com a meta e realizado "—" (`disponivel: false`).
 
@@ -78,13 +86,13 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 
 **Not every screen reads from `projeto_brisa_performance`.** Only Cities does.
 
-| Screen (route)                         | Primary schema                                                   | Tables (verified)                                                                                                                                                                                       |
-| -------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Performance Cidades** (`/dashboard`) | `projeto_brisa_performance`                                      | `indicadores_cidades`, `indicadores_cidades_5g`, `metas_cidades` — all ✅                                                                                                                               |
-| **Vendas · Canais** (`/vendas`)        | `diego_barros_inteligencia_comercial_e_mercado`                  | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU)                                                                                                                                                   |
-| **Produtividade** (`/produtividade`)   | `diego_barros_inteligencia_comercial_e_mercado`                  | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU)                                                                                                                                                   |
-| **Vendedor** (`/vendedor`)             | `projeto_brisa_performance` + `inteligencia_comercial_e_mercado` | `metas_vendedores_canais` (catálogo+metas) ✅ · realizado de `waves_consolidado_orcamento` / `consolidado_5g_pedido` ✅ · `desempenho_hc` (perfil/mix/dias/ranking) ✅ · PDU `vw_hc_zerado_vendedor` ❌ |
-| Auth (all screens)                     | `projeto_brisa_performance`                                      | `cadastro_usuario` ✅                                                                                                                                                                                   |
+| Screen (route)                         | Primary schema                                                             | Tables (verified)                                                                                                                                                                                                                |
+| -------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Performance Cidades** (`/dashboard`) | `projeto_brisa_performance`                                                | `indicadores_cidades`, `indicadores_cidades_5g`, `metas_cidades` — all ✅                                                                                                                                                        |
+| **Vendas · Canais** (`/vendas`)        | `inteligencia_comercial_e_mercado` (blocos) + `diego_barros_…` (PDU/livre) | blocos: `waves_consolidado_orcamento`, `consolidado_5g_pedido`, `churn_*`, `portabilidade` (VE32–VE35) ✅ · `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU)                                                                |
+| **Produtividade** (`/produtividade`)   | `diego_barros_inteligencia_comercial_e_mercado`                            | `desempenho_hc` ✅ + `vw_hc_zerado_vendedor` ❌ (PDU)                                                                                                                                                                            |
+| **Vendedor** (`/vendedor`)             | `projeto_brisa_performance` + `inteligencia_comercial_e_mercado`           | `metas_vendedores_canais` (catálogo+metas) ✅ · realizado de `waves_consolidado_orcamento` / `consolidado_5g_pedido` / `portabilidade` (VE32) ✅ · `desempenho_hc` (perfil/mix/dias/ranking) ✅ · PDU `vw_hc_zerado_vendedor` ❌ |
+| Auth (all screens)                     | `projeto_brisa_performance`                                                | `cadastro_usuario` ✅                                                                                                                                                                                                            |
 
 Schemas overridable via env: `DATABRICKS_CITIES_SCHEMA` (Cities + auth) and
 `DATABRICKS_SALES_SCHEMA` (the other three). All within catalog

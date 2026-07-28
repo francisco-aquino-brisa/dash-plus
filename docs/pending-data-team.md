@@ -1,6 +1,6 @@
 # Pendências para o time de dados — indicadores ainda bloqueados
 
-_Atualizado em 2026-07-19. Tudo abaixo foi verificado contra o warehouse
+_Atualizado em 2026-07-27. Tudo abaixo foi verificado contra o warehouse
 (`gdb_brisanet_comunidade_dev`) via os scripts read-only._
 
 Com a liberação dos schemas `inteligencia_comercial_e_mercado`,
@@ -8,39 +8,28 @@ Com a liberação dos schemas `inteligencia_comercial_e_mercado`,
 **Cidades** teve 8 indicadores desbloqueados (ticket/faturamento BL e 5G, churn
 safra c/ bloqueio, ativação avulsa, e VE04 oficial) — já em produção e validados.
 
-Restam 4 pendências que dependem de ação de vocês. Em ordem de impacto:
+Restam 3 pendências que dependem de ação de vocês (a Portabilidade 5G, item 1, foi
+resolvida em 2026-07-27 com a tabela interina). Em ordem de impacto:
 
 ---
 
-## 1. Portabilidade 5G (VE32, VE33, VE34, VE35) — falta acesso ao catálogo
+## 1. ~~Portabilidade 5G (VE32, VE33, VE34, VE35)~~ — ✅ RESOLVIDO (2026-07-27)
 
-**Onde aparece:** Cidades (bloco 5G) e telas de Vendas/Vendedor.
+**Desbloqueado** via `inteligencia_comercial_e_mercado.portabilidade` (acessível),
+que substitui a fonte oficial antiga `gdb_brisanet_gd…portabilidade_5g` (ainda sem
+`USE CATALOG`). Já em produção nas telas **Cidades**, **Vendas · Canais** e
+**Vendedor** (esta só VE32, o único que o catálogo `metas_vendedores_canais` traz).
 
-O catálogo `indicadores_servicos` define a fonte oficial destes indicadores como:
+A tabela é transacional e **espelha cada pedido em várias linhas** (`STATUS` ∈
+{SOLICITADO, PORTADO}, com/sem detalhe de linha), então deduplicamos por
+`N_do_pedido`: VE32 = concluídas (PORTADO), VE33 = pendentes (solicitado sem
+portar), VE35 = concluídas ÷ solicitadas × 100, VE34 = concluídas ÷ ativações 5G
+(VE04) × 100. Ver [data-map.md](./data-map.md) para as fórmulas completas. No Vendedor
+o join é por `hash_user` (overlap 100% com quem tem meta) — VE32 = Σ portado.
 
-```
-gdb_brisanet_gd.inteligencia_comercial_e_mercado.portabilidade_5g
-```
-
-O app (service principal do Databricks App) **não tem `USE CATALOG` em
-`gdb_brisanet_gd`**:
-
-```
-[INSUFFICIENT_PERMISSIONS] User does not have USE CATALOG on Catalog 'gdb_brisanet_gd'
-```
-
-**Pedido:** conceder `USE CATALOG` em `gdb_brisanet_gd` + `SELECT` em
-`gdb_brisanet_gd.inteligencia_comercial_e_mercado.portabilidade_5g` ao service
-principal do app **ou** publicar essa view/tabela dentro de
-`gdb_brisanet_comunidade_dev` (onde o app já tem acesso).
-
-> Obs.: existem `portabilidade`, `portabilidade_solicitado` e
-> `portabilidade_portado` em `inteligencia_comercial_e_mercado` (acessíveis), mas
-> a estrutura é diferente (orientada a venda/consultor, colunas `Portabilidade?`,
-> `STATUS`, `JANELA`), enquanto a fórmula do catálogo usa `CategoriaServico`,
-> `StatusConector`, `CI_CONTRACT_ID` da `portabilidade_5g`. Se quiserem que a
-> gente use as tabelas acessíveis como substituto, precisamos da confirmação de
-> **qual coluna = "Portabilidade concluída/pendente/solicitada"**.
+> Obs.: se vocês quiserem a fonte oficial `portabilidade_5g` (com
+> `CategoriaServico`/`CI_CONTRACT_ID`) em vez da interina, ainda falta `USE CATALOG`
+> em `gdb_brisanet_gd` **ou** republicá-la em `gdb_brisanet_comunidade_dev`.
 
 ---
 
@@ -92,7 +81,9 @@ errado (verificado por inspeção de colunas):
   `consolidado_5g_pedido`. Usamos `consolidado_5g_pedido` (validado). Sugerimos
   corrigir o `tabela` no catálogo.
 - **Portabilidade 5G (VE32–VE35):** `tabela` aponta para o catálogo
-  `gdb_brisanet_gd`, que o app não acessa (ver item 1).
+  `gdb_brisanet_gd`, que o app não acessa. Resolvido com a interina
+  `inteligencia_comercial_e_mercado.portabilidade` (ver item 1); ideal corrigir o
+  `tabela` do catálogo se a interina virar oficial.
 
 ---
 
@@ -112,9 +103,9 @@ errado (verificado por inspeção de colunas):
 
 ### Resumo do que destrava o quê
 
-| Pendência           | Ação do time de dados                                        | Destrava                                                        |
-| ------------------- | ------------------------------------------------------------ | --------------------------------------------------------------- |
-| 1. Portabilidade 5G | GRANT em `gdb_brisanet_gd` (ou republicar em comunidade_dev) | VE32–VE35                                                       |
-| 2. Dimensões        | Padronizar valores / de-para / consolidar em `desempenho_hc` | Ticket, Faturamento e Churn 5G em Vendas/Produtividade/Vendedor |
-| 3. Catálogo         | Corrigir `tabela` de RE0x-5G e VE3x                          | (metadado — melhora a manutenção)                               |
-| 4. PDU              | Publicar fonte com `total_realizado`                         | PDU em Vendas/Produtividade/Vendedor                            |
+| Pendência                  | Ação do time de dados                                        | Destrava                                                        |
+| -------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------- |
+| ~~1. Portabilidade 5G~~ ✅ | (resolvido via tabela interina `…portabilidade`)             | VE32–VE35 (Cidades + Vendas) — já em produção                   |
+| 2. Dimensões               | Padronizar valores / de-para / consolidar em `desempenho_hc` | Ticket, Faturamento e Churn 5G em Vendas/Produtividade/Vendedor |
+| 3. Catálogo                | Corrigir `tabela` de RE0x-5G e VE3x                          | (metadado — melhora a manutenção)                               |
+| 4. PDU                     | Publicar fonte com `total_realizado`                         | PDU em Vendas/Produtividade/Vendedor                            |

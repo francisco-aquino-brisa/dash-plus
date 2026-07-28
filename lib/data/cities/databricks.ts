@@ -148,6 +148,9 @@ async function fetchCitiesFTTHFWA(): Promise<CityIndicatorRecord[]> {
       churn_bloqueados: 0,
       ativacao_oficial: 0,
       ativacao_avulso: 0,
+      portab_concluida: 0, // só 5G
+      portab_pendente: 0,
+      portab_solicitada: 0,
       total_de_hp: num(r.total_de_hp),
       meta_crescimento: num(r.meta_crescimento),
       // No meta_base_ativa column → proxy (TODO: confirm real target source).
@@ -220,6 +223,10 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
       churn_bloqueados: 0,
       ativacao_oficial: 0,
       ativacao_avulso: 0,
+      // Enriched below from portabilidade (per cidade/mês).
+      portab_concluida: 0,
+      portab_pendente: 0,
+      portab_solicitada: 0,
       total_de_hp: 0,
       meta_crescimento: 0,
       meta_base_ativa: 0,
@@ -413,6 +420,60 @@ async function fetchChurn5g(): Promise<Map<string, ChurnAgg>> {
   return map;
 }
 
+/** Portabilidade 5G concluída/pendente/solicitada per (competência, cidade). */
+interface PortabAgg {
+  concluida: number;
+  pendente: number;
+  solicitada: number;
+}
+
+/**
+ * Portabilidade 5G from `portabilidade`, deduplicada por N_do_pedido (a tabela
+ * espelha cada pedido em várias linhas — SOLICITADO + PORTADO, com/sem detalhe de
+ * linha). Cada pedido é atribuído à competência do seu evento mais recente e
+ * marcado como concluído se tiver qualquer linha PORTADO. VE32 = concluídas
+ * (PORTADO); VE33 = pendentes (solicitado sem portar); solicitada = total (VE35).
+ * Keyed by "competência|cidade".
+ */
+async function fetchPortabilidade(): Promise<Map<string, PortabAgg>> {
+  const sql = `
+    WITH ped AS (
+      SELECT
+        N_do_pedido AS pedido,
+        MAX(cidade_venda) AS cidade_venda,
+        date_format(MAX(to_date(data)), 'yyyy-MM-01') AS competencia,
+        MAX(CASE WHEN upper(trim(STATUS)) = 'PORTADO' THEN 1 ELSE 0 END) AS portado
+      FROM ${FQ_ICM("portabilidade")}
+      WHERE coalesce(N_do_pedido, '') <> ''
+        AND coalesce(cidade_venda, '') <> ''
+        AND to_date(data) >= ${WINDOW}
+      GROUP BY N_do_pedido
+    )
+    SELECT
+      competencia, cidade_venda,
+      SUM(portado) AS concluida,
+      SUM(1 - portado) AS pendente,
+      COUNT(*) AS solicitada
+    FROM ped
+    WHERE competencia IS NOT NULL
+    GROUP BY 1, 2
+  `;
+  const raw = await getDataClient().query<Record<string, unknown>>(sql);
+  const map = new Map<string, PortabAgg>();
+
+  for (const r of raw) {
+    const key = `${str(r.competencia)}|${cityKey(str(r.cidade_venda))}`;
+
+    map.set(key, {
+      concluida: num(r.concluida),
+      pendente: num(r.pendente),
+      solicitada: num(r.solicitada),
+    });
+  }
+
+  return map;
+}
+
 /** .catch handler for an isolated enrich source: log and yield an empty Map. */
 function emptyMapOnError<T>(label: string) {
   return (e: unknown): T => {
@@ -428,7 +489,7 @@ export async function databricksCityDataset(): Promise<CityDataset> {
   // Banda Larga is the core source (propagates on failure). Everything else is
   // isolated: if a source is missing/errors, that indicator degrades to empty
   // (0 / "sem acesso") instead of taking the whole screen down. Never mock.
-  const [ftthFwa, fiveG, metaRecords, tickets, pedidos, churn] = await Promise.all([
+  const [ftthFwa, fiveG, metaRecords, tickets, pedidos, churn, portab] = await Promise.all([
     fetchCitiesFTTHFWA(),
     fetch5G().catch((e) => {
       console.warn("[cities] 5G indisponível (fonte ausente no Databricks):", (e as Error).message);
@@ -443,6 +504,7 @@ export async function databricksCityDataset(): Promise<CityDataset> {
     fetchWavesTickets().catch(emptyMapOnError<Map<string, TicketAgg>>("tickets")),
     fetch5gPedidos().catch(emptyMapOnError<Map<string, PedidoAgg>>("pedidos 5G")),
     fetchChurn5g().catch(emptyMapOnError<Map<string, ChurnAgg>>("churn 5G")),
+    fetchPortabilidade().catch(emptyMapOnError<Map<string, PortabAgg>>("portabilidade 5G")),
   ]);
 
   // Enrich each record with the ticket/faturamento/churn/ativação aggregates
@@ -487,6 +549,14 @@ export async function databricksCityDataset(): Promise<CityDataset> {
       r.churn_entrantes = c.entrantes;
       r.churn_cancelados = c.cancelados;
       r.churn_bloqueados = c.bloqueados;
+    }
+
+    const pt = portab.get(key);
+
+    if (pt) {
+      r.portab_concluida = pt.concluida;
+      r.portab_pendente = pt.pendente;
+      r.portab_solicitada = pt.solicitada;
     }
   }
 

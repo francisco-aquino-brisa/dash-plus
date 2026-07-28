@@ -109,6 +109,40 @@ export const INDICATOR_DEFINITIONS: Record<string, IndicatorDef> = {
   "Combo 1 Chip": { formula: "% de vendas FTTH com combo de 1 chip 5G." },
   "Combo 2 Chip": { formula: "% de vendas FTTH com combo de 2 chips 5G." },
   "Combo 3+ Chip": { formula: "% de vendas FTTH com combo de 3 ou mais chips 5G." },
+
+  // ── Blocos Vendas · Canais (fontes oficiais por canal — ver indicators.ts) ──
+  "Efetivados x Criado": {
+    formula: "Vendas efetivadas ÷ vendas criadas no mês (conversão do funil).",
+  },
+  "Ticket Médio Oferta": {
+    formula: "Média do valor de oferta (tabela) das vendas no mês.",
+  },
+  "Ticket Médio Ponderada": {
+    formula: "Média do ticket ponderado das vendas no mês.",
+  },
+  "Faturamento de Entrada": {
+    formula: "Soma do valor de entrada (com desconto / preço promocional) das vendas do mês.",
+  },
+  "Faturamento de Oferta": {
+    formula: "Soma do valor de oferta das vendas do mês.",
+  },
+  "Faturamento de Ponderado": {
+    formula: "Soma do ticket ponderado das vendas do mês.",
+  },
+  "Vendas Ativadas Chip Combo": {
+    formula: "Pedidos 5G em combo com FTTH (combo_ftth_5g = SIM), contagem distinta no mês.",
+  },
+  "Ativação 5G avulso": {
+    formula: "Pedidos 5G avulsos (combo_ftth_5g = NÃO), contagem distinta no mês.",
+  },
+  "Chip pago": { formula: "Pedidos 5G com chip pago (contagem distinta no mês)." },
+  "Chip gratis": { formula: "Pedidos 5G com chip grátis (contagem distinta no mês)." },
+  "Churn Safra com Bloqueio": {
+    formula: "(Bloqueados + Cancelados) ÷ entrantes da safra 5G. Menor é melhor.",
+  },
+  "Churn Safra sem bloqueio": {
+    formula: "Cancelados ÷ (entrantes + bloqueados) da safra 5G. Menor é melhor.",
+  },
 };
 
 /** Lookup by card label, tolerant of a few known label variants. */
