@@ -25,7 +25,7 @@ export type SalesBlock = "banda-larga" | "5g";
 export type SalesUnit = "qtd" | "percent" | "currency";
 /** "up" = maior é melhor; "down" = menor é melhor (churn). */
 export type Polarity = "up" | "down";
-export type SalesSource = "waves" | "cinco_g" | "churn_bl" | "churn_5g";
+export type SalesSource = "waves" | "cinco_g" | "churn_bl" | "churn_5g" | "portab";
 
 /** How the card's meta (and history-target line) is resolved. */
 export type SalesMeta =
@@ -484,28 +484,37 @@ export const CINCO_G: SalesIndicatorDef[] = [
     categoria: "venda",
     unit: "qtd",
     polarity: "up",
-    available: false,
-    description: "Portabilidades entrantes. Fonte oficial portabilidade_5g sem acesso (USE CATALOG).",
+    available: true,
+    source: "portab",
+    valueExpr: "SUM(portado)",
+    description:
+      "Portabilidades 5G concluídas no mês (STATUS PORTADO, deduplicado por N_do_pedido). Fonte: portabilidade.",
   },
   {
     id: "VE33",
     block: "5g",
-    label: "Portabilidade pendente",
+    label: "Portabilidade Pendente",
     categoria: "venda",
     unit: "qtd",
-    polarity: "up",
-    available: false,
-    description: "Portabilidades pendentes. Fonte oficial portabilidade_5g sem acesso.",
+    polarity: "down",
+    available: true,
+    source: "portab",
+    valueExpr: "SUM(1 - portado)",
+    description:
+      "Portabilidades 5G solicitadas sem concluir a portagem (dedup por N_do_pedido). Menor é melhor. Fonte: portabilidade.",
   },
   {
+    // Cross-source: concluídas (portabilidade) ÷ ativações 5G (VE04, consolidado_5g_pedido).
+    // Sem source/valueExpr — a série é montada no adapter a partir de VE32 e VE04.
     id: "VE34",
     block: "5g",
     label: "% Portabilidade (Concluída x Ativações 5G)",
     categoria: "venda",
     unit: "percent",
     polarity: "up",
-    available: false,
-    description: "Portabilidades concluídas ÷ ativações 5G. Fonte oficial sem acesso.",
+    available: true,
+    description:
+      "Portabilidades concluídas ÷ ativações 5G (VE04) × 100. Fonte: portabilidade + consolidado_5g_pedido.",
   },
   {
     id: "VE35",
@@ -514,8 +523,11 @@ export const CINCO_G: SalesIndicatorDef[] = [
     categoria: "venda",
     unit: "percent",
     polarity: "up",
-    available: false,
-    description: "Portabilidades concluídas ÷ solicitadas. Fonte oficial sem acesso.",
+    available: true,
+    source: "portab",
+    valueExpr: ratioPct("SUM(portado)", "COUNT(*)"),
+    description:
+      "Portabilidades concluídas ÷ solicitadas × 100 (STATUS PORTADO ÷ total de pedidos). Fonte: portabilidade.",
   },
 ];
 

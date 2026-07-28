@@ -39,6 +39,20 @@ const WAVES = `${ICM}.\`waves_consolidado_orcamento\``;
 const CINCO_G = `${ICM}.\`consolidado_5g_pedido\``;
 const CHURN_BL = `${ICM}.\`waves_churnsafra_consultor\``;
 const CHURN_5G = `${ICM}.\`churn_vendedor_5g\``;
+// Portabilidade 5G: transacional, várias linhas por pedido (SOLICITADO + PORTADO,
+// espelhado). Pré-agregamos por N_do_pedido → 1 linha/pedido (vendedor = MAX(hash_user),
+// competência do evento mais recente, `portado` = teve alguma linha PORTADO). VE32 =
+// concluídas (Σ portado), casando com a métrica do catálogo ("Portabilidade - Entrante").
+const PORTAB = `(
+  SELECT
+    N_do_pedido AS pedido,
+    MAX(hash_user) AS hash_user,
+    date_format(MAX(to_date(data)), 'yyyy-MM') AS ym,
+    MAX(CASE WHEN upper(trim(STATUS)) = 'PORTADO' THEN 1 ELSE 0 END) AS portado
+  FROM ${ICM}.\`portabilidade\`
+  WHERE coalesce(N_do_pedido, '') <> '' AND coalesce(hash_user, '') <> ''
+  GROUP BY N_do_pedido
+) p`;
 // Renovações live in a different catalog and join by matricula (not hash_user).
 const FIDELIZACOES = "`gdb_brisanet_comercial`.`gestao_clientes`.`relatorio_chamados_fidelizacoes`";
 
@@ -63,7 +77,7 @@ const SERVICO_TO_CARD: Record<string, ServicoKey> = {
   "Banda Larga": "Banda",
 };
 
-type Fonte = "waves" | "cinco_g" | "churn_bl" | "churn_5g" | "fidelizacoes";
+type Fonte = "waves" | "cinco_g" | "churn_bl" | "churn_5g" | "portab" | "fidelizacoes";
 
 interface SourceSpec {
   fonte: Fonte;
@@ -83,6 +97,7 @@ const SOURCES: SourceSpec[] = [
     joinCol: "hash_user",
     period: "date_format(data_churn,'yyyy-MM') = '{YM}'",
   },
+  { fonte: "portab", table: PORTAB, joinCol: "hash_user", period: "ym = '{YM}'" },
   {
     fonte: "fidelizacoes",
     table: FIDELIZACOES,
@@ -249,6 +264,8 @@ const REALIZADO_DEFS: RealizadoDef[] = [
     fonte: "churn_5g",
     aggExpr: "(SUM(bloqueados)+SUM(cancelados))/NULLIF(SUM(entrantes),0)",
   },
+  // ── portabilidade — VE32 concluídas 5G (Σ portado, dedup por pedido) ──────────
+  { id: "VE32", servico: "5G", fonte: "portab", aggExpr: "SUM(portado)" },
   // ── relatorio_chamados_fidelizacoes — renovação (join por matricula) ──────────
   { id: "VE30", servico: "FTTH", fonte: "fidelizacoes", aggExpr: "COUNT(*)" },
   {

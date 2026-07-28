@@ -168,8 +168,8 @@ function mockServiceCards(
       mkInd("VE51", "Ativação 5G avulso", "qtd", "up", ...p(ativ5g * 0.7)),
       mkInd("RE02", "Ticket Médio Oferta - 5G", "R$", "up", 29, 26 + Math.round(rng() * 10)),
       mkInd("CA10", "Churn Safra com Bloqueio - 5G", "%", "down", 0.15, +(0.05 + rng() * 0.12).toFixed(3)),
-      // Portabilidade (VE32): fonte portabilidade_5g ainda sem acesso → indisponível.
-      mkInd("VE32", "Portabilidade", "qtd", "up", 30, 0, false),
+      // Portabilidade (VE32): concluídas 5G, de `portabilidade` (≈17% das ativações).
+      mkInd("VE32", "Portabilidade", "qtd", "up", ...p(ativ5g * 0.17)),
     ]),
     mk("Banda", bl, bl.instalado, [
       mkInd("VE49", "Vendas instaladas avulso - Banda Larga", "qtd", "up", ...p(bl.instalado)),

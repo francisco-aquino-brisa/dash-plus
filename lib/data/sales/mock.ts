@@ -120,6 +120,10 @@ const MOCK_BASE: Record<string, number> = {
   "5g:VE51": 57_900,
   "5g:VE28": 78_000,
   "5g:VE29": 2_560,
+  "5g:VE32": 13_600, // portabilidade concluída/mês
+  "5g:VE33": 6_000, // portabilidade pendente/mês
+  "5g:VE34": 16.9, // % concluída × ativações 5G
+  "5g:VE35": 70.0, // % concluída × solicitada
   "5g:RE01": 25.9,
   "5g:RE02": 35.0,
   "5g:RE04": 2_060_000,

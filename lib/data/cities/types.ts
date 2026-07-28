@@ -80,6 +80,13 @@ export interface CityIndicatorRecord {
   ativacao_oficial: number;
   ativacao_avulso: number;
 
+  // Portabilidade 5G (fonte: portabilidade, deduplicada por N_do_pedido). VE32 =
+  // concluídas (STATUS PORTADO); VE33 = pendentes (solicitado sem portar); VE35
+  // usa solicitadas (total de pedidos). Só 5G; 0 para FTTH/FWA.
+  portab_concluida: number;
+  portab_pendente: number;
+  portab_solicitada: number;
+
   // Coverage.
   total_de_hp: number;
 

@@ -53,6 +53,25 @@ const TICKET_OFERTA = `${ICM}.\`metas_canais_ticket_oferta\``;
 
 const q13 = "add_months(date_trunc('MM', current_date()), -11)"; // início da janela de 12 meses
 
+// Portabilidade 5G: transacional, com várias linhas por pedido (SOLICITADO +
+// PORTADO, com/sem detalhe de linha). Pré-agregamos por N_do_pedido → 1 linha por
+// pedido (competência do evento mais recente; `portado` = teve alguma linha
+// PORTADO), para que os valueExpr (SUM(portado), COUNT(*)) fiquem corretos.
+const PORTAB_T = `(
+  SELECT
+    N_do_pedido AS pedido,
+    date_format(MAX(to_date(data)), 'yyyy-MM') AS ym,
+    MAX(CANAL_GERAL) AS canal,
+    MAX(nicho) AS nicho,
+    MAX(cidade_venda) AS cidade_venda,
+    MAX(CASE WHEN upper(trim(STATUS)) = 'PORTADO' THEN 1 ELSE 0 END) AS portado
+  FROM ${ICM}.\`portabilidade\`
+  WHERE coalesce(N_do_pedido, '') <> ''
+    AND coalesce(cidade_venda, '') <> ''
+    AND to_date(data) >= ${q13}
+  GROUP BY N_do_pedido
+) p`;
+
 /** Dimension WHERE for desempenho_hc. Pushes params; returns SQL fragment. */
 function dimWhereDH(
   f: SalesFilters,
@@ -311,6 +330,15 @@ const BLOCK_SOURCES: Record<SalesSource, SourceSpec> = {
     window: `data_churn >= ${q13}`,
     dims: { gerente: "GERENTE" },
   },
+  // portab: derivada, já pré-agregada por pedido (janela aplicada dentro). Sem
+  // gerente/tipo na fonte; canal (CANAL_GERAL) e nicho seguem o vocabulário waves.
+  portab: {
+    table: PORTAB_T,
+    scope: "",
+    monthExpr: "ym",
+    window: "ym IS NOT NULL",
+    dims: { canal: "canal", nicho: "nicho", cidade: "cidade_venda", uf: "TRIM(RIGHT(cidade_venda, 2))" },
+  },
 };
 
 /** waves servico scope from the filter (BL = INTERNET + FWA). */
@@ -448,7 +476,25 @@ async function computeBlock(
 
   const empty = new Map<string, number>();
 
+  // VE34 (5G) é cross-source: concluídas (portab VE32) ÷ ativações 5G (cinco_g VE04).
+  const portConcl = resBySource.get("portab")?.get("VE32");
+  const ativ5g = resBySource.get("cinco_g")?.get("VE04");
+  const ve34Ok = !!portConcl && !!ativ5g;
+  const ve34Real = new Map<string, number>();
+
+  if (portConcl && ativ5g) {
+    for (const [ym, c] of portConcl) {
+      const a = ativ5g.get(ym) ?? 0;
+
+      ve34Real.set(ym, a > 0 ? +((c / a) * 100).toFixed(1) : 0);
+    }
+  }
+
   return defs.map((d) => {
+    if (d.id === "VE34" && d.block === "5g") {
+      return buildSalesVM(ve34Ok ? d : { ...d, available: false }, ve34Real, empty, competencia);
+    }
+
     if (!d.available || !d.source) return buildSalesVM(d, empty, empty, competencia);
 
     const res = resBySource.get(d.source);

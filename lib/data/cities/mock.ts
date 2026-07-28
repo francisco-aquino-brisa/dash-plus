@@ -123,6 +123,10 @@ function generate(months: string[]): CityIndicatorRecord[] {
         const canc4m = Math.round(inst4m * (0.02 + rng() * 0.05));
         const is5g = tec === "5G";
         const ativacaoMes = is5g ? Math.round(vInst * 0.8) : 0;
+        // Portabilidade 5G (mock parity): solicitadas ~ fração das ativações,
+        // ~70% concluídas (STATUS PORTADO), resto pendente.
+        const portabSolicitada = is5g ? Math.round(ativacaoMes * (0.3 + rng() * 0.2)) : 0;
+        const portabConcluida = Math.round(portabSolicitada * (0.65 + rng() * 0.1));
         // Ticket / faturamento (mock parity with the enriched Databricks fields).
         const ticketQtd = is5g ? ativacaoMes : vCriadas;
         const ticketEntradaAvg = is5g ? 20 + rng() * 12 : 80 + rng() * 25;
@@ -168,6 +172,9 @@ function generate(months: string[]): CityIndicatorRecord[] {
           churn_bloqueados: is5g ? Math.round(inst4m * (0.2 + rng() * 0.2)) : 0,
           ativacao_oficial: ativacaoMes,
           ativacao_avulso: is5g ? Math.round(ativacaoMes * (0.6 + rng() * 0.2)) : 0,
+          portab_concluida: portabConcluida,
+          portab_pendente: portabSolicitada - portabConcluida,
+          portab_solicitada: portabSolicitada,
           total_de_hp: baseHP,
           meta_crescimento: metaCresc,
           meta_base_ativa: metaBaseAtiva,
