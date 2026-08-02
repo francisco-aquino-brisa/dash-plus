@@ -40,10 +40,10 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button className="shadow-elegant w-full rounded-2xl border border-warning/30 bg-warning/5 p-4 text-left transition-colors hover:border-warning/50">
+        <button className="shadow-elegant border-warning/30 bg-warning/5 hover:border-warning/50 w-full rounded-2xl border p-4 text-left transition-colors">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-warning/15 text-warning">
+              <span className="bg-warning/15 text-warning grid h-8 w-8 place-items-center rounded-lg">
                 <AlertTriangle className="h-4 w-4" />
               </span>
               <div>
@@ -69,7 +69,7 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-warning" /> Dias Zerados
+            <AlertTriangle className="text-warning h-5 w-5" /> Dias Zerados
           </DialogTitle>
         </DialogHeader>
 
@@ -132,7 +132,7 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
               <span className="h-2.5 w-2.5 rounded-full bg-destructive" /> Zerado
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-success/40" /> Com venda
+              <span className="bg-success/40 h-2.5 w-2.5 rounded-full" /> Com venda
             </span>
           </div>
         </div>

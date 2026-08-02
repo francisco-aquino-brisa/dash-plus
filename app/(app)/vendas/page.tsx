@@ -31,7 +31,7 @@ function parseFilters(sp: SearchParams): SalesFilters {
 export default async function VendasPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await getSession();
 
-  if (!session) redirect("/login");
+  if (!session) redirect("/bootstrap?next=/vendas");
 
   const filters = parseFilters(searchParams);
   const [view, options] = await Promise.all([getSalesView(filters), buildSalesFilterOptions()]);

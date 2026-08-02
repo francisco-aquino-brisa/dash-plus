@@ -6,160 +6,345 @@
 @source "../components";
 @source "../lib";
 
-@custom-variant dark (&:is(.dark *));
+/* Theme is driven by [data-theme] on <html> (see brisa-dash-tokens below). */
+@custom-variant dark (&:where([data-theme="dark"] *));
 
-/* Map design tokens to Tailwind color/utility names (Tailwind v4 @theme). */
-@theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-success: var(--success);
-  --color-success-foreground: var(--success-foreground);
-  --color-warning: var(--warning);
-  --color-warning-foreground: var(--warning-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --font-display: "Space Grotesk", system-ui, sans-serif;
-}
-
+/* =============================================================
+   Brisanet Design System — primitives (--bn-*)
+   Ported from docs/references/new_ui/tokens/brisanet-tokens.css.
+   Font faces are loaded via next/font (see app/layout.tsx); the
+   families below reference the generated CSS variables.
+   ============================================================= */
 :root {
-  --radius: 0.75rem;
+  /* Brand — Bn Orange */
+  --bn-orange-100: #f1bfb2;
+  --bn-orange-300: #f28b70;
+  --bn-orange-500: #ff5022;
+  --bn-orange-600: #e53001;
+  --bn-orange-700: #9f2a0b;
+  --bn-orange-800: #601f0e;
+  --bn-orange-900: #29100a;
 
-  /* Brisanet light harmonic — soft canvas with warm accents */
-  --background: oklch(0.985 0.005 80);
-  --foreground: oklch(0.26 0.03 260);
+  /* Bn Blue */
+  --bn-blue-100: #9dbded;
+  --bn-blue-300: #3e87f2;
+  --bn-blue-500: #0858ce;
+  --bn-blue-600: #11499d;
+  --bn-blue-700: #123972;
+  --bn-blue-800: #10284b;
+  --bn-blue-900: #0b1728;
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.26 0.03 260);
+  /* Bn Gray */
+  --bn-gray-50: #fcfcfd;
+  --bn-gray-100: #e8e9eb;
+  --bn-gray-200: #e1e3e8;
+  --bn-gray-300: #ced2db;
+  --bn-gray-400: #aeb2bd;
+  --bn-gray-500: #757d8a;
+  --bn-gray-600: #47505e;
+  --bn-gray-700: #2a2e40;
+  --bn-gray-800: #1f232d;
+  --bn-gray-900: #0f0f1a;
 
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.26 0.03 260);
+  /* Accent palette — data viz */
+  --bn-accent-1: #e53001;
+  --bn-accent-2: #f2bb4f;
+  --bn-accent-3: #aebf56;
+  --bn-accent-4: #5ccc81;
+  --bn-accent-5: #52ccb8;
+  --bn-accent-6: #67a6e5;
+  --bn-accent-7: #778bed;
+  --bn-accent-8: #b277ed;
+  --bn-accent-9: #de6fde;
 
-  --primary: oklch(0.72 0.16 45); /* warm coral-orange */
-  --primary-foreground: oklch(0.99 0.005 80);
+  /* Gradients */
+  --bn-gradient-blue: linear-gradient(180deg, #11499d 0%, #0858ce 100%);
+  --bn-gradient-orange: linear-gradient(180deg, #ffa31a 0%, #ff4800 100%);
+  --bn-gradient-gray-light: linear-gradient(180deg, #47505e 19.02%, #1f232d 80.98%);
+  --bn-gradient-gray-soft: linear-gradient(180deg, #969aa3 19.03%, #757d8a 80.97%);
 
-  --secondary: oklch(0.96 0.012 80);
-  --secondary-foreground: oklch(0.32 0.03 260);
-
-  --muted: oklch(0.955 0.01 80);
-  --muted-foreground: oklch(0.52 0.02 260);
-
-  --accent: oklch(0.78 0.1 195); /* soft teal */
-  --accent-foreground: oklch(0.22 0.04 230);
-
-  --success: oklch(0.76 0.13 160);
-  --success-foreground: oklch(0.22 0.05 160);
-
-  --warning: oklch(0.85 0.13 85);
-  --warning-foreground: oklch(0.3 0.05 80);
-
-  --destructive: oklch(0.68 0.17 25);
-  --destructive-foreground: oklch(0.99 0.005 80);
-
-  --border: oklch(0.92 0.01 80);
-  --input: oklch(0.94 0.01 80);
-  --ring: oklch(0.72 0.16 45);
-
-  --chart-1: oklch(0.72 0.16 45);
-  --chart-2: oklch(0.78 0.1 195);
-  --chart-3: oklch(0.72 0.12 280);
-  --chart-4: oklch(0.83 0.13 85);
-  --chart-5: oklch(0.74 0.13 160);
-
-  --gradient-primary: linear-gradient(135deg, oklch(0.78 0.14 55), oklch(0.72 0.16 30));
-  --gradient-card: linear-gradient(180deg, oklch(1 0 0), oklch(0.98 0.008 80));
-  --gradient-glow: radial-gradient(circle at top right, oklch(0.78 0.14 55 / 0.12), transparent 60%);
-
-  --shadow-elegant: 0 1px 0 oklch(1 0 0 / 0.6) inset, 0 10px 30px -18px oklch(0.3 0.05 260 / 0.25);
-  --shadow-glow: 0 0 40px -12px oklch(0.72 0.16 45 / 0.3);
+  /* Font families — bound to next/font-generated variables */
+  --font-ui:
+    var(--font-source-sans), "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: var(--font-figtree), var(--font-source-sans), sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-@layer base {
-  * {
-    border-color: var(--color-border);
-  }
-  html,
-  body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
-    font-family: "Inter", system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  body {
-    background-image: var(--gradient-glow);
-    background-attachment: fixed;
-    min-height: 100vh;
-  }
-  h1,
-  h2,
-  h3,
-  h4 {
-    font-family: var(--font-display);
-    letter-spacing: -0.02em;
-  }
+/* =============================================================
+   Brisa Dash — semantic layer (--s-*)
+   Ported from docs/references/new_ui/tokens/brisa-dash-tokens.css.
+   Components use ONLY these tokens (never --bn-* nor hex).
+   ============================================================= */
+:root,
+html[data-theme="light"] {
+  --s-page: #f6f7f8;
+  --s-card: #ffffff;
+  --s-sunken: #f2f3f5;
+  --s-raise: #ffffff;
+
+  --s-border: #e4e6e9;
+  --s-border-2: #ced2db;
+
+  --s-t1: #282b33;
+  --s-t2: #505566;
+  --s-t3: #757d8a;
+
+  --s-brand: #e53001;
+  --s-brand-2: #ff5022;
+  --s-brand-weak: #fdece7;
+  --s-brand-line: #f7c9bc;
+
+  --s-ok: #2e9e5a;
+  --s-ok-bg: #e6f4ec;
+  --s-warn: #c98a12;
+  --s-warn-bg: #fbefd3;
+  --s-bad: #e53001;
+  --s-bad-bg: #fbe8e3;
+  --s-blue: #0858ce;
+  --s-blue-bg: #e4eefb;
+
+  --s-sh: 0 1px 2px rgba(15, 15, 26, 0.05), 0 8px 24px -16px rgba(15, 15, 26, 0.18);
+  --s-sh-2: 0 12px 32px -12px rgba(15, 15, 26, 0.22);
+  --s-ink-a: rgba(15, 15, 26, 0.06);
 }
 
-@keyframes tagline-in {
+html[data-theme="dark"] {
+  --s-page: #0c0d14;
+  --s-card: #16181f;
+  --s-sunken: #1c1f27;
+  --s-raise: #1e2129;
+
+  --s-border: #262a33;
+  --s-border-2: #333844;
+
+  --s-t1: #f2f3f5;
+  --s-t2: #b4b9c4;
+  --s-t3: #868d9c;
+
+  --s-brand: #ff5a2c;
+  --s-brand-2: #ff7a4d;
+  --s-brand-weak: #2a1109;
+  --s-brand-line: #4a1d0e;
+
+  --s-ok: #4fc07c;
+  --s-ok-bg: #122a1d;
+  --s-warn: #e0a93a;
+  --s-warn-bg: #2c2110;
+  --s-bad: #ff6a4a;
+  --s-bad-bg: #2e1310;
+  --s-blue: #5a9bf0;
+  --s-blue-bg: #111e33;
+
+  --s-sh: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -16px rgba(0, 0, 0, 0.7);
+  --s-sh-2: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
+  --s-ink-a: rgba(255, 255, 255, 0.05);
+}
+
+/* Typographic shorthands, radii and spacing (product scale) */
+:root {
+  --t-page-title: 30px/1.1 var(--font-display);
+  --t-section: 17px/1.2 var(--font-display);
+  --t-card-title: 15px/1.2 var(--font-display);
+  --t-kpi: 26px/1 var(--font-display);
+  --t-kpi-sm: 21px/1 var(--font-display);
+  --t-body: 13px/1.45 var(--font-ui);
+  --t-label: 12px/1.25 var(--font-ui);
+  --t-meta: 11.5px/1.4 var(--font-ui);
+  --t-eyebrow: 9.5px/1 var(--font-ui);
+  --t-chip: 12.5px/1 var(--font-ui);
+
+  --r-chip: 10px;
+  --r-card: 14px;
+  --r-panel: 16px;
+  --r-modal: 20px;
+  --r-sheet: 22px 22px 0 0;
+  --r-pill: 999px;
+
+  --gap-grid: 10px;
+  --gap-section: 14px;
+  --pad-screen: 16px;
+  --pad-card: 13px;
+  --pad-panel: 15px;
+
+  --h-control: 40px;
+  --h-row: 44px;
+  --h-tap: 44px;
+}
+
+/* =============================================================
+   TEMPORARY compat shim — legacy shadcn token names mapped onto
+   the new --s-* tokens, so screens not yet migrated (and recharts,
+   which reads these as raw CSS vars) stay presentable during the
+   transition. REMOVE per-screen as each is migrated (Phases 1–2).
+   ============================================================= */
+:root {
+  --background: var(--s-page);
+  --foreground: var(--s-t1);
+  --card: var(--s-card);
+  --card-foreground: var(--s-t1);
+  --popover: var(--s-card);
+  --popover-foreground: var(--s-t1);
+  --primary: var(--s-brand);
+  --primary-foreground: #ffffff;
+  --secondary: var(--s-sunken);
+  --secondary-foreground: var(--s-t2);
+  --muted: var(--s-sunken);
+  --muted-foreground: var(--s-t3);
+  --accent: var(--s-sunken);
+  --accent-foreground: var(--s-t1);
+  --destructive: var(--s-bad);
+  --destructive-foreground: #ffffff;
+  --border: var(--s-border);
+  --input: var(--s-border);
+  --ring: var(--s-brand);
+  --chart-1: var(--bn-accent-1);
+  --chart-2: var(--bn-accent-6);
+  --chart-3: var(--bn-accent-4);
+  --chart-4: var(--bn-accent-2);
+  --chart-5: var(--bn-accent-8);
+}
+
+/* =============================================================
+   Tailwind v4 bridge — expose --s-* / --r-* as utilities so
+   components get `bg-card text-t2 border-border rounded-card …`
+   ============================================================= */
+@theme inline {
+  --color-page: var(--s-page);
+  --color-card: var(--s-card);
+  --color-sunken: var(--s-sunken);
+  --color-raise: var(--s-raise);
+  --color-border: var(--s-border);
+  --color-border-2: var(--s-border-2);
+
+  --color-t1: var(--s-t1);
+  --color-t2: var(--s-t2);
+  --color-t3: var(--s-t3);
+
+  --color-brand: var(--s-brand);
+  --color-brand-2: var(--s-brand-2);
+  --color-brand-weak: var(--s-brand-weak);
+  --color-brand-line: var(--s-brand-line);
+
+  --color-ok: var(--s-ok);
+  --color-ok-bg: var(--s-ok-bg);
+  --color-warn: var(--s-warn);
+  --color-warn-bg: var(--s-warn-bg);
+  --color-bad: var(--s-bad);
+  --color-bad-bg: var(--s-bad-bg);
+  --color-blue: var(--s-blue);
+  --color-blue-bg: var(--s-blue-bg);
+
+  /* TEMP compat: legacy shadcn utility names (remove as screens migrate) */
+  --color-background: var(--s-page);
+  --color-foreground: var(--s-t1);
+  --color-card-foreground: var(--s-t1);
+  --color-popover: var(--s-card);
+  --color-popover-foreground: var(--s-t1);
+  --color-primary: var(--s-brand);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--s-sunken);
+  --color-secondary-foreground: var(--s-t2);
+  --color-muted: var(--s-sunken);
+  --color-muted-foreground: var(--s-t3);
+  --color-accent: var(--s-sunken);
+  --color-accent-foreground: var(--s-t1);
+  --color-destructive: var(--s-bad);
+  --color-destructive-foreground: #ffffff;
+  --color-input: var(--s-border);
+  --color-ring: var(--s-brand);
+  --color-chart-1: var(--bn-accent-1);
+  --color-chart-2: var(--bn-accent-6);
+  --color-chart-3: var(--bn-accent-4);
+  --color-chart-4: var(--bn-accent-2);
+  --color-chart-5: var(--bn-accent-8);
+
+  --radius-chip: var(--r-chip);
+  --radius-card: var(--r-card);
+  --radius-panel: var(--r-panel);
+  --radius-modal: var(--r-modal);
+  --radius-pill: var(--r-pill);
+
+  --font-display: var(--font-figtree), var(--font-source-sans), sans-serif;
+  --font-ui: var(--font-source-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ---- Reset / base ---- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--s-t2);
+  background: var(--s-page);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  color: var(--s-t1);
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+
+p {
+  margin: 0;
+}
+
+/* App shell — motion */
+@keyframes bdFade {
   from {
     opacity: 0;
-    transform: translateY(14px);
-    filter: blur(5px);
   }
   to {
     opacity: 1;
+  }
+}
+@keyframes bdSheet {
+  from {
+    transform: translateY(24px);
+    opacity: 0.6;
+  }
+  to {
     transform: translateY(0);
-    filter: blur(0);
+    opacity: 1;
   }
 }
 
-@layer utilities {
-  .bg-gradient-primary {
-    background-image: var(--gradient-primary);
-  }
-  .animate-tagline-in {
-    animation: tagline-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .animate-tagline-in {
-      animation: none;
-    }
-  }
-  .bg-gradient-card {
-    background-image: var(--gradient-card);
-  }
-  .shadow-elegant {
-    box-shadow: var(--shadow-elegant);
-  }
-  .shadow-glow {
-    box-shadow: var(--shadow-glow);
-  }
-  .text-gradient {
-    background-image: var(--gradient-primary);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+/* App shell — hover states (inline styles can't express :hover) */
+.bd-ghost:hover {
+  border-color: var(--s-brand) !important;
+  color: var(--s-brand) !important;
+}
+.bd-nav:hover {
+  background: var(--s-sunken);
+}
+.bd-menuitem:hover {
+  background: var(--s-sunken);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

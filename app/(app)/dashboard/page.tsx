@@ -32,7 +32,7 @@ function parseFilters(sp: SearchParams, months: string[]): Filters {
 export default async function DashboardPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await getSession();
 
-  if (!session) redirect("/login");
+  if (!session) redirect("/bootstrap?next=/dashboard");
 
   const dataset = await getCityDataset();
   const options = buildFilterOptions(dataset);

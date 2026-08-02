@@ -272,7 +272,7 @@ export function Dashboard({ view, options, cache, isMock, watermark }: Props) {
               <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} /> Atualizar
             </button>
             <span className="hidden items-center gap-1.5 sm:flex">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-success" />
+              <span className="bg-success h-2 w-2 animate-pulse rounded-full" />
               {isMock ? MOCK_DATA_LABEL : "Databricks"} · {formatMonth(filters.competencia)}
             </span>
             <span className="rounded-md border border-border bg-secondary/60 px-2 py-1">

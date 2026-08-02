@@ -18,8 +18,8 @@ command:
 env:
   - name: DATA_SOURCE
     value: databricks
-  - name: SSO_BASE_URL
-    value: https://revan.brisanet.net.br/sso/v1
+  # No SSO: identity comes from the Databricks Apps `X-Forwarded-Email` header
+  # (ADR 0005). Nothing to configure here for it.
   # SQL Warehouse from the bound app resource (Resource key "sql-warehouse"). Its
   # id is injected here and the app builds the HTTP path from it — this is what
   # authorizes the app's OAuth token for the warehouse (fixes the 403).

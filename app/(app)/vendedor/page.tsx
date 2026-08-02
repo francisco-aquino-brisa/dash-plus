@@ -21,7 +21,7 @@ function parseFilters(sp: SearchParams): VendedorFilters {
 export default async function VendedorPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await getSession();
 
-  if (!session) redirect("/login");
+  if (!session) redirect("/bootstrap?next=/vendedor");
 
   const filters = parseFilters(searchParams);
   const [view, options] = await Promise.all([

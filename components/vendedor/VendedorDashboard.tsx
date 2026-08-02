@@ -275,7 +275,7 @@ function PendenciasTab({ pendencias, available }: { pendencias: PendenciaOrcamen
   if (!available) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-card/30 px-6 py-20 text-center">
-        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-warning/10 text-warning">
+        <span className="bg-warning/10 text-warning grid h-14 w-14 place-items-center rounded-2xl">
           <Clock className="h-7 w-7" />
         </span>
         <h2 className="text-lg font-semibold text-foreground">Orçamentos Pendentes</h2>
@@ -291,7 +291,7 @@ function PendenciasTab({ pendencias, available }: { pendencias: PendenciaOrcamen
   return (
     <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
       <header className="mb-4 flex items-center gap-3">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-warning/10 text-warning">
+        <span className="bg-warning/10 text-warning grid h-11 w-11 shrink-0 place-items-center rounded-2xl">
           <ClipboardList className="h-5 w-5" />
         </span>
         <div>

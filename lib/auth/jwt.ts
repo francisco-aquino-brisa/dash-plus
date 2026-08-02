@@ -1,22 +1,22 @@
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
 /**
- * Stateless internal session. After a successful SSO login, we issue a signed
- * JWT (HS256) holding the minimal user data and store it in an httpOnly cookie.
- * There is no database: the cookie is the single source of the session.
- *
- * Lifted from the sibling `dashboard` project (see ADR 0003).
+ * Stateless internal session. The app runs inside Databricks Apps, which
+ * authenticates the user at the edge and forwards their email. After the gate
+ * resolves the user against `tb_usuarios_app`, we issue a signed JWT (HS256)
+ * holding the minimal user data and store it in an httpOnly cookie. There is no
+ * database session: the cookie is the single source of the session. See ADR 0005.
  */
 
 export const SESSION_COOKIE = "brisa_session";
 
 export interface SessionUser {
-  id: number; // from SSO
-  picture: string; // from SSO
-  username: string; // from SSO (CPF)
-  name: string; // from SSO
-  email: string; // from cadastro_usuario
-  permissao: string; // from cadastro_usuario
+  email: string; // login key (from X-Forwarded-Email / tb_usuarios_app)
+  nome: string; // from tb_usuarios_app
+  cpf: string | null; // join key to other tables (not used for login)
+  nivelId: number; // tb_usuarios_app.nivel_id
+  nivel: string; // tb_niveis.nome
+  isAdmin: boolean; // derived: nivel === "admin"
 }
 
 function getSecret(): Uint8Array {
@@ -59,20 +59,20 @@ export async function verifySession(token: string | undefined): Promise<SessionU
     const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] });
 
     if (
-      typeof payload.id === "number" &&
-      typeof payload.picture === "string" &&
-      typeof payload.username === "string" &&
-      typeof payload.name === "string" &&
       typeof payload.email === "string" &&
-      typeof payload.permissao === "string"
+      typeof payload.nome === "string" &&
+      (typeof payload.cpf === "string" || payload.cpf === null) &&
+      typeof payload.nivelId === "number" &&
+      typeof payload.nivel === "string" &&
+      typeof payload.isAdmin === "boolean"
     ) {
       return {
-        id: payload.id,
-        picture: payload.picture,
-        username: payload.username,
-        name: payload.name,
         email: payload.email,
-        permissao: payload.permissao,
+        nome: payload.nome,
+        cpf: (payload.cpf as string | null) ?? null,
+        nivelId: payload.nivelId,
+        nivel: payload.nivel,
+        isAdmin: payload.isAdmin,
       };
     }
 

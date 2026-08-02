@@ -6,15 +6,33 @@ A centralized, controlled executive dashboard for Brisanet's commercial data, re
 
 This glossary keeps Brisanet's business terms in their canonical Portuguese form (the ubiquitous language stakeholders actually use), with English definitions. Code identifiers and prose documentation are written in English; the UI is rendered in Portuguese.
 
-## Roles
+## Roles & access
+
+Identity is no longer a login form. The app runs inside Databricks Apps and reads
+the authenticated user's **email** from the platform header (`X-Forwarded-Email`;
+locally, a `DEV_USER_EMAIL` env fallback). The old Brisanet-SSO/CPF login is
+removed. See ADR 0005.
+
+**Usuário do app**:
+A person allowed into the dashboard. Access requires an **active row in
+`tb_usuarios_app`** keyed by `email`; absent or `ativo = false` → no access
+("Sem acesso"). The row also carries `nivel_id` and `cpf` (kept for joins with
+other tables, not for login).
+_Avoid_: viewer, client.
+
+**Nível**:
+The access level of a usuário (`tb_niveis`, referenced by
+`tb_usuarios_app.nivel_id`). Drives which features/routes are visible.
+
+**Admin**:
+A usuário whose nível is `admin`. Sees the "Administração" area (button + routes),
+enforced by the `isAdmin` claim carried in the session token — both the sidebar
+button and the `/admin/*` routes gate on it.
 
 **Maintainer**:
-The single person responsible for the dashboard — owns the code, configuration, and what indicators are shown. The only one who can "change things" (deploy, reconfigure). This is the project author.
-_Avoid_: admin, owner, user.
-
-**Viewer**:
-Anyone who opens the dashboard to read data (e.g. the director). Has no edit capability — the screen is read-only. Authenticated via Brisanet SSO at the Databricks Apps layer.
-_Avoid_: user, client.
+The project author — owns the code and configuration. A code/ops role, not a
+runtime permission.
+_Avoid_: admin (that is a runtime nível), owner.
 
 ## Org hierarchy
 
