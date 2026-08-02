@@ -326,6 +326,26 @@ p {
     opacity: 1;
   }
 }
+/* Popover entrance (DESIGN_SYSTEM §6): translateY(6px)→0, 130–140ms ease. */
+@keyframes bdIn {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+/* KPI attainment bar (DESIGN_SYSTEM §6): scaleX(0)→1, 500ms, origin left. */
+@keyframes bdGrow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
 
 /* App shell — hover states (inline styles can't express :hover) */
 .bd-ghost:hover {
@@ -337,6 +357,12 @@ p {
 }
 .bd-menuitem:hover {
   background: var(--s-sunken);
+}
+/* KPI card hover (DESIGN_SYSTEM §4.3): lift + stronger shadow + brand border. */
+.bd-kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--s-sh-2);
+  border-color: var(--s-brand-line) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
