@@ -1,81 +1,145 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-import { formatNumber, formatPct } from "@/lib/format";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { formatNumber } from "@/lib/format";
 import type { VendedorRow } from "@/lib/data/produtividade/types";
 
-function Pct({ value }: { value: number }) {
-  const color = value >= 80 ? "text-success" : value >= 50 ? "text-warning" : "text-destructive";
+/**
+ * Ranking de Vendedores (SCREENS §3): top 15 by vendas efetivadas in the period,
+ * grouped by coordenação (externas) or nicho (canais). Built on the Fase 1
+ * DataTable (sticky header + maxHeight). The row click-through to the Vendedor
+ * dashboard is deferred until that screen's URL contract settles (it's being
+ * rebuilt in parallel) — see new-ui-plan §3.
+ */
+type RankRow = VendedorRow & { pos: number };
 
-  return <span className={cn("text-xs font-medium", color)}>{formatPct(value, 0)}</span>;
+function convColor(v: number): string {
+  return v >= 80 ? "var(--s-ok)" : v >= 50 ? "var(--s-warn)" : "var(--s-bad)";
+}
+
+function Tag({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "1px 7px",
+        borderRadius: 999,
+        border: "1px solid var(--s-border)",
+        background: "var(--s-sunken)",
+        fontSize: 10,
+        fontWeight: 700,
+        color: "var(--s-t3)",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ValueWithPct({ value, pct }: { value: number; pct: number }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+      <span style={{ color: "var(--s-t1)" }}>{formatNumber(value)}</span>
+      <span style={{ fontSize: 10.5, fontWeight: 800, color: convColor(pct) }}>{pct.toFixed(0)}%</span>
+    </div>
+  );
 }
 
 export function RankingVendedores({ rows, grupoLabel }: { rows: VendedorRow[]; grupoLabel: string }) {
-  return (
-    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
-      <header className="mb-4">
-        <h2 className="text-lg font-semibold text-foreground">Ranking de Vendedores</h2>
-        <p className="text-sm text-muted-foreground">
-          Top 15 por vendas efetivadas no período · {grupoLabel}
-        </p>
-      </header>
+  const ranked: RankRow[] = rows.map((r, i) => ({ ...r, pos: i + 1 }));
 
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-border text-[11px] tracking-wider text-muted-foreground uppercase">
-              <th className="px-2 py-2 text-left font-medium">#</th>
-              <th className="px-2 py-2 text-left font-medium">Vendedor</th>
-              <th className="px-2 py-2 text-right font-medium">Criadas</th>
-              <th className="px-2 py-2 text-right font-medium">Efetivadas</th>
-              <th className="px-2 py-2 text-right font-medium">Instaladas</th>
-              <th className="px-2 py-2 text-right font-medium">Ativ. 5G</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr
-                key={`${r.nome}-${i}`}
-                className="border-b border-border/50 transition-colors hover:bg-secondary/40"
-              >
-                <td className="px-2 py-2 text-muted-foreground tabular-nums">{i + 1}</td>
-                <td className="px-2 py-2">
-                  <div className="font-medium text-foreground">{r.nome}</div>
-                  <div className="mt-0.5 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
-                    <span className="rounded border border-border bg-secondary/40 px-1.5 py-0.5">
-                      {r.grupo}
-                    </span>
-                    <span className="rounded border border-border bg-secondary/40 px-1.5 py-0.5">
-                      {r.cidade}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-2 py-2 text-right text-foreground tabular-nums">
-                  {formatNumber(r.criado)}
-                </td>
-                <td className="px-2 py-2 text-right tabular-nums">
-                  <div className="text-foreground">{formatNumber(r.efetivado)}</div>
-                  <Pct value={r.efetVsCriado} />
-                </td>
-                <td className="px-2 py-2 text-right tabular-nums">
-                  <div className="text-foreground">{formatNumber(r.instalado)}</div>
-                  <Pct value={r.instVsEfet} />
-                </td>
-                <td className="px-2 py-2 text-right text-foreground tabular-nums">
-                  {formatNumber(r.ativ5g)}
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-2 py-8 text-center text-muted-foreground">
-                  Nenhum vendedor com resultado nos filtros atuais.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+  const columns: Column<RankRow>[] = [
+    {
+      key: "pos",
+      header: "#",
+      render: (r) => (
+        <span
+          style={{
+            display: "grid",
+            placeItems: "center",
+            width: 24,
+            height: 24,
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 800,
+            fontVariantNumeric: "tabular-nums",
+            background: r.pos <= 3 ? "var(--s-brand-weak)" : "var(--s-sunken)",
+            color: r.pos <= 3 ? "var(--s-brand)" : "var(--s-t3)",
+          }}
+        >
+          {r.pos}
+        </span>
+      ),
+    },
+    {
+      key: "nome",
+      header: "Vendedor",
+      render: (r) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <span style={{ fontWeight: 700, color: "var(--s-t1)" }}>{r.nome}</span>
+          <span style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            <Tag>{r.grupo}</Tag>
+            <Tag>{r.cidade}</Tag>
+          </span>
+        </div>
+      ),
+    },
+    { key: "criado", header: "Criadas", numeric: true, render: (r) => formatNumber(r.criado) },
+    {
+      key: "efetivado",
+      header: "Efetivadas",
+      numeric: true,
+      render: (r) => <ValueWithPct value={r.efetivado} pct={r.efetVsCriado} />,
+    },
+    {
+      key: "instalado",
+      header: "Instaladas",
+      numeric: true,
+      render: (r) => <ValueWithPct value={r.instalado} pct={r.instVsEfet} />,
+    },
+    { key: "ativ5g", header: "Ativ. 5G", numeric: true, render: (r) => formatNumber(r.ativ5g) },
+  ];
+
+  return (
+    <section
+      style={{
+        border: "1px solid var(--s-border)",
+        borderRadius: "var(--r-panel)",
+        background: "var(--s-card)",
+        padding: 15,
+        boxShadow: "var(--s-sh)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <div>
+        <h2
+          style={{
+            fontFamily: "var(--font-display)",
+            fontWeight: 800,
+            fontSize: 17,
+            letterSpacing: "-.02em",
+          }}
+        >
+          Ranking de Vendedores
+        </h2>
+        <div style={{ fontSize: 11.5, color: "var(--s-t3)", marginTop: 2 }}>
+          Top 15 por vendas efetivadas no período · {grupoLabel}
+        </div>
       </div>
+
+      <DataTable
+        columns={columns}
+        rows={ranked}
+        rowKey={(r) => `${r.pos}-${r.nome}`}
+        minWidth={620}
+        maxHeight={520}
+        empty={{
+          title: "Nenhum vendedor com resultado",
+          hint: "Ajuste os filtros para ver o ranking do período.",
+        }}
+      />
     </section>
   );
 }

@@ -10,7 +10,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 function Calendar({
   className,
   classNames,
-  showOutsideDays = true,
+  showOutsideDays = false,
   captionLayout = "label",
   buttonVariant = "ghost",
   formatters,

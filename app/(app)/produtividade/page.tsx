@@ -35,5 +35,5 @@ export default async function ProdutividadePage({ searchParams }: { searchParams
   const filters = parseFilters(searchParams);
   const [view, options] = await Promise.all([getProdView(filters), buildProdFilterOptions()]);
 
-  return <ProdDashboard view={view} options={options} usesMock={view.source === "mock"} />;
+  return <ProdDashboard view={view} options={options} />;
 }

@@ -251,12 +251,81 @@ Banda Larga → 5G → PDU → Análise por Canal → Seleção Livre):
 - **Pendente:** verificação no navegador (claro + escuro) após login; confirmar fórmula/meta da
   PDU com o time de dados para destravar o bloco.
 
-### 3. Produtividade Comercial — `/produtividade`
+### 3. Produtividade Comercial — `/produtividade` — 🚧 _em migração (Fase 2)_
 
-- new_ui: `SCREENS.md` §3 (segmented externas/canais, ranking de vendedores).
-- Current source: `lib/data/produtividade/**`.
-- Indicator mapping: _TBD at migration._
-- Divergences to resolve: _TBD._
+- new_ui: `SCREENS.md` §3 (Período + segmented Externas/Canais + 4 cards de funil +
+  Ranking de Vendedores).
+- Current source: `lib/data/produtividade/**` — **reutilizada, sem tocar no cálculo.**
+  A página server (`app/(app)/produtividade/page.tsx`) entrega o `ProdView`
+  (`getProdView` → `databricksProdView`) pronto; só o cliente (`components/produtividade/**`)
+  é reconstruído com as primitivas da Fase 1. Fonte: `desempenho_hc` (funil + 5G por
+  vendedor, hierarquia, cidade). Validado no warehouse (últimos 30 dias, 04/07–02/08:
+  Criadas 28.615 · Efetivadas 24.837 · Instaladas 21.978 · Ativ 5G 43.736).
+
+**Layout do legado (paridade):** Header (subtítulo = período) → filtros (Período range +
+segmented Gestão Externas/Canais + Serviço + hierarquia por modo + Cidade) → **Indicadores**
+(cards de funil) → **Ranking de Vendedores** → **PDU** → **TAM de Vendedores**. PDU e TAM o
+new_ui §3 não mostra, mas são do legado → mantidos (travados, "sem acesso").
+
+**Mapeamento por seção (new_ui → VM `ProdView`):**
+
+| Seção (legado + §3)         | Campo do VM                  | Fonte / fórmula (verificada, read-only)                                                                                                                                             |
+| --------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Período (range) + subtítulo | `filters.from/to`            | `resolveProdPeriod` (default = últimos 30 dias); janela anterior de igual tamanho p/ o delta                                                                                        |
+| Segmented Externas/Canais   | `filters.mode`               | filtro server: troca a hierarquia (`GERENCIA`/`COORDENACAO` vs `GERENTE_CANAL`/`nicho`) e o agrupamento do ranking. **Não** troca a população dos cards                             |
+| 4 cards de funil            | `indicadores` (`KpiBlock[]`) | `desempenho_hc` — Criadas/Efetivadas/Instaladas (`criado/efetivado/instalado_*` por `servico`) + Ativadas 5G (`5g_ativacao`); `delta` vs período anterior; `helper` (tag/conversão) |
+| 3 cards sem acesso          | `indicadores` (blocked)      | Ticket Médio, Ticket Médio 5G, Churn Safra — sem fonte no grão → `available:false`                                                                                                  |
+| Ranking de Vendedores       | `ranking` (`VendedorRow[]`)  | `desempenho_hc` top 15 por efetivadas, `GROUP BY MATRICULA`, agrupado por Coord. (externas) / Nicho (canais)                                                                        |
+| PDU                         | `pdu` (`PduPoint[]`)         | **⚠️ view ausente `vw_hc_zerado_vendedor`** → série vazia. Mesma decisão de Vendas: **travar** (não ligar a substituta agora)                                                       |
+| TAM de Vendedores           | `tamAvailable` (false)       | quintis por atingimento — precisa de **meta por vendedor** (sem fonte) → bloco travado                                                                                              |
+
+**Primitivas a reutilizar:** `KpiCard`/`LockedKpiCard` (ou card simples fiel ao §3),
+`Segmented` (modo Gestão + é filtro), `ChipFilter`, range popover (padrão `CustomRangeChip`
+de Vendas → from/to ISO), `DataTable` (ranking, `maxHeight`), `statusColor`/`isTrendGood`,
+`nav-pending`, filtro otimista. Bloco PDU travado pode reusar um `LockedSection` compartilhado
+(a extrair — útil também p/ Vendedor).
+
+**Divergências (protótipo × warehouse/dados) — RESOLVER ANTES DE CODAR:**
+
+1. **Estilo dos cards de funil.** `indicadores` é `KpiBlock[]` (só `value/meta(0)/delta/helper`,
+   **sem série e sem meta**). → **RESOLVIDO (2026-08-02):** **card simples** (valor + pill de
+   tendência + linha auxiliar), fiel ao §3, sem campos vazios. Não reusar o `KpiCard` completo aqui.
+2. **Segmented Externas/Canais não troca os números.** → **RESOLVIDO: manter comportamento atual**
+   (modo = troca a hierarquia de filtro + o agrupamento do ranking; sem filtro, os cards são iguais
+   nos dois modos). Os totais diferentes do protótipo são placeholders (sem fonte que separe a
+   população externas × canais). Sem inventar split.
+3. **Ranking → Dashboard Vendedor.** → **RESOLVIDO: SEM click-through** por agora (a tela Vendedor
+   está sendo reconstruída em paralelo; evitar acoplar ao contrato de URL antes de fechar). Ranking
+   fica sem link; ligar depois.
+4. **PDU travada (decisão herdada de Vendas).** → **RESOLVIDO: travar** (bloco local "sem acesso").
+   Remover a query morta contra a view ausente `vw_hc_zerado_vendedor`.
+5. **TAM de Vendedores travado.** Sem meta por vendedor → bloco local "sem acesso" (mantido do
+   legado, insight 2). → **RESOLVIDO: manter travado.**
+6. **Silent mock fallback obsoleto** (igual Vendas): `produtividade/repository.ts` não cai pra
+   mock na view; só listas de filtro degradam. Endurecer `indicadores`/`ranking` (sem try/catch
+   hoje) ao migrar.
+
+**Nota de coordenação (agente Vendedor em paralelo):** blocos travados (PDU/TAM) ficam **locais**
+em produtividade — **não** extrair um `LockedSection` compartilhado agora (evita colisão com o
+bloco travado que o agente de Vendedor também criará). Primitivas `components/ui/*` só reuso.
+
+**Entregue (2026-08-02, aguardando verificação no navegador).** Cliente reconstruído em
+`components/produtividade/**`, ordem do legado (Indicadores → Ranking → PDU → TAM):
+
+- **`ProdFilterBar.tsx`** — range popover de Período (padrão `PeriodRangeChip` → from/to ISO) +
+  `Segmented` de Gestão (Externas/Canais, é filtro; reseta a hierarquia ao trocar) + `ChipFilter`
+  por modo (Serviço + Gerência/Coord. ou Gerente/Nicho + Cidade). Filtro otimista + `nav-pending`.
+- **`ProdKpiCard.tsx`** — card simples (valor + pill de tendência + linha auxiliar), variante
+  travada p/ os 3 sem-fonte. **`RankingVendedores.tsx`** — `DataTable` + `maxHeight` (posição
+  com destaque top-3, tags coord/cidade, valor+% por estágio). Sem click-through (decisão).
+- **`ProdLockedBlock.tsx`** (local) — reusado por **PDU** e **TAM** travados.
+- **`ProdDashboard.tsx`** — cliente com header (subtítulo = período) + as seções.
+- **Camada de dados (só hardening):** `indicadores`/`ranking` ganharam `try/catch` (isolamento);
+  **removida a query morta da PDU** (`pduSeries`/`whereVW`/const `VW`) que batia na view ausente —
+  `pdu` sai `[]` no path Databricks.
+- **Órfãos removidos:** `ProdFiltersBar`, `TamBlock`, e — por perderem o último usuário —
+  `sales/SalesKpiCard` e `sales/PduBlock` (versão antiga). `npm run check` **verde**.
+- **Pendente:** verificação no navegador (claro + escuro) após login.
 
 ### 4. Dashboard Vendedor — `/vendedor`
 

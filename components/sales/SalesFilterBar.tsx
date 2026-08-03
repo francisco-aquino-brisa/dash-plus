@@ -258,8 +258,12 @@ function CustomRangeChip({
         <PopoverPrimitive.Content
           align="start"
           sideOffset={6}
+          collisionPadding={12}
           style={{
             zIndex: 50,
+            maxWidth: "calc(100vw - 24px)",
+            maxHeight: "calc(100dvh - 24px)",
+            overflowY: "auto",
             padding: 8,
             background: "var(--s-card)",
             border: "1px solid var(--s-border)",
@@ -278,13 +282,16 @@ function CustomRangeChip({
           />
           <div
             style={{
+              position: "sticky",
+              bottom: -8,
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
               gap: 8,
               borderTop: "1px solid var(--s-border)",
-              paddingTop: 8,
+              padding: "8px 0 2px",
               marginTop: 4,
+              background: "var(--s-card)",
             }}
           >
             <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--s-t3)" }}>
