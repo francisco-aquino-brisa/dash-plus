@@ -5,7 +5,7 @@ export const metadata = {
 };
 
 /**
- * Shown when the forwarded email has no active row in `tb_usuarios_app`
+ * Shown when the forwarded email has no active row in `tb_usuarios`
  * (ADR 0005). There is no login to retry — access is granted by the data team.
  */
 export default function SemAcessoPage() {

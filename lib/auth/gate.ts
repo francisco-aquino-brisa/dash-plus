@@ -2,7 +2,7 @@
  * Application access gate, checked after Databricks Apps authenticates the user.
  *
  * A forwarded email is not enough to enter: it must match an ACTIVE row in
- * `tb_usuarios_app`, joined to `tb_niveis` for the access level. The result
+ * `tb_usuarios`, joined to `tb_niveis` for the access level. The result
  * populates the session token. Runs server-side only (bootstrap route). Queries
  * Databricks directly via the real client, independent of DATA_SOURCE, with a
  * parameterized email (never inlined). See ADR 0005.
@@ -13,11 +13,11 @@ import type { SessionUser } from "./jwt";
 
 const CAT = process.env.DATABRICKS_CITIES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const SCHEMA = process.env.DATABRICKS_CITIES_SCHEMA ?? "projeto_brisa_performance";
-const USERS = `\`${CAT}\`.\`${SCHEMA}\`.\`tb_usuarios_app\``;
+const USERS = `\`${CAT}\`.\`${SCHEMA}\`.\`tb_usuarios\``;
 const NIVEIS = `\`${CAT}\`.\`${SCHEMA}\`.\`tb_niveis\``;
 
 /**
- * Authorize a user by email against `tb_usuarios_app`. Returns the session user
+ * Authorize a user by email against `tb_usuarios`. Returns the session user
  * when an ACTIVE record exists, or null when the email is not registered or
  * `ativo = false` (→ access denied). Email match is case-insensitive.
  */

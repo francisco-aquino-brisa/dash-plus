@@ -3,7 +3,7 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 /**
  * Stateless internal session. The app runs inside Databricks Apps, which
  * authenticates the user at the edge and forwards their email. After the gate
- * resolves the user against `tb_usuarios_app`, we issue a signed JWT (HS256)
+ * resolves the user against `tb_usuarios`, we issue a signed JWT (HS256)
  * holding the minimal user data and store it in an httpOnly cookie. There is no
  * database session: the cookie is the single source of the session. See ADR 0005.
  */
@@ -11,10 +11,10 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 export const SESSION_COOKIE = "brisa_session";
 
 export interface SessionUser {
-  email: string; // login key (from X-Forwarded-Email / tb_usuarios_app)
-  nome: string; // from tb_usuarios_app
+  email: string; // login key (from X-Forwarded-Email / tb_usuarios)
+  nome: string; // from tb_usuarios
   cpf: string | null; // join key to other tables (not used for login)
-  nivelId: number; // tb_usuarios_app.nivel_id
+  nivelId: number; // tb_usuarios.nivel_id
   nivel: string; // tb_niveis.nome
   isAdmin: boolean; // derived: nivel === "admin"
 }

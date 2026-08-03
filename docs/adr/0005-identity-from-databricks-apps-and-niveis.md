@@ -26,7 +26,7 @@ new UI actually uses.
 - The **email is the login key** (Databricks does not forward CPF).
 
 **Access gate.** A request is authorized iff an **active** row exists in
-`tb_usuarios_app` for that email. The row joins `tb_niveis` for the access level.
+`tb_usuarios` for that email. The row joins `tb_niveis` for the access level.
 Absent or `ativo = false` → a "Sem acesso" screen, not a redirect to a login page.
 
 **Session token still exists**, minted after the gate resolves and cached in an
@@ -49,7 +49,8 @@ user data the UI needs: `{ email, nome, cpf, nivelId, nivel, isAdmin }`, where
 
 ```
 tb_niveis          { id, nome, descricao, … }        -- nome='admin' is the seeded level
-tb_usuarios_app    { id, cpf, matricula, nome, email, nivel_id→tb_niveis, ativo, … }
+tb_cargos          { id, nome, descricao, … }        -- nome='Administrador' is the seeded cargo
+tb_usuarios        { id, cpf, matricula, nome, email, nivel_id→tb_niveis, cargo_id→tb_cargos, ativo, … }
 tb_paginas         { id, nome, icone, rota, … }
 tb_permissoes      { id, label(snake_case), descricao, pagina_id→tb_paginas, … }
 tb_permissoes_nivel{ permissao_id→tb_permissoes, nivel_id→tb_niveis }
@@ -66,7 +67,7 @@ scoping. `cpf` is retained only as a join key to other warehouse tables.
   have — and the CPF it keyed on is not even forwarded by the platform.
 - **`cadastro_usuario` cannot be the gate:** its email domain is
   `@grupobrisanet.com.br` while the forwarded identity is `@timebrisa.com.br`, so an
-  email match never lands. `tb_usuarios_app` is seeded with the `@timebrisa.com.br`
+  email match never lands. `tb_usuarios` is seeded with the `@timebrisa.com.br`
   identity instead.
 - **Lakebase/Postgres was never provisioned;** the `tb_*` Delta tables were. Using
   them avoids a second datastore for a small, low-write policy set.
@@ -76,7 +77,7 @@ scoping. `cpf` is retained only as a join key to other warehouse tables.
 - **The read-only hard rule (CLAUDE.md) gains one carve-out.** The `tb_*` tables are
   app-owned (created under the maintainer, who has `ALL PRIVILEGES` on the schema)
   and the Administração area will **write** to them. Every _analytics_ catalog stays
-  strictly read-only; only these five app-tables are writable, and only from the
+  strictly read-only; only these six app-tables are writable, and only from the
   admin path. This tension is revisited in the Administração phase (the alternative
   is still to move the writable layer to Lakebase as ADR 0004 intended).
 - **Staleness window:** a nível change is not reflected until the cookie expires

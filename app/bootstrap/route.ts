@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * GET /bootstrap?next=/path
  *
  * The session entry point (there is no login form — ADR 0005). Reads the
- * forwarded email, gates it against `tb_usuarios_app`, and on success mints the
+ * forwarded email, gates it against `tb_usuarios`, and on success mints the
  * session cookie and redirects to `next`. On failure sends to /sem-acesso.
  * The middleware routes here whenever the cookie is missing/expired.
  */
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     // Databricks query failed — usually the app principal lacks access to the
     // table. Log the full error (no secrets in here) so the cause is visible.
-    console.error("[bootstrap] tb_usuarios_app lookup failed:", err);
+    console.error("[bootstrap] tb_usuarios lookup failed:", err);
 
     return NextResponse.redirect(new URL("/sem-acesso?erro=lookup", req.url));
   }

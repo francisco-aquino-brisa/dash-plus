@@ -15,14 +15,14 @@ removed. See ADR 0005.
 
 **Usuário do app**:
 A person allowed into the dashboard. Access requires an **active row in
-`tb_usuarios_app`** keyed by `email`; absent or `ativo = false` → no access
+`tb_usuarios`** keyed by `email`; absent or `ativo = false` → no access
 ("Sem acesso"). The row also carries `nivel_id` and `cpf` (kept for joins with
 other tables, not for login).
 _Avoid_: viewer, client.
 
 **Nível**:
 The access level of a usuário (`tb_niveis`, referenced by
-`tb_usuarios_app.nivel_id`). Drives which features/routes are visible.
+`tb_usuarios.nivel_id`). Drives which features/routes are visible.
 
 **Admin**:
 A usuário whose nível is `admin`. Sees the "Administração" area (button + routes),

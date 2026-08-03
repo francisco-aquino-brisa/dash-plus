@@ -420,8 +420,108 @@ Serviço → Dias Zerados → Rankings → Mix; aba Pendências à parte):
 - new_ui: `SCREENS.md` §5. Needs a 12-month series per indicator + related indicators.
 - Divergences to resolve: _TBD._
 
-### 6. Administração
+### 6. Administração — 🚧 _em migração (Fase 4)_
 
-- new_ui: `SCREENS.md` §6 + `DESIGN_SYSTEM.md` §5. Tables: `tb_niveis`,
-  `tb_usuarios_app`, `tb_paginas`, `tb_permissoes`, `tb_permissoes_nivel`.
-- Open decision: writable layer location (see ADR 0005).
+- new_ui: `SCREENS.md` §6 + `DESIGN_SYSTEM.md` §5. Seis telas: **Usuários · Níveis de
+  acesso · Cargos · Páginas · Capacidades · Capacidades por nível**, mais a **troca de
+  navegação** ao entrar/sair do admin (desktop + mobile).
+- Área/isolamento: `app/admin/**`, `components/admin/**`, `lib/data/admin/**`. Mudanças
+  no `AppShell` (nav-swap) são **aditivas**. Reusa as primitivas da Fase 1 congeladas.
+
+**Schema real verificado no warehouse (read-only, Ago/26) —
+`gdb_brisanet_comunidade_dev.projeto_brisa_performance`:**
+
+| Tabela                | Colunas reais                                                                                                                              | Linhas hoje                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| `tb_niveis`           | `id` bigint · `nome` · `descricao` · `criado_em` · `atualizado_em`                                                                         | 1 (`admin`)                    |
+| `tb_cargos`           | `id` bigint · `nome` · `descricao` · `criado_em` · `atualizado_em`                                                                         | 1 (`Administrador`)            |
+| `tb_usuarios`         | `id` · `cpf` · `matricula` · `nome` · `email` · `nivel_id→tb_niveis` · `cargo_id→tb_cargos` · `ativo` bool · `criado_em` · `atualizado_em` | 1 (o admin semente, Francisco) |
+| `tb_paginas`          | `id` · `nome` · `icone` · `rota` · `criado_em` · `atualizado_em`                                                                           | 0                              |
+| `tb_permissoes`       | `id` · `label` (snake_case) · `descricao` · `pagina_id→tb_paginas` · `criado_em` · `atualizado_em`                                         | 0                              |
+| `tb_permissoes_nivel` | `permissao_id→tb_permissoes` · `nivel_id→tb_niveis` · `criado_em` (junção N:N)                                                             | 0                              |
+
+> **Nota (2026-08-02):** `tb_usuarios_app` foi **substituída** por `tb_usuarios` (mesmo schema
+>
+> - `cargo_id`). Todo o sistema (gate de auth, admin, docs) aponta para `tb_usuarios`.
+
+**Mapeamento new_ui → tabelas reais:**
+
+| Modelo new_ui (`DESIGN_SYSTEM` §5)               | Tabela real                | Observação                                                                       |
+| ------------------------------------------------ | -------------------------- | -------------------------------------------------------------------------------- |
+| `nivel {id,nome,desc,locked}`                    | `tb_niveis` (sem `locked`) | `locked` **derivado**: `nome==='admin'` → badge "Padrão", sem editar/excluir     |
+| `usuario {id,nome,email,nivelId,cargoId,status}` | `tb_usuarios`              | `status` = `ativo` bool; `cargo_id→tb_cargos` existe. Email **derivado** do nome |
+| `pagina {id,nome,icone}`                         | `tb_paginas` (+ `rota`)    | `icone` = chave do set de ícones; `rota` extra do real, útil                     |
+| `capacidade {id,label,desc,paginaId}`            | `tb_permissoes`            | "Capacidade" (new_ui) = "permissão" (tabela). `label` snake_case                 |
+| `perms {[nivelId]:{[capId]:true}}`               | `tb_permissoes_nivel`      | matriz N:N nível × capacidade                                                    |
+| `cargo {id,nome,locked}`                         | `tb_cargos`                | `locked` **derivado**: `nome==='Administrador'`                                  |
+
+**Decisões (2026-08-02):**
+
+- **Camada de escrita = DML direto nas `tb_*`/`tb_cargos`** (o caminho do ADR 0005). O
+  _agente_ só tem read-only, mas o **app em produção grava** (credencial com escrita nas
+  tabelas app-owned). Construo o admin data-writer Node normal (`INSERT/UPDATE/DELETE`
+  parametrizado, só no path `/admin`); funciona em prod. Não consigo _testar_ a escrita
+  localmente (guard read-only) — validação de mutação é em prod pelo usuário.
+- **`id` é `GENERATED ALWAYS AS IDENTITY`** e `criado_em`/`atualizado_em` têm
+  `DEFAULT CURRENT_TIMESTAMP()` → INSERT **omite** `id`/`criado_em`/`atualizado_em`;
+  UPDATE seta `atualizado_em = CURRENT_TIMESTAMP()`. `tb_usuarios` tem PK(`id`),
+  FK `nivel_id→tb_niveis`, `cargo_id→tb_cargos`, UNIQUE(`email`) (não-enforced), `ativo DEFAULT TRUE`.
+
+**Divergências (protótipo × warehouse):**
+
+1. **Cargos — RESOLVIDO (2026-08-02).** Time criou **`tb_cargos {id,nome,descricao,
+criado_em,atualizado_em}`** e a nova **`tb_usuarios`** (substitui `tb_usuarios_app`) já com
+   `cargo_id→tb_cargos`. O elo usuário↔cargo existe; a leitura faz `LEFT JOIN tb_cargos` e os
+   fallbacks temporários (query sem-cargo) foram removidos.
+2. **`locked` não existe como coluna** (nem em `tb_niveis` nem em `tb_cargos`). →
+   **Decisão:** derivar `locked` de `nome==='admin'` (nível), coerente com o ADR 0005
+   ("`nome='admin'` is the seeded level"); cargo idem por `nome==='Administrador'`. Sem coluna nova.
+3. **Cor do chip de nível.** O protótipo colore por nível (Admin laranja, Supervisor,
+   Gestor, Consulta). Não há coluna de cor → paleta estável derivada do `nome` (menor,
+   sigo sem perguntar).
+4. **Dados são placeholders.** As telas do protótipo mostram vários níveis/cargos/páginas;
+   o warehouse hoje tem só o admin semente e páginas/capacidades vazias. A UI precisa de
+   **estado vazio** com explicação (checklist §7.8). Popular é trabalho do próprio CRUD.
+5. **"Páginas" e as telas reais.** O checklist §7.9 pede que cada tela nova apareça no CRUD
+   de Páginas com capacidades. Como `tb_paginas`/`tb_permissoes` estão vazias, o seed
+   inicial (Cidades, Vendas, Produtividade, Vendedor + capacidades) é feito **pelo próprio
+   admin** após a camada de escrita existir — não hardcodar.
+
+**Ordem de execução:** (1) camada de **leitura** `lib/data/admin/**` + tipos + o
+**admin data-writer** (mutação em prod) → (2) **nav-swap** do `AppShell` (aditiva, desktop
+
+- mobile) + shell `/admin` → (3) as 6 telas com formulários/validação/matriz + as ações de
+  CRUD (create/update/delete) já ligadas ao writer, **confirmação destrutiva** (§4.8), selects
+  p/ referência, email derivado, normalização snake_case, badge "Padrão", Admin travado na
+  matriz com aviso azul → (4) Cargos usa `tb_cargos` real; a coluna Cargo em Usuários espera o
+  `cargo_id` (Divergência 1). Fecho: varredura de órfãos + `npm run check` verde + verificação
+  no navegador (claro/escuro). Escrita não é testável localmente (guard read-only) → validada
+  em prod pelo usuário.
+
+**Entregue (2026-08-02, branch `new-ui-admin`, `npm run check` verde).**
+
+- **Camada de dados** `lib/data/admin/**`: `derive.ts` (helpers puros: `normalizeCapabilityLabel`
+  - variante `…Input`, `deriveEmail`, `isLockedNivel/Cargo`, `nivelChipTone`, `statusChipTone`),
+    `types.ts`, `tables.ts` (ids via env; usuários = `tb_usuarios`), `read.ts` (6 leituras isoladas
+    por `safe()`; usuários com `LEFT JOIN tb_cargos` via `cargo_id`), `write.ts`
+    (INSERT/UPDATE/DELETE parametrizado, omite `id`/timestamps, guarda SQL contra editar/excluir
+    `admin`/`Administrador`, `setPerm` idempotente + admin travado).
+- **Server actions** `app/(app)/admin/actions.ts` (`"use server"`): guarda `isAdmin`, valida/normaliza
+  server-side, `revalidatePath` das 6 rotas. `guard.ts` = `requireAdmin()`.
+- **Nav-swap** aditiva no `AppShell` (`ADMIN_NAV`, `inAdmin`, heading dinâmico, "Voltar aos
+  dashboards" laranja no rodapé desktop + tab bar/sheet mobile).
+- **6 telas** `components/admin/**` no padrão `--s-*` (reusa `DataTable` + Radix `DialogPrimitive`):
+  `AdminScreen` (eyebrow+título+Atualizar+busca+ação), `AdminModal`/`ModalShell`/`ModalHeader`
+  (§4.7), `ConfirmDelete` (§4.8), `AdminSelect` (botão+lista+check, busca >7), `primitives`,
+  `icons`, `useAdminAction`, `filter`. Telas: Usuários (nome+email derivado, selects nível/cargo,
+  status só na edição), Níveis (n de N), Cargos, Páginas (icon picker), Capacidades (label mono
+  normalizado ao digitar), Capacidades por nível (matriz: chips, contador, card por página,
+  Admin travado + aviso azul, toggle otimista).
+- **Rotas** `app/(app)/admin/{page→redirect, usuarios, niveis, cargos, paginas, capacidades,
+permissoes}` (server, `requireAdmin` + `readAdminData`).
+- **Rename `tb_usuarios_app` → `tb_usuarios`** (nova tabela com `cargo_id`): atualizado em todo o
+  sistema — gate de auth (`lib/auth/gate.ts`), `lib/data/admin/tables.ts`, comentários
+  (`jwt.ts`/`bootstrap`/`sem-acesso`) e docs (`CONTEXT.md`, ADR 0005, este plano).
+- **Pendências:** (a) verificação no navegador (claro/escuro) após login — o preview em execução é
+  o checkout principal, não esta worktree; validar servindo `new-ui-admin`; (b) escrita validada em
+  prod (guard read-only bloqueia teste local).
