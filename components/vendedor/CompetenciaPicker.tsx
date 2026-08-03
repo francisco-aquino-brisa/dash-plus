@@ -100,13 +100,53 @@ export function CompetenciaPicker({
             </button>
           </div>
         ) : (
-          <button className="shadow-elegant flex items-center gap-2 rounded-xl border border-border bg-card/60 px-3 py-2.5 text-sm backdrop-blur transition-colors hover:border-primary/40">
-            <CalendarDays className="h-4 w-4 text-primary" />
-            <span className="min-w-0">
-              <span className="block text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+          <button
+            type="button"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 9,
+              minHeight: 40,
+              padding: "0 12px",
+              border: "1px solid var(--s-border)",
+              borderRadius: 999,
+              background: "var(--s-card)",
+              color: "var(--s-t1)",
+              font: "inherit",
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            <span
+              style={{
+                flex: "none",
+                display: "grid",
+                placeItems: "center",
+                width: 22,
+                height: 22,
+                borderRadius: 7,
+                background: "var(--s-sunken)",
+                color: "var(--s-brand)",
+              }}
+            >
+              <CalendarDays size={13} />
+            </span>
+            <span style={{ minWidth: 0 }}>
+              <span
+                style={{
+                  display: "block",
+                  fontSize: 8.5,
+                  fontWeight: 700,
+                  letterSpacing: ".1em",
+                  textTransform: "uppercase",
+                  color: "var(--s-t3)",
+                }}
+              >
                 Competência
               </span>
-              <span className="block font-medium text-foreground">{label}</span>
+              <span style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "var(--s-t1)" }}>
+                {label}
+              </span>
             </span>
           </button>
         )}

@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ChevronRight } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
-import type { DiasZeradosView } from "@/lib/data/vendedor/types";
+import type { DiasZeradosView, ServicoKey } from "@/lib/data/vendedor/types";
 
 const FILTROS = ["Todos", "FTTH", "FWA", "5G", "Banda"] as const;
 const SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"];
@@ -23,14 +22,18 @@ const MESES_LONG = [
   "Dezembro",
 ];
 
+const TILES: ServicoKey[] = ["FTTH", "FWA", "5G", "Banda"];
+
+/**
+ * Dias Zerados (SCREENS §4.4): a `--s-warn-bg` band with a per-technology count
+ * of zeroed days, opening the legacy month calendar (restyled) that marks
+ * zeroed / sold / holiday / future days per service filter.
+ */
 export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
   const [filtro, setFiltro] = useState<(typeof FILTROS)[number]>("Todos");
 
   const totalTodos = dias.resumo.find((r) => r.servico === "Todos")?.dias ?? 0;
-  const porServico = FILTROS.filter((f) => f !== "Todos").map((f) => ({
-    servico: f,
-    dias: dias.resumo.find((r) => r.servico === f)?.dias ?? 0,
-  }));
+  const countFor = (k: string) => dias.resumo.find((r) => r.servico === k)?.dias ?? 0;
 
   const lastDay = new Date(dias.ano, dias.mes, 0).getDate();
   const firstDow = new Date(dias.ano, dias.mes - 1, 1).getDay();
@@ -40,27 +43,93 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button className="shadow-elegant border-warning/30 bg-warning/5 hover:border-warning/50 w-full rounded-2xl border p-4 text-left transition-colors">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="bg-warning/15 text-warning grid h-8 w-8 place-items-center rounded-lg">
-                <AlertTriangle className="h-4 w-4" />
+        <button
+          type="button"
+          style={{
+            width: "100%",
+            textAlign: "left",
+            font: "inherit",
+            cursor: "pointer",
+            border: "1px solid var(--s-warn)",
+            borderRadius: "var(--r-panel)",
+            background: "var(--s-warn-bg)",
+            padding: 14,
+            display: "flex",
+            flexDirection: "column",
+            gap: 11,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span
+              style={{
+                flex: "none",
+                display: "grid",
+                placeItems: "center",
+                width: 30,
+                height: 30,
+                borderRadius: 9,
+                background: "rgba(255,255,255,.55)",
+                color: "var(--s-warn)",
+              }}
+            >
+              <AlertTriangle size={16} />
+            </span>
+            <span style={{ flex: 1 }}>
+              <span
+                style={{
+                  display: "block",
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: ".1em",
+                  textTransform: "uppercase",
+                  color: "var(--s-warn)",
+                }}
+              >
+                Dias zerados
               </span>
-              <div>
-                <h2 className="text-sm font-bold tracking-wide text-foreground uppercase">Dias Zerados</h2>
-                <p className="text-[11px] text-muted-foreground">{totalTodos} dia(s) sem venda no mês</p>
-              </div>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              <span
+                style={{
+                  display: "block",
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: "var(--s-t1)",
+                  marginTop: 1,
+                }}
+              >
+                {totalTodos} dia(s) sem venda no mês
+              </span>
+            </span>
           </div>
-          <div className="grid grid-cols-4 gap-2">
-            {porServico.map((s) => (
-              <div key={s.servico} className="rounded-lg border border-border bg-card px-1 py-2 text-center">
-                <div className="text-base leading-none font-bold text-foreground">{s.dias}</div>
-                <div className="mt-1 truncate text-[9px] font-medium tracking-wider text-muted-foreground uppercase">
-                  {s.servico}
-                </div>
-              </div>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 8 }}
+          >
+            {TILES.map((k) => (
+              <span
+                key={k}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 2,
+                  borderRadius: 11,
+                  background: "rgba(255,255,255,.6)",
+                  padding: 9,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 800,
+                    fontSize: 18,
+                    color: "var(--s-t1)",
+                  }}
+                >
+                  {countFor(k)}
+                </span>
+                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".09em", color: "var(--s-t3)" }}>
+                  {k.toUpperCase()}
+                </span>
+              </span>
             ))}
           </div>
         </button>
@@ -69,34 +138,65 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="text-warning h-5 w-5" /> Dias Zerados
+            <AlertTriangle size={18} style={{ color: "var(--s-warn)" }} /> Dias Zerados
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-wrap gap-1.5">
-          {FILTROS.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFiltro(f)}
-              className={cn(
-                "rounded-full border px-3 py-1 text-[10px] font-medium tracking-wider uppercase transition-colors",
-                filtro === f
-                  ? "border-primary/40 bg-primary/15 text-primary"
-                  : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {f}
-            </button>
-          ))}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {FILTROS.map((f) => {
+            const active = filtro === f;
+
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFiltro(f)}
+                style={{
+                  padding: "5px 11px",
+                  border: `1px solid ${active ? "var(--s-brand)" : "var(--s-border)"}`,
+                  borderRadius: 999,
+                  background: active ? "var(--s-brand-weak)" : "var(--s-sunken)",
+                  color: active ? "var(--s-brand)" : "var(--s-t2)",
+                  font: "inherit",
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  letterSpacing: ".04em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                {f}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-4">
-          <h3 className="mb-4 text-center text-xs font-bold tracking-wider text-muted-foreground uppercase">
+        <div
+          style={{
+            border: "1px solid var(--s-border)",
+            borderRadius: 14,
+            background: "var(--s-card)",
+            padding: 16,
+          }}
+        >
+          <h3
+            style={{
+              marginBottom: 14,
+              textAlign: "center",
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+              color: "var(--s-t3)",
+            }}
+          >
             {MESES_LONG[dias.mes - 1]} {dias.ano}
           </h3>
-          <div className="grid grid-cols-7 gap-1.5 text-center">
+          <div
+            style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, textAlign: "center" }}
+          >
             {SEMANA.map((d, i) => (
-              <div key={i} className="text-[10px] font-bold text-muted-foreground">
+              <div key={i} style={{ fontSize: 10, fontWeight: 800, color: "var(--s-t3)" }}>
                 {d}
               </div>
             ))}
@@ -109,30 +209,60 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
               const isZerado = zerados.has(day);
               const hasVenda = comVenda.has(day);
               const isToday = dias.hoje === day;
+              let bg = "var(--s-sunken)";
+              let color = "var(--s-t2)";
+
+              if (isZerado) {
+                bg = "var(--s-bad)";
+                color = "#fff";
+              } else if (hasVenda) {
+                bg = "var(--s-ok-bg)";
+                color = "var(--s-ok)";
+              } else if (isFuture) {
+                bg = "transparent";
+                color = "var(--s-t3)";
+              }
 
               return (
                 <div
                   key={day}
-                  className={cn(
-                    "flex aspect-square items-center justify-center rounded-lg text-[11px] font-medium",
-                    isZerado && "bg-destructive text-destructive-foreground",
-                    !isZerado && hasVenda && "bg-success/15 text-success",
-                    !isZerado && !hasVenda && !isFuture && "bg-secondary/40 text-muted-foreground",
-                    isFuture && "bg-secondary/20 text-muted-foreground/50",
-                    isToday && "ring-2 ring-primary ring-offset-1 ring-offset-card",
-                  )}
+                  style={{
+                    display: "grid",
+                    placeItems: "center",
+                    aspectRatio: "1 / 1",
+                    borderRadius: 9,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: bg,
+                    color,
+                    outline: isToday ? "2px solid var(--s-brand)" : undefined,
+                    outlineOffset: isToday ? 1 : undefined,
+                  }}
                 >
                   {day}
                 </div>
               );
             })}
           </div>
-          <div className="mt-4 flex justify-center gap-4 border-t border-border pt-3 text-[10px] font-medium text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-destructive" /> Zerado
+          <div
+            style={{
+              marginTop: 14,
+              paddingTop: 12,
+              borderTop: "1px solid var(--s-border)",
+              display: "flex",
+              justifyContent: "center",
+              gap: 16,
+              fontSize: 10.5,
+              fontWeight: 600,
+              color: "var(--s-t3)",
+            }}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 999, background: "var(--s-bad)" }} /> Zerado
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="bg-success/40 h-2.5 w-2.5 rounded-full" /> Com venda
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 999, background: "var(--s-ok)" }} /> Com
+              venda
             </span>
           </div>
         </div>

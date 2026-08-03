@@ -1,66 +1,143 @@
 "use client";
 
-import { Briefcase, Building, Clock, MapPin, Radio, UserRound, Users2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import type { CSSProperties } from "react";
 import type { VendedorProfile } from "@/lib/data/vendedor/types";
+import { initials } from "./vendedor-format";
 
-function Field({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-secondary/30 p-3">
-      <div className="flex items-center gap-1.5 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
-        <Icon className="h-3.5 w-3.5" /> {label}
-      </div>
-      <div className="mt-1 truncate text-sm font-semibold text-foreground" title={value}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
+/**
+ * Identity card (SCREENS §4.2). A `--bn-gradient-orange` header (the one screen
+ * surface allowed to use the brand gradient per DESIGN_SYSTEM §1) with avatar
+ * initials, nome, "Matrícula · cargo" and ATIVO / tipo-cidade badges, over an
+ * auto-fit grid of profile fields separated by hairline dividers. Follows the
+ * legacy field set (data = current app), restyled to the new tokens.
+ */
 export function VendedorHeader({ profile }: { profile: VendedorProfile }) {
   const ativo = profile.situacao.toUpperCase() === "ATIVO";
+  const fields: { label: string; value: string }[] = [
+    { label: "Cidade", value: profile.cidade },
+    { label: "Canal", value: profile.canal },
+    { label: "Gerente", value: profile.gerente },
+    { label: "Supervisão", value: profile.supervisao },
+    { label: "Coordenação", value: profile.coordenacao },
+    { label: "Gerência", value: profile.gerencia },
+    { label: "Nicho", value: profile.nicho },
+    { label: "Tempo de empresa", value: profile.tempoEmpresa },
+  ];
 
   return (
-    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="bg-gradient-primary shadow-glow grid h-12 w-12 shrink-0 place-items-center rounded-xl text-primary-foreground">
-            <UserRound className="h-6 w-6" />
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-lg leading-tight font-bold text-foreground">{profile.nome}</h2>
-            <p className="text-xs text-muted-foreground">
-              Matrícula {profile.matricula} · {profile.nivel}
-            </p>
+    <section
+      style={{
+        border: "1px solid var(--s-border)",
+        borderRadius: "var(--r-panel)",
+        background: "var(--s-card)",
+        boxShadow: "var(--s-sh)",
+        overflow: "hidden",
+      }}
+    >
+      {/* Gradient header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 12,
+          padding: 15,
+          background: "var(--bn-gradient-orange)",
+        }}
+      >
+        <div
+          style={{
+            flex: "none",
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            background: "rgba(255,255,255,.22)",
+            display: "grid",
+            placeItems: "center",
+            color: "#fff",
+            fontFamily: "var(--font-display)",
+            fontWeight: 800,
+            fontSize: 15,
+          }}
+        >
+          {initials(profile.nome)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontSize: 17,
+              lineHeight: 1.2,
+              letterSpacing: "-.02em",
+              color: "#fff",
+              textWrap: "pretty",
+            }}
+          >
+            {profile.nome}
+          </div>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: "rgba(255,255,255,.85)", marginTop: 3 }}>
+            Matrícula {profile.matricula} · {profile.nivel}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={cn(
-              "rounded-md px-2.5 py-1 text-xs font-medium",
-              ativo ? "bg-success/15 text-success" : "bg-warning/15 text-warning",
-            )}
-          >
-            {profile.situacao}
-          </span>
-          {profile.tipoCidade !== "—" && (
-            <span className="rounded-md bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-              {profile.tipoCidade}
-            </span>
-          )}
+        <div style={{ flex: "none", display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <Badge strong={ativo}>{profile.situacao}</Badge>
+          {profile.tipoCidade !== "—" && <Badge>{profile.tipoCidade}</Badge>}
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <Field icon={MapPin} label="Cidade" value={profile.cidade} />
-        <Field icon={Radio} label="Canal" value={profile.canal} />
-        <Field icon={Briefcase} label="Gerente" value={profile.gerente} />
-        <Field icon={Users2} label="Supervisão" value={profile.supervisao} />
-        <Field icon={Building} label="Coordenação" value={profile.coordenacao} />
-        <Field icon={Building} label="Gerência" value={profile.gerencia} />
-        <Field icon={Radio} label="Nicho" value={profile.nicho} />
-        <Field icon={Clock} label="Tempo de empresa" value={profile.tempoEmpresa} />
+      {/* Field grid (hairline dividers via 1px gap over --s-border) */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+          gap: 1,
+          background: "var(--s-border)",
+        }}
+      >
+        {fields.map((f) => (
+          <div key={f.label} style={{ background: "var(--s-card)", padding: "11px 14px" }}>
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: ".1em",
+                textTransform: "uppercase",
+                color: "var(--s-t3)",
+              }}
+            >
+              {f.label}
+            </div>
+            <div
+              title={f.value}
+              style={{
+                fontSize: 12.5,
+                fontWeight: 700,
+                color: "var(--s-t1)",
+                marginTop: 3,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {f.value}
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );
+}
+
+function Badge({ children, strong }: { children: React.ReactNode; strong?: boolean }) {
+  const style: CSSProperties = {
+    padding: "3px 8px",
+    borderRadius: 999,
+    background: strong ? "rgba(255,255,255,.24)" : "rgba(255,255,255,.16)",
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: 800,
+    whiteSpace: "nowrap",
+  };
+
+  return <span style={style}>{children}</span>;
 }

@@ -1,131 +1,218 @@
 "use client";
 
-import { ChevronRight, Globe, Radio, Smartphone, Wifi } from "lucide-react";
-import { formatNumber, formatPct } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import type { CSSProperties } from "react";
+import { ChevronRight } from "lucide-react";
+import { formatNumber } from "@/lib/format";
+import { statusColor } from "@/lib/ui/status";
 import type { IndicadorVM, ServicoCard as ServicoCardType, ServicoKey } from "@/lib/data/vendedor/types";
+import { SERVICO_STYLE, formatIndicadorValue } from "./vendedor-format";
 
-const ICONS: Record<ServicoKey, React.ElementType> = {
-  FTTH: Wifi,
-  FWA: Radio,
-  "5G": Smartphone,
-  Banda: Globe,
-};
+const LOCK_HINT =
+  "PDU/NDU: fonte oficial indisponível — fórmula (denominador) e meta em confirmação com o time de dados.";
 
-/** Format an indicator value per its catalog `formato` (qtd / R$ / %). */
-function fmtValor(v: number, formato: IndicadorVM["formato"]): string {
-  if (formato === "R$")
-    return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+/**
+ * Resultado por Serviço card (SCREENS §4.3): coloured icon + nome + realizado,
+ * the NDU/PDU pair (currently **locked** → "—", never a fabricated 0), the
+ * vendor's catalog indicators (meta × realizado) or an empty state, and the
+ * "Ver raio-X" button. Reconstructed with `--s-*` tokens; data = current app.
+ */
+export function ServicoCard({ card, onOpen }: { card: ServicoCardType; onOpen: (key: ServicoKey) => void }) {
+  const style = SERVICO_STYLE[card.key];
+  const Icon = style.icon;
 
-  // "%" metas are stored as a fraction (0.15 → 15%).
-  if (formato === "%") return formatPct(v * 100, 0);
+  return (
+    <div
+      style={{
+        border: "1px solid var(--s-border)",
+        borderRadius: 14,
+        background: "var(--s-card)",
+        padding: 13,
+        boxShadow: "var(--s-sh)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 11,
+      }}
+    >
+      {/* Header: icon · nome/realizado · NDU/PDU */}
+      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <span
+          style={{
+            flex: "none",
+            display: "grid",
+            placeItems: "center",
+            width: 30,
+            height: 30,
+            borderRadius: 9,
+            background: style.bg,
+            color: style.fg,
+          }}
+        >
+          <Icon size={15} />
+        </span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span
+            style={{
+              display: "block",
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontSize: 14,
+              color: "var(--s-t1)",
+            }}
+          >
+            {card.label}
+          </span>
+          <span style={{ display: "block", fontSize: 11, color: "var(--s-t3)" }}>
+            Realizado {formatNumber(card.realizado)}
+          </span>
+        </span>
+        <span style={{ flex: "none", display: "flex", gap: 5 }} title={LOCK_HINT}>
+          <MiniStat label="NDU" value={card.ndu == null ? "—" : formatNumber(card.ndu)} />
+          <MiniStat label="PDU" value={card.pdu == null ? "—" : card.pdu.toFixed(2).replace(".", ",")} />
+        </span>
+      </div>
 
-  return formatNumber(v);
+      {/* Catalog indicators (meta × realizado) or empty state */}
+      {card.indicadores.length === 0 ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 4,
+            border: "1px dashed var(--s-border-2)",
+            borderRadius: 11,
+            padding: "14px 10px",
+            textAlign: "center",
+          }}
+        >
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--s-t2)" }}>
+            Sem indicadores neste mês
+          </span>
+          <span style={{ fontSize: 10.5, color: "var(--s-t3)" }}>
+            Nada foi lançado para {card.label} nesta competência.
+          </span>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+          {card.indicadores.map((ind) => (
+            <IndicadorRow key={`${ind.id}-${ind.label}`} ind={ind} />
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => onOpen(card.key)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          height: 38,
+          border: "1px solid var(--s-brand-line)",
+          borderRadius: 10,
+          background: "var(--s-brand-weak)",
+          color: "var(--s-brand)",
+          font: "inherit",
+          fontSize: 12.5,
+          fontWeight: 800,
+          cursor: "pointer",
+        }}
+      >
+        Ver raio-X
+        <ChevronRight size={14} strokeWidth={2.3} />
+      </button>
+    </div>
+  );
 }
 
-/** Small labeled stat used for NDU / PDU. */
-function MiniStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function MiniStat({ label, value }: { label: string; value: string }) {
+  const locked = value === "—";
+
   return (
-    <div className="rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-center">
-      <div className="text-[9px] font-medium tracking-wider text-muted-foreground uppercase">{label}</div>
-      <div className={cn("text-sm leading-none font-bold", accent ? "text-primary" : "text-foreground")}>
+    <span
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        border: "1px solid var(--s-border)",
+        borderRadius: 8,
+        padding: "3px 7px",
+      }}
+    >
+      <span style={{ fontSize: 8.5, fontWeight: 700, color: "var(--s-t3)" }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: 800, color: locked ? "var(--s-t3)" : "var(--s-t1)" }}>
         {value}
+      </span>
+    </span>
+  );
+}
+
+/** One catalog indicator: label + Meta / Real / % / Falta cells. */
+function IndicadorRow({ ind }: { ind: IndicadorVM }) {
+  const meta = formatIndicadorValue(ind.meta, ind.formato);
+  const real = ind.disponivel ? formatIndicadorValue(ind.realizado, ind.formato) : "—";
+  const pct = ind.disponivel && ind.meta > 0 ? `${Math.round(ind.atingimento)}%` : "—";
+  const falta = ind.disponivel && ind.polaridade === "up" ? formatNumber(ind.falta) : "—";
+  const pctColor =
+    ind.disponivel && ind.meta > 0 ? statusColor(ind.atingimento, ind.polaridade === "down") : "var(--s-t3)";
+
+  return (
+    <div
+      style={{
+        border: "1px solid var(--s-border)",
+        borderRadius: 9,
+        background: "var(--s-sunken)",
+        padding: "7px 8px",
+      }}
+    >
+      <div
+        style={{ fontSize: 11, fontWeight: 700, color: "var(--s-t2)", marginBottom: 5, textWrap: "pretty" }}
+      >
+        {ind.label}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 5 }}>
+        <Cell label="Meta" value={meta} />
+        <Cell label="Real" value={real} color={ind.disponivel ? "var(--s-t1)" : "var(--s-t3)"} />
+        <Cell label="%" value={pct} color={pctColor} />
+        <Cell label="Falta" value={falta} color={falta === "—" ? "var(--s-t3)" : "var(--s-t1)"} />
       </div>
     </div>
   );
 }
 
-export function ServicoCard({
-  card,
-  chartVar,
-  onOpen,
-}: {
-  card: ServicoCardType;
-  chartVar: string; // e.g. "var(--chart-1)"
-  onOpen: (key: ServicoKey) => void;
-}) {
-  const Icon = ICONS[card.key];
+function Cell({ label, value, color }: { label: string; value: string; color?: string }) {
+  const box: CSSProperties = {
+    border: "1px solid var(--s-border)",
+    borderRadius: 7,
+    background: "var(--s-card)",
+    padding: "4px 2px",
+    textAlign: "center",
+    minWidth: 0,
+  };
 
   return (
-    <button
-      onClick={() => onOpen(card.key)}
-      className="bg-gradient-card shadow-elegant flex w-full flex-col rounded-2xl border border-border p-4 text-left transition-colors hover:border-primary/40"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <span
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-white shadow-sm"
-            style={{ backgroundColor: chartVar }}
-          >
-            <Icon className="h-5 w-5" />
-          </span>
-          <div>
-            <h3 className="font-bold text-foreground">{card.label}</h3>
-            <p className="text-[11px] text-muted-foreground">Realizado {formatNumber(card.realizado)}</p>
-          </div>
-        </div>
-        <div className="flex gap-1.5">
-          <MiniStat label="NDU" value={formatNumber(card.ndu)} />
-          <MiniStat label="PDU" value={card.pdu.toFixed(2).replace(".", ",")} accent />
-        </div>
-      </div>
-
-      {/* Catalog indicators (meta × realizado) from metas_vendedores_canais */}
-      <div className="mt-3 space-y-2">
-        {card.indicadores.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border bg-secondary/20 px-2.5 py-3 text-center text-[11px] text-muted-foreground">
-            Sem indicadores neste mês.
-          </p>
-        ) : (
-          card.indicadores.map((ind) => {
-            const pct = ind.disponivel && ind.meta > 0 ? `${Math.round(ind.atingimento)}%` : "—";
-            const real = ind.disponivel ? fmtValor(ind.realizado, ind.formato) : "—";
-            const falta = ind.disponivel && ind.polaridade === "up" ? formatNumber(ind.falta) : "—";
-
-            return (
-              <div
-                key={`${ind.id}-${ind.label}`}
-                className="rounded-lg border border-border bg-secondary/30 p-2.5"
-              >
-                <p className="mb-1.5 text-[11px] font-semibold text-foreground">{ind.label}</p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  <Cell label="Meta" value={fmtValor(ind.meta, ind.formato)} />
-                  <Cell label="Real" value={real} accent={ind.disponivel} muted={!ind.disponivel} />
-                  <Cell label="%" value={pct} muted={!ind.disponivel} />
-                  <Cell label="Falta" value={falta} muted={falta === "—"} />
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      <span className="mt-3 flex items-center justify-end gap-1 text-[11px] font-medium text-primary">
-        Ver raio-X <ChevronRight className="h-3.5 w-3.5" />
-      </span>
-    </button>
-  );
-}
-
-function Cell({
-  label,
-  value,
-  accent,
-  muted,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-  muted?: boolean;
-}) {
-  return (
-    <div className="rounded-md border border-border bg-card px-1 py-1 text-center">
-      <div className="text-[8px] font-medium tracking-wider text-muted-foreground uppercase">{label}</div>
+    <div style={box}>
       <div
-        className={cn(
-          "text-[11px] font-bold",
-          accent ? "text-primary" : muted ? "text-muted-foreground" : "text-foreground",
-        )}
+        style={{
+          fontSize: 8,
+          fontWeight: 700,
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+          color: "var(--s-t3)",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: color ?? "var(--s-t1)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
       >
         {value}
       </div>

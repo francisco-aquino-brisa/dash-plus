@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { VendedorOption } from "@/lib/data/vendedor/types";
 
-/** Searchable vendedor picker (client-side filter by nome/matrícula). */
+/** Searchable vendedor picker (client-side filter by nome/matrícula). The
+ *  primary filter of the screen — a token-styled pill matching the filter bar. */
 export function VendedorSearch({
   options,
   value,
@@ -32,6 +33,8 @@ export function VendedorSearch({
       .slice(0, 60);
   }, [options, query]);
 
+  const dirty = !!selected;
+
   return (
     <Popover
       open={open}
@@ -43,21 +46,67 @@ export function VendedorSearch({
     >
       <PopoverTrigger asChild>
         <button
-          className="shadow-elegant flex w-full items-center gap-2 rounded-xl border border-border bg-card/60 px-3 py-2.5 text-left text-sm backdrop-blur transition-colors hover:border-primary/40 sm:w-80"
+          type="button"
           aria-label="Selecionar vendedor"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 9,
+            width: "100%",
+            maxWidth: 340,
+            minHeight: 40,
+            padding: "0 12px",
+            border: `1px solid ${dirty ? "var(--s-brand)" : "var(--s-border)"}`,
+            borderRadius: 999,
+            background: dirty ? "var(--s-brand-weak)" : "var(--s-card)",
+            color: "var(--s-t1)",
+            font: "inherit",
+            cursor: "pointer",
+            textAlign: "left",
+          }}
         >
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-            <UserRound className="h-4 w-4" />
+          <span
+            style={{
+              flex: "none",
+              display: "grid",
+              placeItems: "center",
+              width: 22,
+              height: 22,
+              borderRadius: 7,
+              background: dirty ? "var(--s-brand)" : "var(--s-sunken)",
+              color: dirty ? "#fff" : "var(--s-t3)",
+            }}
+          >
+            <UserRound size={13} />
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+          <span style={{ minWidth: 0, flex: 1 }}>
+            <span
+              style={{
+                display: "block",
+                fontSize: 8.5,
+                fontWeight: 700,
+                letterSpacing: ".1em",
+                textTransform: "uppercase",
+                color: dirty ? "var(--s-brand)" : "var(--s-t3)",
+              }}
+            >
               Vendedor
             </span>
-            <span className="block truncate font-medium text-foreground">
+            <span
+              style={{
+                display: "block",
+                fontSize: 12.5,
+                fontWeight: 700,
+                color: dirty ? "var(--s-brand)" : "var(--s-t1)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
               {selected ? selected.nome : "Buscar vendedor…"}
             </span>
           </span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <ChevronsUpDown size={14} style={{ flex: "none", color: "var(--s-t3)" }} />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[calc(100vw-2rem)] p-0 sm:w-80" align="start">
@@ -81,6 +130,7 @@ export function VendedorSearch({
             return (
               <button
                 key={o.matricula}
+                type="button"
                 onClick={() => {
                   onSelect(String(o.matricula));
                   setOpen(false);

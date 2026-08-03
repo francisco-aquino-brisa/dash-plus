@@ -29,5 +29,5 @@ export default async function VendedorPage({ searchParams }: { searchParams: Sea
     buildVendedorFilterOptions(filters.competencia),
   ]);
 
-  return <VendedorDashboard view={view} options={options} usesMock={view.source === "mock"} />;
+  return <VendedorDashboard view={view} options={options} />;
 }
