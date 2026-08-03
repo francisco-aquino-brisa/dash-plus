@@ -60,7 +60,7 @@ export function PaginasScreen({ paginas }: { paginas: Pagina[] }) {
     },
     {
       key: "caps",
-      header: "Capacidades",
+      header: "Permissões",
       numeric: true,
       render: (p) => p.capCount,
     },
@@ -115,7 +115,7 @@ export function PaginasScreen({ paginas }: { paginas: Pagina[] }) {
           minWidth={560}
           empty={{
             title: "Nenhuma página",
-            hint: "Cadastre as telas do dashboard para dar capacidades a elas.",
+            hint: "Cadastre as telas do dashboard para dar permissões a elas.",
           }}
         />
       </Panel>

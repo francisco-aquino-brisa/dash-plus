@@ -132,9 +132,8 @@ export function PrimaryButton({
       style={{
         ...baseBtn,
         border: "1px solid transparent",
-        background: "var(--bn-gradient-orange)",
+        background: "var(--s-brand)",
         color: "#fff",
-        boxShadow: "0 6px 16px -8px rgba(229,48,1,.6)",
         opacity: disabled ? 0.6 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
         ...style,

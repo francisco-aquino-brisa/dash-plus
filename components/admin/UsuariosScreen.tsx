@@ -60,7 +60,7 @@ export function UsuariosScreen({
       header: "Nível",
       render: (u) =>
         u.nivelNome ? (
-          <Chip tone={nivelChipTone(u.nivelNome)}>{u.nivelNome}</Chip>
+          <Chip tone={nivelChipTone()}>{u.nivelNome}</Chip>
         ) : (
           <span style={{ color: "var(--s-t3)" }}>—</span>
         ),

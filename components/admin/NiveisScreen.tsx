@@ -8,7 +8,7 @@ import { Chip, Field, Panel, RowActions, TextAreaField } from "./primitives";
 import { useAdminAction } from "./useAdminAction";
 import { textMatches } from "./filter";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { nivelChipTone } from "@/lib/data/admin/derive";
+import { BLUE_TONE, BRAND_TONE } from "@/lib/data/admin/derive";
 import { removeNivel, saveNivel } from "@/app/(app)/admin/actions";
 import type { Nivel } from "@/lib/data/admin/types";
 
@@ -30,7 +30,7 @@ export function NiveisScreen({ niveis, totalCaps }: { niveis: Nivel[]; totalCaps
     {
       key: "nome",
       header: "Nível",
-      render: (n) => <Chip tone={nivelChipTone(n.nome)}>{n.nome}</Chip>,
+      render: (n) => <Chip tone={n.locked ? BLUE_TONE : BRAND_TONE}>{n.nome}</Chip>,
     },
     {
       key: "descricao",
@@ -39,7 +39,7 @@ export function NiveisScreen({ niveis, totalCaps }: { niveis: Nivel[]; totalCaps
     },
     {
       key: "caps",
-      header: "Capacidades",
+      header: "Permissões",
       render: (n) => (
         <span style={{ color: "var(--s-t3)", fontWeight: 700 }}>
           {n.capCount} de {totalCaps}

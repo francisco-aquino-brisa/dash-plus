@@ -13,8 +13,14 @@ import { verifySession, SESSION_COOKIE } from "@/lib/auth/jwt";
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  // Entry point and the access-denied page must always pass through.
-  if (pathname === "/bootstrap" || pathname === "/sem-acesso") {
+  // Entry point, access-denied, logout and the re-entry screen always pass
+  // through (the last two are the logged-out state — no session by design).
+  if (
+    pathname === "/bootstrap" ||
+    pathname === "/sem-acesso" ||
+    pathname === "/logout" ||
+    pathname === "/entrar"
+  ) {
     return NextResponse.next();
   }
 

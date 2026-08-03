@@ -59,12 +59,23 @@ export function deriveEmail(nome: string): string {
 }
 
 /**
- * A record is `locked` when it is the seeded default: the `admin` level and the
- * `Administrador` cargo (ADR 0005 — `nome='admin'` is the seeded level). Locked
- * records show a "Padrão" badge instead of edit/delete actions and cannot be
- * removed. There is no `locked` column; it is derived from the name.
+ * A record is `locked` when it is a seeded default that must not be edited or
+ * deleted (shows a "Padrão" badge instead of actions). There is no `locked`
+ * column; it is derived from the name. The `admin` and `vendedor` levels and the
+ * `admin`/`Administrador` cargo are locked (ADR 0005 — `admin` is the seeded level).
  */
 export function isLockedNivel(nome: string): boolean {
+  const n = deburr(nome).trim();
+
+  return n === "admin" || n === "vendedor";
+}
+
+/**
+ * The `admin` level alone is FULLY locked in the permission matrix: it holds every
+ * capability and cannot be toggled. `vendedor` is record-locked (no rename/delete)
+ * but its capabilities ARE editable — so the matrix uses this, not `isLockedNivel`.
+ */
+export function isAdminNivel(nome: string): boolean {
   return deburr(nome).trim() === "admin";
 }
 
@@ -79,32 +90,22 @@ export interface ChipTone {
   bg: string;
 }
 
-const NEUTRAL: ChipTone = { fg: "var(--s-t2)", bg: "var(--s-sunken)" };
-const BRAND: ChipTone = { fg: "var(--s-brand)", bg: "var(--s-brand-weak)" };
-const PALETTE: ChipTone[] = [
-  { fg: "var(--s-blue)", bg: "var(--s-blue-bg)" },
-  { fg: "var(--s-ok)", bg: "var(--s-ok-bg)" },
-  { fg: "var(--s-warn)", bg: "var(--s-warn-bg)" },
-  NEUTRAL,
-];
+/** Salmon (brand) — the uniform tone for a nível chip in the Usuários table (design §5). */
+export const BRAND_TONE: ChipTone = { fg: "var(--s-brand)", bg: "var(--s-brand-weak)" };
+/** Blue — marks a "padrão" (locked) nível on the Níveis screen (SCREENS §6). */
+export const BLUE_TONE: ChipTone = { fg: "var(--s-blue)", bg: "var(--s-blue-bg)" };
+const NEUTRAL_TONE: ChipTone = { fg: "var(--s-t2)", bg: "var(--s-sunken)" };
 
 /**
- * Stable chip tone for an access level. There is no colour column, so the
- * prototype's per-level colour is derived: `admin` pins to brand (orange); every
- * other level hashes deterministically into a small palette so a given name
- * always keeps the same colour across renders.
+ * Chip tone for an access level. The design uses a single salmon chip for every
+ * nível (there is no per-level colour column); the "padrão" blue variant is
+ * applied per-screen where the spec calls for it, not here.
  */
-export function nivelChipTone(nome: string): ChipTone {
-  if (isLockedNivel(nome)) return BRAND;
-
-  let hash = 0;
-
-  for (const ch of deburr(nome)) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-
-  return PALETTE[hash % PALETTE.length];
+export function nivelChipTone(): ChipTone {
+  return BRAND_TONE;
 }
 
 /** Status chip tone: Ativo → ok, Inativo → neutral. */
 export function statusChipTone(ativo: boolean): ChipTone {
-  return ativo ? { fg: "var(--s-ok)", bg: "var(--s-ok-bg)" } : NEUTRAL;
+  return ativo ? { fg: "var(--s-ok)", bg: "var(--s-ok-bg)" } : NEUTRAL_TONE;
 }

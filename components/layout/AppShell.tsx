@@ -49,8 +49,8 @@ const ADMIN_NAV = [
   { title: "Níveis de acesso", short: "Níveis", href: "/admin/niveis", icon: ShieldCheck },
   { title: "Cargos", short: "Cargos", href: "/admin/cargos", icon: Briefcase },
   { title: "Páginas", short: "Páginas", href: "/admin/paginas", icon: Files },
-  { title: "Capacidades", short: "Capac.", href: "/admin/capacidades", icon: KeyRound },
-  { title: "Capacidades por nível", short: "Matriz", href: "/admin/permissoes", icon: LayoutGrid },
+  { title: "Permissões", short: "Permiss.", href: "/admin/capacidades", icon: KeyRound },
+  { title: "Permissões por nível", short: "Matriz", href: "/admin/permissoes", icon: LayoutGrid },
 ];
 
 const COLLAPSE_KEY = "brisa-sidebar-collapsed";
@@ -183,7 +183,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   const expanded = !railed;
   const inAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
   const navItems = inAdmin ? ADMIN_NAV : NAV;
-  const navHeading = inAdmin ? "Administração" : "Navegação";
+  const navHeading = "Navegação";
   const activeTitle = navItems.find((n) => pathname === n.href || pathname.startsWith(`${n.href}/`))?.title;
 
   const ghostBtn: CSSProperties = {
@@ -784,7 +784,10 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                           </button>
                         )}
                         <button
-                          onClick={() => setUserMenu(false)}
+                          onClick={() => {
+                            setUserMenu(false);
+                            startNav(() => router.push("/perfil"));
+                          }}
                           className="bd-menuitem"
                           style={menuItem("var(--s-t1)")}
                         >
@@ -794,7 +797,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                         <button
                           onClick={() => {
                             setUserMenu(false);
-                            window.location.assign("/bootstrap");
+                            window.location.assign("/logout");
                           }}
                           className="bd-menuitem"
                           style={menuItem("var(--s-bad)")}

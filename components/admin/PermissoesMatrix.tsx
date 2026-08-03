@@ -1,21 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Info } from "lucide-react";
+import { Check, Info, Loader2 } from "lucide-react";
 import { AdminScreen } from "./AdminScreen";
 import { Panel } from "./primitives";
 import { PageIcon } from "./icons";
 import { textMatches } from "./filter";
 import { useSetNavPending } from "@/lib/ui/nav-pending";
-import { nivelChipTone } from "@/lib/data/admin/derive";
+import { isAdminNivel } from "@/lib/data/admin/derive";
 import { togglePerm } from "@/app/(app)/admin/actions";
 import { permKey, type Capacidade, type Nivel, type Pagina } from "@/lib/data/admin/types";
 
 /**
  * Capacidades por nível (SCREENS §6): level chips on top, a live counter, and one
  * card per página with a checkbox per capability. The `admin` level is fully
- * granted and locked, shown with a blue notice (DESIGN_SYSTEM §5). Toggles are
- * optimistic and revert if the server action fails.
+ * granted and locked, shown with a blue notice (DESIGN_SYSTEM §5). Each toggle
+ * disables its own checkbox (spinner) until the server answers, then commits the
+ * new state on success or leaves it unchanged on failure — no double-fire.
  */
 export function PermissoesMatrix({
   niveis,
@@ -31,7 +32,10 @@ export function PermissoesMatrix({
   const [activeId, setActiveId] = useState<number | null>(niveis[0]?.id ?? null);
   const [query, setQuery] = useState("");
   const [granted, setGranted] = useState<Set<string>>(() => new Set(perms));
-  const setPending = useSetNavPending();
+  // Keys whose grant/revoke request is in flight — the checkbox is disabled and
+  // shows a spinner until the server answers, so a double-click can't fire twice.
+  const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set());
+  const setNavPending = useSetNavPending();
 
   // Re-seed from the server whenever the granted set changes underneath (e.g. after
   // "Atualizar" reloads the page).
@@ -39,61 +43,74 @@ export function PermissoesMatrix({
     setGranted(new Set(perms));
   }, [perms]);
 
+  // Light the shell loader while any toggle is in flight.
+  useEffect(() => {
+    setNavPending(pendingKeys.size > 0);
+  }, [pendingKeys, setNavPending]);
+
   const active = niveis.find((n) => n.id === activeId) ?? null;
   const totalCaps = capacidades.length;
+  // Only `admin` is locked IN THE MATRIX (all caps, non-editable). `vendedor` is
+  // record-locked but its capabilities are editable here.
+  const adminLocked = !!active && isAdminNivel(active.nome);
 
   const groups = useMemo(() => groupByPage(capacidades, paginas, query), [capacidades, paginas, query]);
 
   const activeGrantedCount = useMemo(() => {
     if (!active) return 0;
 
-    if (active.locked) return totalCaps;
+    if (isAdminNivel(active.nome)) return totalCaps;
 
     return capacidades.reduce((n, c) => n + (granted.has(permKey(active.id, c.id)) ? 1 : 0), 0);
   }, [active, capacidades, granted, totalCaps]);
 
   async function toggle(capId: number, next: boolean) {
-    if (!active || active.locked) return;
+    if (!active || adminLocked) return;
 
     const key = permKey(active.id, capId);
 
-    setGranted((prev) => {
-      const n = new Set(prev);
+    // Ignore clicks while this checkbox's request is still open.
+    if (pendingKeys.has(key)) return;
 
-      next ? n.add(key) : n.delete(key);
-
-      return n;
-    });
-    setPending(true);
+    setPendingKeys((prev) => new Set(prev).add(key));
 
     try {
       const res = await togglePerm(active.id, capId, next);
 
-      if (!res.ok) {
+      // Commit the new state only on success; on failure the checkbox keeps its
+      // previous state (there is no optimistic flip to undo).
+      if (res.ok) {
         setGranted((prev) => {
           const n = new Set(prev);
 
-          next ? n.delete(key) : n.add(key);
+          next ? n.add(key) : n.delete(key);
 
           return n;
         });
       }
+    } catch {
+      // network/unexpected error — leave the checkbox unchanged.
     } finally {
-      setPending(false);
+      setPendingKeys((prev) => {
+        const n = new Set(prev);
+
+        n.delete(key);
+
+        return n;
+      });
     }
   }
 
   return (
     <AdminScreen
-      title="Capacidades por nível"
+      title="Permissões por nível"
       subtitle="Marque o que cada nível pode fazer"
-      search={{ value: query, onChange: setQuery, placeholder: "Buscar capacidade…" }}
+      search={{ value: query, onChange: setQuery, placeholder: "Buscar permissão…" }}
     >
       {/* Level chips */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {niveis.map((n) => {
           const isActive = n.id === activeId;
-          const tone = nivelChipTone(n.nome);
 
           return (
             <button
@@ -104,8 +121,8 @@ export function PermissoesMatrix({
                 padding: "8px 16px",
                 borderRadius: "var(--r-pill)",
                 border: `1px solid ${isActive ? "var(--s-brand)" : "var(--s-border)"}`,
-                background: isActive ? tone.bg : "var(--s-card)",
-                color: isActive ? tone.fg : "var(--s-t2)",
+                background: "var(--s-card)",
+                color: isActive ? "var(--s-brand)" : "var(--s-t2)",
                 font: "inherit",
                 fontSize: 12.5,
                 fontWeight: 800,
@@ -125,12 +142,12 @@ export function PermissoesMatrix({
             {active.nome}
           </span>
           <span style={{ fontSize: 12.5, color: "var(--s-t3)", fontWeight: 700 }}>
-            {activeGrantedCount} de {totalCaps} capacidades ativas
+            {activeGrantedCount} de {totalCaps} permissões ativas
           </span>
         </div>
       )}
 
-      {active?.locked && (
+      {adminLocked && (
         <div
           style={{
             display: "flex",
@@ -145,7 +162,7 @@ export function PermissoesMatrix({
         >
           <Info size={16} style={{ flex: "none", marginTop: 1 }} />
           <span style={{ fontSize: 12.5, fontWeight: 700 }}>
-            O nível Admin tem todas as capacidades e não pode ser alterado.
+            O nível Admin tem todas as permissões e não pode ser alterado.
           </span>
         </div>
       )}
@@ -154,8 +171,8 @@ export function PermissoesMatrix({
         <Panel>
           <div style={{ padding: "40px 16px", textAlign: "center", color: "var(--s-t3)", fontSize: 13 }}>
             {capacidades.length === 0
-              ? "Cadastre páginas e capacidades para montar a matriz."
-              : "Nenhuma capacidade encontrada para a busca."}
+              ? "Cadastre páginas e permissões para montar a matriz."
+              : "Nenhuma permissão encontrada para a busca."}
           </div>
         </Panel>
       ) : (
@@ -187,13 +204,16 @@ export function PermissoesMatrix({
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {g.caps.map((c) => {
-                  const on = active?.locked ? true : !!active && granted.has(permKey(active.id, c.id));
+                  const key = active ? permKey(active.id, c.id) : "";
+                  const busy = pendingKeys.has(key);
+                  const on = adminLocked ? true : !!active && granted.has(key);
+                  const disabled = adminLocked || busy;
 
                   return (
                     <button
                       key={c.id}
                       type="button"
-                      disabled={active?.locked}
+                      disabled={disabled}
                       onClick={() => toggle(c.id, !on)}
                       style={{
                         display: "flex",
@@ -206,7 +226,8 @@ export function PermissoesMatrix({
                         border: `1px solid ${on ? "var(--s-brand-line)" : "var(--s-border)"}`,
                         background: on ? "var(--s-brand-weak)" : "var(--s-sunken)",
                         font: "inherit",
-                        cursor: active?.locked ? "not-allowed" : "pointer",
+                        cursor: adminLocked ? "not-allowed" : busy ? "wait" : "pointer",
+                        opacity: busy ? 0.65 : 1,
                         transition: ".16s",
                       }}
                     >
@@ -219,12 +240,16 @@ export function PermissoesMatrix({
                           height: 20,
                           marginTop: 1,
                           borderRadius: 6,
-                          border: `1px solid ${on ? "var(--s-brand)" : "var(--s-border-2)"}`,
-                          background: on ? "var(--s-brand)" : "transparent",
-                          color: "#fff",
+                          border: `1px solid ${on || busy ? "var(--s-brand)" : "var(--s-border-2)"}`,
+                          background: on && !busy ? "var(--s-brand)" : "transparent",
+                          color: on && !busy ? "#fff" : "var(--s-brand)",
                         }}
                       >
-                        {on && <Check size={13} />}
+                        {busy ? (
+                          <Loader2 size={13} style={{ animation: "bdSpin .7s linear infinite" }} />
+                        ) : (
+                          on && <Check size={13} />
+                        )}
                       </span>
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <span

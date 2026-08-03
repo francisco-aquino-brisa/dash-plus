@@ -44,7 +44,7 @@ export function CapacidadesScreen({
   const columns: Column<Capacidade>[] = [
     {
       key: "label",
-      header: "Capacidade",
+      header: "Permissão",
       render: (c) => (
         <span
           style={{
@@ -119,10 +119,10 @@ export function CapacidadesScreen({
 
   return (
     <AdminScreen
-      title="Capacidades"
+      title="Permissões"
       subtitle="Ações permitidas dentro de cada página"
-      search={{ value: query, onChange: setQuery, placeholder: "Buscar capacidade…" }}
-      action={{ label: "Nova capacidade", onClick: openNew }}
+      search={{ value: query, onChange: setQuery, placeholder: "Buscar permissão…" }}
+      action={{ label: "Nova permissão", onClick: openNew }}
     >
       <Panel>
         <DataTable
@@ -130,7 +130,7 @@ export function CapacidadesScreen({
           rows={rows}
           rowKey={(c) => String(c.id)}
           minWidth={640}
-          empty={{ title: "Nenhuma capacidade", hint: "Crie capacidades e associe cada uma a uma página." }}
+          empty={{ title: "Nenhuma permissão", hint: "Crie permissões e associe cada uma a uma página." }}
         />
       </Panel>
 
@@ -138,10 +138,10 @@ export function CapacidadesScreen({
         <AdminModal
           open
           onClose={() => setDraft(null)}
-          eyebrow={draft.id ? "Editar capacidade" : "Nova capacidade"}
-          title={draft.id ? "Editar capacidade" : "Nova capacidade"}
+          eyebrow={draft.id ? "Editar permissão" : "Nova permissão"}
+          title={draft.id ? "Editar permissão" : "Nova permissão"}
           onSubmit={submit}
-          submitLabel={draft.id ? "Salvar" : "Criar capacidade"}
+          submitLabel={draft.id ? "Salvar" : "Criar permissão"}
           submitDisabled={!draft.label.trim()}
           busy={busy}
           error={error}
@@ -159,7 +159,7 @@ export function CapacidadesScreen({
             label="Descrição"
             value={draft.descricao}
             onChange={(descricao) => setDraft({ ...draft, descricao })}
-            placeholder="O que esta capacidade libera"
+            placeholder="O que esta permissão libera"
           />
           <AdminSelect
             label="Página"
@@ -177,7 +177,7 @@ export function CapacidadesScreen({
           open
           onClose={() => setTarget(null)}
           onConfirm={confirmDelete}
-          question="Excluir esta capacidade?"
+          question="Excluir esta permissão?"
           recordName={target.label}
           busy={busy}
         />
