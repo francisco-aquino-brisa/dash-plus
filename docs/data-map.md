@@ -10,21 +10,22 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 
 ## Verification status (last audited via warehouse queries)
 
-| Object                        | Schema                                             | Type    | Exists            | Columns used by code               |
-| ----------------------------- | -------------------------------------------------- | ------- | ----------------- | ---------------------------------- |
-| `indicadores_cidades`         | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                     |
-| `indicadores_cidades_5g`      | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                     |
-| `metas_cidades`               | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                     |
-| `metas_vendedores_canais`     | `projeto_brisa_performance`                        | MANAGED | ✅ (2026-07)      | catálogo+metas por vendedor ✅     |
-| `cadastro_usuario`            | `projeto_brisa_performance`                        | MANAGED | ✅                | all present ✅                     |
-| `desempenho_hc`               | `diego_barros_inteligencia_comercial_e_mercado`    | MANAGED | ✅                | all present ✅                     |
-| `waves_consolidado_orcamento` | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | ticket/faturamento BL ✅           |
-| `consolidado_5g_pedido`       | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | ticket 5G, VE04, VE51 ✅           |
-| `churn_vendedor_5g`           | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | CA10 (churn safra 5G) ✅           |
-| `indicadores_servicos`        | `inteligencia_comercial_e_mercado_indicadores`     | —       | ✅ (2026-07)      | catálogo (fonte+fórmula) ✅        |
-| **`vw_hc_zerado_vendedor`**   | (referenced as `projeto_brisa_performance`)        | —       | ❌ **absent**     | —                                  |
-| `portabilidade`               | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | VE32–VE35 (Cidades + Vendas) ✅    |
-| **`portabilidade_5g`**        | `gdb_brisanet_gd.inteligencia_comercial_e_mercado` | —       | ⛔ **sem acesso** | fonte oficial antiga (substituída) |
+| Object                          | Schema                                             | Type    | Exists            | Columns used by code                                       |
+| ------------------------------- | -------------------------------------------------- | ------- | ----------------- | ---------------------------------------------------------- |
+| `indicadores_cidades`           | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                                             |
+| `indicadores_cidades_5g`        | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                                             |
+| `metas_cidades`                 | `projeto_brisa_performance`                        | VIEW    | ✅                | all present ✅                                             |
+| `metas_vendedores_canais`       | `projeto_brisa_performance`                        | MANAGED | ✅ (2026-07)      | catálogo+metas por vendedor ✅                             |
+| `cadastro_usuario`              | `projeto_brisa_performance`                        | MANAGED | ✅                | all present ✅                                             |
+| `desempenho_hc`                 | `diego_barros_inteligencia_comercial_e_mercado`    | MANAGED | ✅                | all present ✅                                             |
+| `waves_consolidado_orcamento`   | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | ticket/faturamento BL ✅                                   |
+| `consolidado_5g_pedido`         | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | ticket 5G, VE04, VE51 ✅                                   |
+| `churn_vendedor_5g`             | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | CA10 (churn safra 5G) ✅                                   |
+| `indicadores_servicos`          | `inteligencia_comercial_e_mercado_indicadores`     | —       | ✅ (2026-07)      | catálogo (fonte+fórmula) ✅                                |
+| **`vw_hc_zerado_vendedor`**     | (referenced as `projeto_brisa_performance`)        | —       | ❌ **absent**     | PDU antiga — não existe                                    |
+| **`vw_producao_hc_zero_venda`** | `projeto_brisa_performance`                        | VIEW    | ✅ (2026-08)      | **PDU (substituta): `total_vendas`/dias por `servico`** ✅ |
+| `portabilidade`                 | `inteligencia_comercial_e_mercado`                 | —       | ✅ (2026-07)      | VE32–VE35 (Cidades + Vendas) ✅                            |
+| **`portabilidade_5g`**          | `gdb_brisanet_gd.inteligencia_comercial_e_mercado` | —       | ⛔ **sem acesso** | fonte oficial antiga (substituída)                         |
 
 > **Acesso ampliado (2026-07):** antes o app só alcançava `projeto_brisa_performance`.
 > O time de dados liberou os demais schemas de `gdb_brisanet_comunidade_dev`
@@ -34,10 +35,11 @@ Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 > de verdade de "como calcular" cada indicador (colunas `tabela`/`colunas`/`metrica`/
 > `funcao`/`formato_dado`/`polaridade` por indicador×serviço) — mais rico que `metas_cidades`.
 
-> **`vw_hc_zerado_vendedor` does not exist in ANY accessible catalog**, and the
-> column it relies on — **`total_realizado`** — does not exist anywhere either
-> (checked across all catalogs). So the **PDU is broken** on every screen that
-> uses it. See "Known breakage" below.
+> **`vw_hc_zerado_vendedor` does not exist in ANY accessible catalog**, and its
+> column **`total_realizado`** exists nowhere. Porém (2026-08) a PDU **tem
+> substituta verificada: `projeto_brisa_performance.vw_producao_hc_zero_venda`**
+> (`total_vendas` + `dias_trabalhado`/`dias_uteis_acumulado` por `servico`). Ver
+> "Known breakage" (fórmula a confirmar com o time de dados).
 
 > **Portabilidade 5G (VE32–VE35) DESBLOQUEADA (2026-07):** a fonte oficial antiga
 > `gdb_brisanet_gd…portabilidade_5g` continua sem `USE CATALOG`, mas a tabela
@@ -100,12 +102,19 @@ Schemas overridable via env: `DATABRICKS_CITIES_SCHEMA` (Cities + auth) and
 
 ## Known breakage
 
-- **PDU (`vw_hc_zerado_vendedor` + `total_realizado`) — broken.** The view is
-  absent from every catalog, and `total_realizado` exists nowhere. `dias_uteis_acumulado`
-  survives only in `dias_acum_uteis_vw` and `vw_producao_hc_zero_venda`, but
-  neither carries `total_realizado`, so **there is no drop-in replacement** — the
-  PDU needs a redesigned source, not a rename. Affects Vendas, Produtividade,
-  Vendedor.
+- **PDU — fonte de substituição ENCONTRADA (2026-08, a validar a fórmula).** A
+  original `vw_hc_zerado_vendedor` (+ `total_realizado`) continua **inexistente** em
+  todo catálogo. Mas **`projeto_brisa_performance.vw_producao_hc_zero_venda`** (VIEW,
+  verificada) reconstrói a PDU: carrega `total_vendas` (LONG) + `dias_trabalhado` e
+  `dias_uteis_acumulado` (DECIMAL, acumulado no mês) por **`servico`**
+  (`INTERNET`→FTTH · `FWA` · `5G` · `RENOVACAO`; "Banda" = INTERNET+FWA), com todas as
+  dimensões de filtro (`data`, `hash_user`/`consultor`, `canal`, `nicho`,
+  `cidade_vendedor`, `uf_cidade_vendedor`, `gerente`, `coordenacao`, `tipo_cidade`,
+  `status_experiencia`, `matricula`). Candidata a PDU = `Σtotal_vendas ÷ Σdias_trabalhado`
+  por serviço; validação jul/2026: **INTERNET 0,95 · 5G 1,50 · FWA 0,15** (escala coerente).
+  **Pendente:** confirmar o denominador oficial (`dias_trabalhado` vs `dias_uteis_acumulado`,
+  pooled vs média por vendedor) e a fonte da meta com o time de dados. Afeta Vendas,
+  Produtividade, Vendedor — **deixa de ser "Sem acesso" e passa a usar dado real.**
 - **Silent mock fallback.** `lib/data/{sales,vendedor,produtividade}/repository.ts`
   wrap the Databricks call in `try/catch` and fall back to the **full mock** on
   any error (only a `console.warn`). So today those three screens silently serve
@@ -221,11 +230,12 @@ decimal (`"29,99"`) — daí `to_date(...,'dd/MM/yyyy')` e `replace(',','.')`.
 
 ## Other tables (verified)
 
-| Table                        | Use                                                                                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `cadastro_usuario` (MANAGED) | Access control: login checks an active `cpf` (`usuario_ativo`), pulls `email`/`permissao`. Queried on Databricks regardless of mode. Columns verified. |
-| `desempenho_hc` (MANAGED)    | Sales/HC fact for Vendas · Canais, Produtividade, Vendedor. Every column the code uses is present.                                                     |
-| `vw_hc_zerado_vendedor` ❌   | PDU source referenced in code — **does not exist**. Column `total_realizado` exists nowhere. Needs a new source.                                       |
+| Table                              | Use                                                                                                                                                                                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cadastro_usuario` (MANAGED)       | Access control: login checks an active `cpf` (`usuario_ativo`), pulls `email`/`permissao`. Queried on Databricks regardless of mode. Columns verified.                                                                             |
+| `desempenho_hc` (MANAGED)          | Sales/HC fact for Vendas · Canais, Produtividade, Vendedor. Every column the code uses is present.                                                                                                                                 |
+| `vw_hc_zerado_vendedor` ❌         | PDU antiga — **não existe** (nem `total_realizado`). **Substituída** por `vw_producao_hc_zero_venda`.                                                                                                                              |
+| `vw_producao_hc_zero_venda` (VIEW) | **PDU (substituta, 2026-08).** `total_vendas`/`dias_trabalhado`/`dias_uteis_acumulado` por `servico` (INTERNET/FWA/5G/RENOVACAO) + dims (canal, nicho, cidade, gerente, coord, hash_user, matricula). Fórmula oficial a confirmar. |
 
 ## Source of truth
 
