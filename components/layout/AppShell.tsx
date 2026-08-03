@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useState, useTransition, type CSSProperties } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -122,53 +122,37 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   const [theme, toggleTheme] = useTheme();
   const [userMenu, setUserMenu] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [navPending, setNavPending] = useState(false);
-  const navTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The brand loader lights on either a menu page change (menuPending, a
+  // transition) or a screen's own filter/refresh request (screenPending, set via
+  // the nav-pending context / useReportNavPending). Both are transition-backed,
+  // so the loader stays lit for the whole request — click to commit — no flicker.
+  const [screenPending, setScreenPending] = useState(false);
+  const [menuPending, startNav] = useTransition();
+  const navPending = menuPending || screenPending;
   const source = useDataSource();
 
   useEffect(() => {
     setRailed(localStorage.getItem(COLLAPSE_KEY) === "1");
   }, []);
 
-  // Clear the loader (and close menus) when the route settles. Screens report
-  // their own request-driven pending (URL filters, router.refresh) via
-  // useReportNavPending — this only covers page changes the shell triggers.
   useEffect(() => {
     setUserMenu(false);
     setMoreOpen(false);
-    setNavPending(false);
-
-    if (navTimer.current) {
-      clearTimeout(navTimer.current);
-      navTimer.current = null;
-    }
   }, [pathname]);
 
-  // Global loader on link navigations: any internal <a> pointing at a different
-  // path kicks off a page change → show the brand loader until the route settles
-  // (the effect above clears it; an 8s fallback avoids a stuck loader).
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  // Navigate through a transition so menuPending covers the full page change.
+  // Keep <Link> for prefetch / middle-click / new-tab — only intercept a plain
+  // left-click to a different path.
+  const navTo = (href: string) => (e: React.MouseEvent) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
 
-      const a = (e.target as HTMLElement | null)?.closest?.("a");
-      const href = a?.getAttribute("href");
+    if (new URL(href, window.location.origin).pathname === pathname) return;
 
-      if (!a || !href || !href.startsWith("/") || a.getAttribute("target") === "_blank") return;
-
-      if (new URL(href, window.location.origin).pathname === pathname) return;
-
-      setNavPending(true);
-
-      if (navTimer.current) clearTimeout(navTimer.current);
-
-      navTimer.current = setTimeout(() => setNavPending(false), 8000);
-    };
-
-    document.addEventListener("click", onClick, true);
-
-    return () => document.removeEventListener("click", onClick, true);
-  }, [pathname]);
+    e.preventDefault();
+    setUserMenu(false);
+    setMoreOpen(false);
+    startNav(() => router.push(href));
+  };
 
   const toggleRail = () =>
     setRailed((c) => {
@@ -200,7 +184,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   };
 
   return (
-    <SetNavPendingContext.Provider value={setNavPending}>
+    <SetNavPendingContext.Provider value={setScreenPending}>
       <TooltipProvider delayDuration={0}>
         <div
           style={{
@@ -481,6 +465,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                     <Link
                       key={item.href}
                       href={item.href}
+                      onClick={navTo(item.href)}
                       title={item.title}
                       className="bd-nav"
                       style={{
@@ -536,6 +521,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                 {user.isAdmin && (
                   <Link
                     href="/admin"
+                    onClick={navTo("/admin")}
                     title="Área administrativa"
                     className="bd-ghost"
                     style={{
@@ -728,8 +714,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                           <button
                             onClick={() => {
                               setUserMenu(false);
-                              setNavPending(true);
-                              router.push("/admin");
+                              startNav(() => router.push("/admin"));
                             }}
                             className="bd-menuitem"
                             style={menuItem("var(--s-t1)")}
@@ -785,7 +770,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
               const Icon = item.icon;
 
               return (
-                <Link key={item.href} href={item.href} style={tabItem(active)}>
+                <Link key={item.href} href={item.href} onClick={navTo(item.href)} style={tabItem(active)}>
                   <Icon size={20} />
                   <span style={tabLabel}>{item.short}</span>
                 </Link>
@@ -845,7 +830,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                     <Link
                       key={item.href}
                       href={item.href}
-                      onClick={() => setMoreOpen(false)}
+                      onClick={navTo(item.href)}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -896,7 +881,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                 {user.isAdmin && (
                   <Link
                     href="/admin"
-                    onClick={() => setMoreOpen(false)}
+                    onClick={navTo("/admin")}
                     style={{
                       display: "flex",
                       alignItems: "center",
