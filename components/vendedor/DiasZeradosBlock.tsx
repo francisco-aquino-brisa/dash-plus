@@ -68,7 +68,7 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
                 width: 30,
                 height: 30,
                 borderRadius: 9,
-                background: "rgba(255,255,255,.55)",
+                background: "var(--s-card)",
                 color: "var(--s-warn)",
               }}
             >
@@ -112,7 +112,8 @@ export function DiasZeradosBlock({ dias }: { dias: DiasZeradosView }) {
                   alignItems: "center",
                   gap: 2,
                   borderRadius: 11,
-                  background: "rgba(255,255,255,.6)",
+                  background: "var(--s-card)",
+                  border: "1px solid var(--s-border)",
                   padding: 9,
                 }}
               >
