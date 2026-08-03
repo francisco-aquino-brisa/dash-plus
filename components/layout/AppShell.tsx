@@ -5,14 +5,20 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Activity,
+  ArrowLeft,
+  Briefcase,
   ChevronRight,
   ChevronsUpDown,
+  Files,
+  KeyRound,
+  LayoutGrid,
   LogOut,
   Moon,
   MoreHorizontal,
   PanelLeft,
   Plus,
   Settings,
+  ShieldCheck,
   ShoppingCart,
   Sun,
   User,
@@ -34,6 +40,17 @@ const NAV = [
   { title: "Vendas · Canais", short: "Canais", href: "/vendas", icon: ShoppingCart },
   { title: "Produtividade Comercial", short: "Produtiv.", href: "/produtividade", icon: Users },
   { title: "Dashboard Vendedor", short: "Vendedor", href: "/vendedor", icon: UserRound },
+];
+
+// Entering the admin area swaps the whole navigation to the management screens
+// (DESIGN_SYSTEM §5). The swap and its explicit exit exist on both platforms.
+const ADMIN_NAV = [
+  { title: "Usuários", short: "Usuários", href: "/admin/usuarios", icon: Users },
+  { title: "Níveis de acesso", short: "Níveis", href: "/admin/niveis", icon: ShieldCheck },
+  { title: "Cargos", short: "Cargos", href: "/admin/cargos", icon: Briefcase },
+  { title: "Páginas", short: "Páginas", href: "/admin/paginas", icon: Files },
+  { title: "Capacidades", short: "Capac.", href: "/admin/capacidades", icon: KeyRound },
+  { title: "Capacidades por nível", short: "Matriz", href: "/admin/permissoes", icon: LayoutGrid },
 ];
 
 const COLLAPSE_KEY = "brisa-sidebar-collapsed";
@@ -164,7 +181,10 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
     });
 
   const expanded = !railed;
-  const activeTitle = NAV.find((n) => pathname === n.href || pathname.startsWith(`${n.href}/`))?.title;
+  const inAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
+  const navItems = inAdmin ? ADMIN_NAV : NAV;
+  const navHeading = inAdmin ? "Administração" : "Navegação";
+  const activeTitle = navItems.find((n) => pathname === n.href || pathname.startsWith(`${n.href}/`))?.title;
 
   const ghostBtn: CSSProperties = {
     display: "flex",
@@ -454,10 +474,10 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                       padding: "0 8px 8px",
                     }}
                   >
-                    Navegação
+                    {navHeading}
                   </div>
                 )}
-                {NAV.map((item) => {
+                {navItems.map((item) => {
                   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                   const Icon = item.icon;
 
@@ -518,30 +538,30 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
 
               {/* Footer (fixed) */}
               <div style={{ flex: "none", display: "flex", flexDirection: "column", gap: 10 }}>
-                {user.isAdmin && (
+                {inAdmin ? (
                   <Link
-                    href="/admin"
-                    onClick={navTo("/admin")}
-                    title="Área administrativa"
+                    href="/dashboard"
+                    onClick={navTo("/dashboard")}
+                    title="Voltar aos dashboards"
                     className="bd-ghost"
                     style={{
                       display: "flex",
                       alignItems: "center",
                       gap: 10,
                       width: "100%",
-                      border: "1px solid var(--s-border)",
+                      border: "1px solid var(--s-brand-line)",
                       borderRadius: 10,
                       padding: 9,
-                      background: "var(--s-card)",
-                      color: "var(--s-t2)",
+                      background: "var(--s-brand-weak)",
+                      color: "var(--s-brand)",
                       fontSize: 13,
-                      fontWeight: 700,
+                      fontWeight: 800,
                       textDecoration: "none",
                       transition: ".16s",
                       justifyContent: expanded ? "flex-start" : "center",
                     }}
                   >
-                    <Settings size={17} style={{ flex: "none" }} />
+                    <ArrowLeft size={17} style={{ flex: "none" }} />
                     {expanded && (
                       <span
                         style={{
@@ -552,10 +572,50 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                           whiteSpace: "nowrap",
                         }}
                       >
-                        Administração
+                        Voltar aos dashboards
                       </span>
                     )}
                   </Link>
+                ) : (
+                  user.isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={navTo("/admin")}
+                      title="Área administrativa"
+                      className="bd-ghost"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        width: "100%",
+                        border: "1px solid var(--s-border)",
+                        borderRadius: 10,
+                        padding: 9,
+                        background: "var(--s-card)",
+                        color: "var(--s-t2)",
+                        fontSize: 13,
+                        fontWeight: 700,
+                        textDecoration: "none",
+                        transition: ".16s",
+                        justifyContent: expanded ? "flex-start" : "center",
+                      }}
+                    >
+                      <Settings size={17} style={{ flex: "none" }} />
+                      {expanded && (
+                        <span
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Administração
+                        </span>
+                      )}
+                    </Link>
+                  )
                 )}
 
                 {/* Data source */}
@@ -765,7 +825,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
               borderTop: "1px solid var(--s-border)",
             }}
           >
-            {NAV.slice(0, 3).map((item) => {
+            {navItems.slice(0, 3).map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               const Icon = item.icon;
 
@@ -816,13 +876,15 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                     className="font-display"
                     style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-.02em", color: "var(--s-t1)" }}
                   >
-                    Dashboards
+                    {inAdmin ? "Administração" : "Dashboards"}
                   </div>
                   <div style={{ fontSize: 11.5, color: "var(--s-t3)", marginTop: 2 }}>
-                    Novas telas aparecem aqui automaticamente.
+                    {inAdmin
+                      ? "Telas gerenciais da área administrativa."
+                      : "Novas telas aparecem aqui automaticamente."}
                   </div>
                 </div>
-                {NAV.map((item) => {
+                {navItems.map((item) => {
                   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                   const Icon = item.icon;
 
@@ -862,26 +924,28 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                     </Link>
                   );
                 })}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    marginTop: 8,
-                    padding: "11px 12px",
-                    border: "1px dashed var(--s-border-2)",
-                    borderRadius: 12,
-                    color: "var(--s-t3)",
-                    fontSize: 11.5,
-                  }}
-                >
-                  <Plus size={16} style={{ flex: "none" }} />
-                  Espaço reservado para os próximos dashboards.
-                </div>
-                {user.isAdmin && (
+                {!inAdmin && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      marginTop: 8,
+                      padding: "11px 12px",
+                      border: "1px dashed var(--s-border-2)",
+                      borderRadius: 12,
+                      color: "var(--s-t3)",
+                      fontSize: 11.5,
+                    }}
+                  >
+                    <Plus size={16} style={{ flex: "none" }} />
+                    Espaço reservado para os próximos dashboards.
+                  </div>
+                )}
+                {inAdmin ? (
                   <Link
-                    href="/admin"
-                    onClick={navTo("/admin")}
+                    href="/dashboard"
+                    onClick={navTo("/dashboard")}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -890,19 +954,46 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                       minHeight: 50,
                       marginTop: 8,
                       padding: "0 12px",
-                      border: "1px solid var(--s-border)",
+                      border: "1px solid var(--s-brand-line)",
                       borderRadius: 12,
-                      background: "var(--s-card)",
-                      color: "var(--s-t2)",
+                      background: "var(--s-brand-weak)",
+                      color: "var(--s-brand)",
                       textDecoration: "none",
                       fontSize: 13.5,
-                      fontWeight: 700,
+                      fontWeight: 800,
                     }}
                   >
-                    <Settings size={18} style={{ flex: "none" }} />
-                    <span style={{ flex: 1 }}>Administração</span>
+                    <ArrowLeft size={18} style={{ flex: "none" }} />
+                    <span style={{ flex: 1 }}>Voltar aos dashboards</span>
                     <ChevronRight size={15} style={{ flex: "none", opacity: 0.5 }} />
                   </Link>
+                ) : (
+                  user.isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={navTo("/admin")}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 11,
+                        width: "100%",
+                        minHeight: 50,
+                        marginTop: 8,
+                        padding: "0 12px",
+                        border: "1px solid var(--s-border)",
+                        borderRadius: 12,
+                        background: "var(--s-card)",
+                        color: "var(--s-t2)",
+                        textDecoration: "none",
+                        fontSize: 13.5,
+                        fontWeight: 700,
+                      }}
+                    >
+                      <Settings size={18} style={{ flex: "none" }} />
+                      <span style={{ flex: 1 }}>Administração</span>
+                      <ChevronRight size={15} style={{ flex: "none", opacity: 0.5 }} />
+                    </Link>
+                  )
                 )}
               </div>
             </div>
