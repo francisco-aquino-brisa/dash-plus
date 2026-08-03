@@ -27,6 +27,8 @@ export interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
   /** Interior min width so columns don't crush on narrow viewports. */
   minWidth?: number;
+  /** Cap the body height and scroll vertically, keeping the header pinned. */
+  maxHeight?: number;
   empty?: { title: string; hint: string };
 }
 
@@ -36,6 +38,7 @@ export function DataTable<T>({
   rowKey,
   onRowClick,
   minWidth = 640,
+  maxHeight,
   empty = { title: "Nada por aqui", hint: "Ajuste os filtros para ver resultados." },
 }: DataTableProps<T>) {
   if (rows.length === 0) {
@@ -70,9 +73,9 @@ export function DataTable<T>({
   }
 
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div style={{ overflowX: "auto", overflowY: maxHeight ? "auto" : undefined, maxHeight }}>
       <table style={{ width: "100%", minWidth, borderCollapse: "collapse" }}>
-        <thead>
+        <thead style={maxHeight ? { position: "sticky", top: 0, zIndex: 1 } : undefined}>
           <tr style={{ background: "var(--s-sunken)" }}>
             {columns.map((col) => (
               <th key={col.key} style={headCellStyle(col)}>
@@ -116,6 +119,7 @@ function headCellStyle(col: CellStyleInput): CSSProperties {
     letterSpacing: ".09em",
     textTransform: "uppercase",
     color: "var(--s-t3)",
+    background: "var(--s-sunken)",
     whiteSpace: "nowrap",
   };
 }

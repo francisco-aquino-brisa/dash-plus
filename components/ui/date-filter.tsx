@@ -43,6 +43,8 @@ export interface DateFilterProps {
   defaultValue?: string;
   onChange: (value: string) => void;
   initialMode?: DateMode;
+  /** Which modes to offer. A single mode hides the mode switch entirely. */
+  modes?: DateMode[];
   align?: "start" | "end";
 }
 
@@ -52,10 +54,12 @@ export function DateFilter({
   defaultValue,
   onChange,
   initialMode = "mes",
+  modes = ["mes", "dia", "intervalo"],
   align = "start",
 }: DateFilterProps) {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<DateMode>(initialMode);
+  const [mode, setMode] = useState<DateMode>(modes.includes(initialMode) ? initialMode : modes[0]);
+  const modeOptions = MODES.filter((m) => modes.includes(m.value));
   const [displayMonth, setDisplayMonth] = useState<Date>(() => new Date());
   const [range, setRange] = useState<DateRange | undefined>();
 
@@ -101,17 +105,19 @@ export function DateFilter({
             animation: "bdIn .14s ease both",
           }}
         >
-          <Segmented
-            options={MODES}
-            value={mode}
-            onChange={(m) => {
-              setMode(m);
-              setRange(undefined);
-            }}
-            size="sm"
-            full
-            ariaLabel="Modo de data"
-          />
+          {modeOptions.length > 1 && (
+            <Segmented
+              options={modeOptions}
+              value={mode}
+              onChange={(m) => {
+                setMode(m);
+                setRange(undefined);
+              }}
+              size="sm"
+              full
+              ariaLabel="Modo de data"
+            />
+          )}
 
           {mode === "mes" ? (
             <>

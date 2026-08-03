@@ -1,7 +1,8 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { ChevronDown, ChevronUp, Lock, Minus, type LucideIcon } from "lucide-react";
+import * as TooltipPrimitive from "@radix-ui/react-tooltip";
+import { ChevronDown, ChevronUp, Info, Lock, Minus, type LucideIcon } from "lucide-react";
 import { Sparkline } from "@/components/ui/sparkline";
 import { isTrendGood, statusColor } from "@/lib/ui/status";
 
@@ -36,6 +37,8 @@ export interface KpiCardProps {
   stats: KpiStat[];
   /** 12 raw points for the sparkline. */
   sparkline: number[];
+  /** Formula/definition shown in an (i) tooltip next to the label. */
+  description?: string;
   onClick?: () => void;
 }
 
@@ -48,6 +51,7 @@ export function KpiCard({
   inverse = false,
   stats,
   sparkline,
+  description,
   onClick,
 }: KpiCardProps) {
   const ac = statusColor(atingimento, inverse);
@@ -94,18 +98,20 @@ export function KpiCard({
         >
           <Icon size={15} />
         </span>
-        <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: 12,
-            fontWeight: 700,
-            color: "var(--s-t2)",
-            lineHeight: 1.25,
-            textWrap: "pretty",
-          }}
-        >
-          {label}
+        <span style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", gap: 5 }}>
+          <span
+            style={{
+              minWidth: 0,
+              fontSize: 12,
+              fontWeight: 700,
+              color: "var(--s-t2)",
+              lineHeight: 1.25,
+              textWrap: "pretty",
+            }}
+          >
+            {label}
+          </span>
+          {description && <InfoHint text={description} />}
         </span>
         {trend != null && (
           <span
@@ -202,6 +208,64 @@ export function KpiCard({
         />
       </div>
     </button>
+  );
+}
+
+/**
+ * Small (i) next to a KPI label that reveals the indicator's formula on hover.
+ * Radix Tooltip so the popup is portaled (escapes the card's `overflow:hidden`)
+ * and self-provides a Provider so it works anywhere. The trigger is a span (no
+ * nested button) and stops click propagation so it never opens the card's drill.
+ */
+function InfoHint({ text }: { text: string }) {
+  return (
+    <TooltipPrimitive.Provider delayDuration={150}>
+      <TooltipPrimitive.Root>
+        <TooltipPrimitive.Trigger asChild>
+          <span
+            role="img"
+            aria-label="Sobre este indicador"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              flex: "none",
+              display: "grid",
+              placeItems: "center",
+              width: 15,
+              height: 15,
+              marginTop: 1,
+              color: "var(--s-t3)",
+              cursor: "help",
+            }}
+          >
+            <Info size={13} strokeWidth={2.2} />
+          </span>
+        </TooltipPrimitive.Trigger>
+        <TooltipPrimitive.Portal>
+          <TooltipPrimitive.Content
+            side="top"
+            align="start"
+            sideOffset={6}
+            collisionPadding={12}
+            style={{
+              zIndex: 60,
+              maxWidth: 260,
+              padding: "8px 10px",
+              borderRadius: 10,
+              background: "var(--s-t1)",
+              color: "var(--s-page)",
+              fontSize: 11.5,
+              fontWeight: 600,
+              lineHeight: 1.4,
+              boxShadow: "var(--s-sh-2)",
+              animation: "bdIn .12s ease both",
+            }}
+          >
+            {text}
+            <TooltipPrimitive.Arrow style={{ fill: "var(--s-t1)" }} />
+          </TooltipPrimitive.Content>
+        </TooltipPrimitive.Portal>
+      </TooltipPrimitive.Root>
+    </TooltipPrimitive.Provider>
   );
 }
 

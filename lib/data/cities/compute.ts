@@ -614,7 +614,10 @@ export function buildDashboardView(
   const currentRows = applyFilters(rows, filters);
   const coverageRows =
     filters.tecnologia === "5G" ? currentRows : currentRows.filter((r) => r.tecnologia !== "5G");
-  const totalCidades = new Set(currentRows.map((r) => r.id_cidade)).size;
+  // Distinct PHYSICAL cities: the synthetic id_cidade is per city+tech (5G carries
+  // a "|5G" suffix), so a city operating both BL and 5G would count twice. Count
+  // by the normalized "Cidade / UF" name instead.
+  const totalCidades = new Set(currentRows.map((r) => r.cidade)).size;
   const totalBase = sum(coverageRows, (r) => r.base_ativa);
   const totalHP = sum(coverageRows, (r) => r.total_de_hp);
   const takeup = totalHP === 0 ? 0 : ((totalBase + sum(coverageRows, (r) => r.fechados)) / totalHP) * 100;
