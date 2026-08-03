@@ -1,101 +1,159 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowDown, ArrowUp, Minus } from "lucide-react";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { Segmented } from "@/components/ui/segmented";
 import { formatNumber } from "@/lib/format";
 import type { CanalDelta, SalesView } from "@/lib/data/sales/types";
 
+/**
+ * Análise por Canal / Nicho (legacy block, kept — the new_ui §2 doesn't surface
+ * it, but the migration keeps parity with the old screen). A segmented switches
+ * the dimension; two DataTables (Banda Larga + 5G) show média/dia and the
+ * variation vs the previous month/week, anchored on the latest attributed month
+ * (see databricks.ts). Restyled with the Fase 1 primitives + `--s-*` tokens.
+ */
+type Dim = "canal" | "nicho";
+
+const DIMS: { value: Dim; label: string }[] = [
+  { value: "canal", label: "Canal" },
+  { value: "nicho", label: "Nicho" },
+];
+
 function Delta({ v }: { v: number }) {
-  const up = v >= 0;
+  const up = v > 0.05;
+  const down = v < -0.05;
+  const good = up; // more sales momentum is good on both dimensions
+  const Icon = up ? ArrowUp : down ? ArrowDown : Minus;
 
   return (
     <span
-      className={cn(
-        "flex items-center justify-end gap-0.5 tabular-nums",
-        up ? "text-success" : "text-destructive",
-      )}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        gap: 3,
+        fontVariantNumeric: "tabular-nums",
+        fontWeight: 800,
+        color: up || down ? (good ? "var(--s-ok)" : "var(--s-bad)") : "var(--s-t3)",
+      }}
     >
-      {up ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+      <Icon size={11} strokeWidth={3} />
       {Math.abs(v).toFixed(1).replace(".", ",")}%
     </span>
   );
 }
 
-function CanalList({ title, rows, dimLabel }: { title: string; rows: CanalDelta[]; dimLabel: string }) {
+function CanalTable({ rows, dimLabel }: { rows: CanalDelta[]; dimLabel: string }) {
+  const columns: Column<CanalDelta>[] = [
+    {
+      key: "dim",
+      header: dimLabel,
+      render: (r) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <span style={{ fontWeight: 700, color: "var(--s-t1)" }}>{r.canal}</span>
+          <span style={{ fontSize: 11, color: "var(--s-t3)" }}>{r.gerente}</span>
+        </div>
+      ),
+    },
+    { key: "media", header: "Média/dia", numeric: true, render: (r) => formatNumber(r.mediaDia) },
+    { key: "mes", header: "vs mês", numeric: true, render: (r) => <Delta v={r.vsMesAnterior} /> },
+    { key: "sem", header: "vs semana", numeric: true, render: (r) => <Delta v={r.vsSemanaAnterior} /> },
+  ];
+
   return (
-    <div className="rounded-lg border border-border bg-card/40">
-      <div className="border-b border-border px-4 py-2 text-sm font-semibold">{title}</div>
-      <div className="max-h-[360px] overflow-auto">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur">
-            <tr className="text-left text-[11px] tracking-wider text-muted-foreground uppercase">
-              <th className="px-4 py-2 font-medium">{dimLabel}</th>
-              <th className="px-3 py-2 text-right font-medium">Média/dia</th>
-              <th className="px-3 py-2 text-right font-medium">vs mês</th>
-              <th className="px-3 py-2 text-right font-medium">vs semana</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={`${r.canal}-${i}`} className="border-t border-border/40 hover:bg-secondary/40">
-                <td className="px-4 py-2">
-                  <div className="font-medium">{r.canal}</div>
-                  <div className="text-[11px] text-muted-foreground">{r.gerente}</div>
-                </td>
-                <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                  {formatNumber(r.mediaDia)}
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <Delta v={r.vsMesAnterior} />
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <Delta v={r.vsSemanaAnterior} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <DataTable
+      columns={columns}
+      rows={rows}
+      rowKey={(r, i) => `${r.canal}-${i}`}
+      minWidth={360}
+      maxHeight={360}
+      empty={{ title: "Sem movimento no período", hint: "Ajuste os filtros para ver canais." }}
+    />
   );
 }
 
 export function AnaliseCanais({ canais }: { canais: SalesView["canais"] }) {
-  const [dim, setDim] = useState<"canal" | "nicho">("canal");
+  const [dim, setDim] = useState<Dim>("canal");
   const data = canais[dim];
   const dimLabel = dim === "canal" ? "Canal" : "Nicho";
 
   return (
-    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
-      <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
+    <section
+      style={{
+        border: "1px solid var(--s-border)",
+        borderRadius: "var(--r-panel)",
+        background: "var(--s-card)",
+        padding: 15,
+        boxShadow: "var(--s-sh)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <header
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Análise por {dimLabel}</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontSize: 17,
+              letterSpacing: "-.02em",
+            }}
+          >
+            Análise por {dimLabel}
+          </h2>
+          <div style={{ fontSize: 11.5, color: "var(--s-t3)", marginTop: 2 }}>
             Média por dia útil e variação vs mês/semana anterior
-          </p>
+          </div>
         </div>
-        <div className="flex gap-1 rounded-lg border border-border bg-secondary/40 p-0.5">
-          {(["canal", "nicho"] as const).map((d) => (
-            <button
-              key={d}
-              onClick={() => setDim(d)}
-              className={cn(
-                "cursor-pointer rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors",
-                dim === d
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
+        <Segmented options={DIMS} value={dim} onChange={setDim} size="sm" ariaLabel="Dimensão da análise" />
       </header>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <CanalList title="Banda Larga" rows={data.bl} dimLabel={dimLabel} />
-        <CanalList title="5G" rows={data.g5} dimLabel={dimLabel} />
+
+      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
+        <TableCard title="Banda Larga">
+          <CanalTable rows={data.bl} dimLabel={dimLabel} />
+        </TableCard>
+        <TableCard title="5G">
+          <CanalTable rows={data.g5} dimLabel={dimLabel} />
+        </TableCard>
       </div>
     </section>
+  );
+}
+
+function TableCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        border: "1px solid var(--s-border)",
+        borderRadius: 14,
+        background: "var(--s-card)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          padding: "10px 12px",
+          borderBottom: "1px solid var(--s-border)",
+          fontFamily: "var(--font-display)",
+          fontWeight: 800,
+          fontSize: 13,
+          color: "var(--s-t1)",
+        }}
+      >
+        {title}
+      </div>
+      {children}
+    </div>
   );
 }

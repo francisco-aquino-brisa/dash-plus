@@ -550,9 +550,9 @@ export const SELECTION_PREF_KEY: Record<SalesBlock, string> = {
 
 // ── View-model assembly (shared by the mock and Databricks paths) ─────────────
 
-/** One point of the card's 12-month history (feeds HistoryChart directly). */
+/** One point of the card's 12-month history (feeds the TimeSeriesChart/drill). */
 export interface SalesSeriesPoint {
-  mes: string; // yyyy-MM (HistoryChart formats it)
+  mes: string; // yyyy-MM (the chart formats it)
   valor: number;
   target?: number | null;
 }

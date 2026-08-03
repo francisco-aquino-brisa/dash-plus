@@ -1,26 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  LabelList,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { Lock } from "lucide-react";
-import { formatChartLabel } from "@/lib/format";
-import { Combobox } from "@/components/ui/combobox";
-import { InfoHint } from "@/components/ui/info-hint";
-import { getIndicatorDef } from "@/lib/indicators/definitions";
-import { cn } from "@/lib/utils";
+import { ChipFilter } from "@/components/ui/chip-filter";
+import { TimeSeriesChart } from "@/components/ui/time-series-chart";
+import { formatNumber } from "@/lib/format";
 import type { FreeIndicator } from "@/lib/data/sales/types";
 
+/**
+ * Seleção Livre de Indicadores (legacy block, kept — the new_ui §2 doesn't
+ * surface it, but the migration keeps parity with the old screen). Pick any
+ * accessible indicator and chart its 12-month series (`desempenho_hc`). Restyled
+ * over the Fase 1 `TimeSeriesChart` + `ChipFilter`. Indicators without a source
+ * are omitted here (they already show as LockedKpiCards in the blocks above).
+ */
 export function SelecaoLivre({
   indicators,
   series,
@@ -28,138 +20,68 @@ export function SelecaoLivre({
   indicators: FreeIndicator[];
   series: Record<string, { mes: string; valor: number }[]>;
 }) {
-  const firstAvailable = indicators.find((i) => i.available)?.nome ?? indicators[0]?.nome ?? "";
-  const [selected, setSelected] = useState(firstAvailable);
-  const [kind, setKind] = useState<"linha" | "coluna">("linha");
-
-  const data = series[selected];
-  const blocked = !data;
-  const selectedDef = getIndicatorDef(selected);
+  const available = indicators.filter((i) => i.available && series[i.nome]?.length);
+  const names = available.map((i) => i.nome);
+  const [selected, setSelected] = useState(names[0] ?? "");
+  const active = names.includes(selected) ? selected : (names[0] ?? "");
+  // `mes` já vem formatado ("Mai/26") do adapter e do mock — não reformatar.
+  const data = (series[active] ?? []).map((p) => ({ label: p.mes, value: p.valor }));
 
   return (
-    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
-      <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
+    <section
+      style={{
+        border: "1px solid var(--s-border)",
+        borderRadius: "var(--r-panel)",
+        background: "var(--s-card)",
+        padding: 15,
+        boxShadow: "var(--s-sh)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <header
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Seleção Livre de Indicadores</h2>
-          <p className="text-sm text-muted-foreground">Escolha um indicador para visualizar a série</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {selectedDef ? <InfoHint def={selectedDef} /> : null}
-          <Combobox
-            value={selected}
-            onChange={setSelected}
-            options={indicators.map((i) => ({
-              value: i.nome,
-              label: i.nome,
-              disabled: !i.available,
-              hint: i.available ? undefined : "sem acesso",
-            }))}
-            aria-label="Indicador"
-            searchPlaceholder="Buscar indicador…"
-            triggerClassName="min-w-[260px] bg-secondary/60"
-          />
-          <div className="flex gap-1 rounded-lg border border-border bg-secondary/40 p-0.5">
-            {(["linha", "coluna"] as const).map((k) => (
-              <button
-                key={k}
-                onClick={() => setKind(k)}
-                className={cn(
-                  "cursor-pointer rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors",
-                  kind === k
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {k}
-              </button>
-            ))}
+          <h2
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontSize: 17,
+              letterSpacing: "-.02em",
+            }}
+          >
+            Seleção Livre de Indicadores
+          </h2>
+          <div style={{ fontSize: 11.5, color: "var(--s-t3)", marginTop: 2 }}>
+            Escolha um indicador para ver a série de 12 meses
           </div>
         </div>
+        {names.length > 0 && (
+          <ChipFilter
+            label="Indicador"
+            value={active}
+            options={names}
+            defaultValue={names[0]}
+            onChange={setSelected}
+            align="end"
+          />
+        )}
       </header>
 
-      {blocked ? (
-        <div className="grid h-[300px] place-items-center rounded-lg border border-dashed border-border bg-secondary/20 text-center">
-          <div>
-            <Lock className="mx-auto h-6 w-6 text-muted-foreground" />
-            <p className="mt-2 text-sm font-medium text-muted-foreground">
-              Sem acesso aos dados deste indicador
-            </p>
-            <p className="text-[11px] text-muted-foreground">Aguardando liberação do time de dados.</p>
-          </div>
-        </div>
+      {names.length === 0 ? (
+        <p style={{ padding: "10px 2px", fontSize: 12.5, color: "var(--s-t3)" }}>
+          Nenhum indicador disponível para o escopo atual.
+        </p>
       ) : (
-        <div className="h-[300px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            {kind === "linha" ? (
-              <LineChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis
-                  dataKey="mes"
-                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={48}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                />
-                <Line type="monotone" dataKey="valor" stroke="var(--primary)" strokeWidth={2} dot={false}>
-                  <LabelList
-                    dataKey="valor"
-                    position="top"
-                    offset={8}
-                    formatter={(v: number) => formatChartLabel(v)}
-                    style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }}
-                  />
-                </Line>
-              </LineChart>
-            ) : (
-              <BarChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis
-                  dataKey="mes"
-                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={48}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                  cursor={{ fill: "var(--secondary)" }}
-                />
-                <Bar dataKey="valor" fill="var(--primary)" radius={[4, 4, 0, 0]}>
-                  <LabelList
-                    dataKey="valor"
-                    position="top"
-                    offset={6}
-                    formatter={(v: number) => formatChartLabel(v)}
-                    style={{ fill: "var(--foreground)", fontSize: 10, fontWeight: 600 }}
-                  />
-                </Bar>
-              </BarChart>
-            )}
-          </ResponsiveContainer>
-        </div>
+        <TimeSeriesChart data={data} formatValue={(n) => formatNumber(n)} height={280} selectableRange />
       )}
     </section>
   );

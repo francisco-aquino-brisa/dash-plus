@@ -36,5 +36,5 @@ export default async function VendasPage({ searchParams }: { searchParams: Searc
   const filters = parseFilters(searchParams);
   const [view, options] = await Promise.all([getSalesView(filters), buildSalesFilterOptions()]);
 
-  return <SalesDashboard view={view} options={options} usesMock={view.source === "mock"} />;
+  return <SalesDashboard view={view} options={options} />;
 }

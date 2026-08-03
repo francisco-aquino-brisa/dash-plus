@@ -115,11 +115,16 @@ Schemas overridable via env: `DATABRICKS_CITIES_SCHEMA` (Cities + auth) and
   **Pendente:** confirmar o denominador oficial (`dias_trabalhado` vs `dias_uteis_acumulado`,
   pooled vs média por vendedor) e a fonte da meta com o time de dados. Afeta Vendas,
   Produtividade, Vendedor — **deixa de ser "Sem acesso" e passa a usar dado real.**
-- **Silent mock fallback.** `lib/data/{sales,vendedor,produtividade}/repository.ts`
-  wrap the Databricks call in `try/catch` and fall back to the **full mock** on
-  any error (only a `console.warn`). So today those three screens silently serve
-  mock because the PDU throws — real-looking but not real. Cities has no such
-  fallback (it uses Databricks directly).
+- **~~Silent mock fallback~~ — corrigido (verificado 2026-08-02).** A ressalva
+  antiga dizia que `lib/data/{sales,vendedor,produtividade}/repository.ts`
+  embrulhavam a chamada Databricks em `try/catch → mock completo`. **Não é mais
+  verdade:** os três `get*View` chamam o adapter direto (sem `try/catch`); o mock
+  só é servido em modo mock (`DATA_SOURCE=mock`). O único `catch → mock` restante
+  é nas **listas de opções de filtro** (`build*FilterOptions`), que degradam para
+  listas mock em erro — nunca a view de dados. Dentro de cada adapter, cada fonte
+  é isolada (falha → card "sem acesso"), então um erro pontual degrada um card,
+  não a tela. ⚠️ Endurecer `canalAnalysis`/`freeData` em `sales/databricks.ts`
+  (ainda sem `try/catch` próprio) na próxima passada.
 
 ## The three Cities views (verified)
 

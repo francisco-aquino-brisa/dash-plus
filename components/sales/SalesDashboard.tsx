@@ -1,22 +1,32 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ShoppingCart } from "lucide-react";
-import { SalesFiltersBar } from "@/components/sales/SalesFiltersBar";
-import { SalesIndicatorCard } from "@/components/sales/SalesIndicatorCard";
-import { PduBlock } from "@/components/sales/PduBlock";
+import { RefreshCw } from "lucide-react";
+import { SalesFilterBar } from "@/components/sales/SalesFilterBar";
+import { SalesKpiBlock } from "@/components/sales/SalesKpiBlock";
+import { SalesPduBlock } from "@/components/sales/SalesPduBlock";
 import { AnaliseCanais } from "@/components/sales/AnaliseCanais";
 import { SelecaoLivre } from "@/components/sales/SelecaoLivre";
-import { IndicatorPicker } from "@/components/dashboard/IndicatorPicker";
-import { HistoryChart } from "@/components/dashboard/HistoryChart";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { MockDataBadge } from "@/components/ui/mock-data-badge";
+import { SalesDrillModal } from "@/components/sales/SalesDrillModal";
 import { usePreference } from "@/lib/preferences/use-preference";
+import { useSetNavPending } from "@/lib/ui/nav-pending";
 import { DEFAULT_SELECTION, SELECTION_PREF_KEY, type SalesIndicatorVM } from "@/lib/data/sales/indicators";
-import { formatChartLabel, formatMonth, formatNumber, formatPct } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { formatMonth } from "@/lib/format";
 import type { SalesFilters, SalesFilterOptions, SalesView } from "@/lib/data/sales/types";
+
+const DEFAULT_FILTERS: SalesFilters = {
+  period: "mes_atual",
+  from: undefined,
+  to: undefined,
+  servico: "",
+  gerente: "",
+  canal: "",
+  nicho: "",
+  uf: "",
+  cidade: "",
+  tipo: "",
+};
 
 function toQuery(f: SalesFilters): string {
   const p = new URLSearchParams();
@@ -27,7 +37,7 @@ function toQuery(f: SalesFilters): string {
 
   if (f.to) p.set("ate", f.to);
 
-  for (const [k, key] of [
+  for (const [key, param] of [
     ["servico", "servico"],
     ["gerente", "gerente"],
     ["canal", "canal"],
@@ -36,70 +46,39 @@ function toQuery(f: SalesFilters): string {
     ["cidade", "cidade"],
     ["tipo", "tipo"],
   ] as const) {
-    const v = f[k];
+    const v = f[key];
 
-    if (v) p.set(key, v);
+    if (v) p.set(param, v);
   }
 
   return p.toString();
 }
 
-function Section({
-  title,
-  subtitle,
-  children,
-  right,
-}: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-  right?: React.ReactNode;
-}) {
-  return (
-    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
-      <header className="mb-4 flex items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
-        </div>
-        {right}
-      </header>
-      {children}
-    </section>
-  );
-}
-
-function MiniStat({ label, value, good }: { label: string; value: string; good?: boolean | null }) {
-  return (
-    <div className="h-full rounded-lg border border-border bg-secondary/30 p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div
-        className={cn(
-          "mt-1 text-xl font-bold tracking-tight",
-          good === true && "text-success",
-          good === false && "text-destructive",
-        )}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-export function SalesDashboard({
-  view,
-  options,
-  usesMock,
-}: {
-  view: SalesView;
-  options: SalesFilterOptions;
-  usesMock: boolean;
-}) {
+export function SalesDashboard({ view, options }: { view: SalesView; options: SalesFilterOptions }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const { filters, competencia, blocksBL, blocks5G, pdu, canais, freeIndicators, freeSeries } = view;
+  const { competencia, blocksBL, blocks5G, canais, freeIndicators, freeSeries } = view;
 
   const [selected, setSelected] = useState<SalesIndicatorVM | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Optimistic filters: the chips reflect the new value instantly, while the
+  // server request (which recomputes the data) runs behind the transition.
+  const [uiFilters, setUiFilters] = useState<SalesFilters>(view.filters);
+
+  useEffect(() => {
+    setUiFilters(view.filters);
+  }, [view.filters]);
+
+  // Report filter-navigation pending state to the shell (brand loading shimmer).
+  const setNavPending = useSetNavPending();
+
+  useEffect(() => {
+    setNavPending(isPending);
+
+    return () => setNavPending(false);
+  }, [isPending, setNavPending]);
+
   const [blSelection, setBlSelection] = usePreference<string[]>(
     SELECTION_PREF_KEY["banda-larga"],
     DEFAULT_SELECTION["banda-larga"],
@@ -111,159 +90,131 @@ export function SalesDashboard({
 
   const navigate = useCallback(
     (f: SalesFilters) => {
+      setUiFilters(f); // reflect the chip immediately, request afterwards
       const qs = toQuery(f);
 
       startTransition(() => router.push(qs ? `/vendas?${qs}` : "/vendas", { scroll: false }));
     },
     [router],
   );
-  const reset = useCallback(() => startTransition(() => router.push("/vendas", { scroll: false })), [router]);
+  const resetFilters = useCallback(() => {
+    setUiFilters(DEFAULT_FILTERS);
+    startTransition(() => router.push("/vendas", { scroll: false }));
+  }, [router]);
 
-  const renderBlock = (
-    title: string,
-    subtitle: string,
-    vms: SalesIndicatorVM[],
-    selection: string[],
-    setSelection: (next: string[]) => void,
-  ) => {
-    const pickerOptions = vms.map((v) => ({ id: v.id, label: v.label, available: v.available }));
-    const cards = vms.filter((v) => selection.includes(v.id));
+  const manualRefresh = useCallback(() => {
+    setRefreshing(true);
+    router.refresh();
+    setTimeout(() => setRefreshing(false), 800);
+  }, [router]);
 
-    return (
-      <Section
-        title={title}
-        subtitle={subtitle}
-        right={<IndicatorPicker options={pickerOptions} selected={selection} onChange={setSelection} />}
-      >
-        {cards.length === 0 ? (
-          <p className="py-4 text-sm text-muted-foreground">
-            Nenhum indicador selecionado. Use “Indicadores” para escolher.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {cards.map((vm) => (
-              <SalesIndicatorCard
-                key={vm.id}
-                vm={vm}
-                onClick={vm.available ? () => setSelected(vm) : undefined}
-              />
-            ))}
-          </div>
-        )}
-      </Section>
-    );
-  };
+  const comp = formatMonth(competencia);
 
   return (
-    <div className="min-h-screen pb-12">
-      <header className="border-b border-border bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <span className="bg-gradient-primary shadow-glow grid h-10 w-10 place-items-center rounded-xl text-primary-foreground">
-              <ShoppingCart className="h-5 w-5" />
-            </span>
-            <div>
-              <h1 className="text-xl leading-tight font-bold">
-                Vendas · <span className="text-gradient">Canais</span>
-              </h1>
-              <p className="text-xs text-muted-foreground">Acompanhamento de canais · Brisanet</p>
-            </div>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        padding: "16px 16px 40px",
+        opacity: isPending ? 0.6 : 1,
+        pointerEvents: isPending ? "none" : "auto",
+        transition: "opacity .18s",
+        animation: "bdIn .3s ease both",
+      }}
+    >
+      {/* Header */}
+      <header
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+          padding: "2px 2px 0",
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: ".11em",
+              textTransform: "uppercase",
+              color: "var(--s-brand)",
+            }}
+          >
+            Brisanet · Acompanhamento comercial
           </div>
-          {usesMock && <MockDataBadge />}
+          <h1
+            style={{
+              fontSize: 30,
+              fontWeight: 800,
+              letterSpacing: "-.025em",
+              lineHeight: 1.05,
+              marginTop: 4,
+            }}
+          >
+            Vendas · Canais
+          </h1>
+          <p style={{ fontSize: 13, color: "var(--s-t3)", marginTop: 4 }}>
+            Funil de vendas por canal — Banda Larga e 5G, com produtividade por dia útil.
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={manualRefresh}
+          className="bd-ghost"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+            height: 34,
+            padding: "0 14px",
+            border: "1px solid var(--s-border)",
+            borderRadius: 999,
+            background: "var(--s-card)",
+            color: "var(--s-t2)",
+            font: "inherit",
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            transition: ".16s",
+          }}
+        >
+          <RefreshCw size={14} style={{ animation: refreshing ? "bdSpin 1s linear infinite" : undefined }} />
+          Atualizar
+        </button>
       </header>
 
-      <main
-        className={cn(
-          "mx-auto max-w-[1600px] space-y-6 px-6 py-6 transition-opacity",
-          isPending && "pointer-events-none opacity-60",
-        )}
-      >
-        <div className="sticky top-10 z-30">
-          <SalesFiltersBar filters={filters} options={options} onChange={navigate} onReset={reset} />
-        </div>
+      <SalesFilterBar filters={uiFilters} options={options} onChange={navigate} onReset={resetFilters} />
 
-        {renderBlock(
-          "Banda Larga (INTERNET + FWA)",
-          `Meta x Realizado · ${formatMonth(competencia)}`,
-          blocksBL,
-          blSelection,
-          setBlSelection,
-        )}
-        {renderBlock(
-          "5G",
-          `Ativações, portabilidade, ticket e churn · ${formatMonth(competencia)}`,
-          blocks5G,
-          g5Selection,
-          setG5Selection,
-        )}
+      {/* KPI blocks */}
+      <SalesKpiBlock
+        title="Banda Larga (INTERNET + FWA)"
+        subtitle={`Meta × Realizado · ${comp} · toque num indicador para o histórico`}
+        vms={blocksBL}
+        selection={blSelection}
+        onSelectionChange={setBlSelection}
+        onCardClick={setSelected}
+      />
+      <SalesKpiBlock
+        title="5G"
+        subtitle={`Ativações, portabilidade, ticket e churn · ${comp} · toque para o histórico`}
+        vms={blocks5G}
+        selection={g5Selection}
+        onSelectionChange={setG5Selection}
+        onCardClick={setSelected}
+      />
 
-        <PduBlock pdu={pdu} />
-        <AnaliseCanais canais={canais} />
-        <SelecaoLivre indicators={freeIndicators} series={freeSeries} />
+      {/* PDU (travada — fórmula/meta pendentes) */}
+      <SalesPduBlock />
 
-        <footer className="pt-6 text-center text-xs text-muted-foreground">
-          Brisanet · Vendas · Acompanhamento de Canais · v1
-        </footer>
-      </main>
+      {/* Blocos do legado mantidos (não estão no new_ui §2) */}
+      <AnaliseCanais canais={canais} />
+      <SelecaoLivre indicators={freeIndicators} series={freeSeries} />
 
-      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-        <DialogContent className="max-w-3xl">
-          {selected &&
-            (() => {
-              const vm = selected;
-              const fmtU = (v: number) =>
-                vm.unit === "currency"
-                  ? `R$ ${formatNumber(+v.toFixed(vm.decimals))}`
-                  : vm.unit === "percent"
-                    ? formatPct(v, vm.decimals)
-                    : formatNumber(v);
-              const compact = (v: number) =>
-                vm.unit === "currency"
-                  ? `R$ ${formatChartLabel(v)}`
-                  : vm.unit === "percent"
-                    ? formatPct(v, 0)
-                    : formatChartLabel(v);
-              const atinGood =
-                vm.attainment === null
-                  ? undefined
-                  : vm.polarity === "down"
-                    ? vm.attainment <= 100
-                    : vm.attainment >= 100;
-
-              return (
-                <>
-                  <DialogHeader>
-                    <DialogTitle>{vm.label} · Histórico</DialogTitle>
-                    <DialogDescription>
-                      Evolução mensal (Real{vm.meta !== null ? " × Meta" : ""}) no escopo filtrado.
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div
-                    className={cn(
-                      "grid grid-cols-2 gap-3",
-                      vm.meta !== null ? "sm:grid-cols-3" : "sm:grid-cols-1",
-                    )}
-                  >
-                    <MiniStat label={`Atual · ${formatMonth(competencia)}`} value={fmtU(vm.value)} />
-                    {vm.meta !== null && <MiniStat label="Meta" value={fmtU(vm.meta)} />}
-                    {vm.attainment !== null && (
-                      <MiniStat label="Atingimento" value={formatPct(vm.attainment, 0)} good={atinGood} />
-                    )}
-                  </div>
-
-                  <HistoryChart
-                    data={vm.series}
-                    unit={vm.unit}
-                    valueFormatter={fmtU}
-                    compactFormatter={compact}
-                  />
-                </>
-              );
-            })()}
-        </DialogContent>
-      </Dialog>
+      <SalesDrillModal indicator={selected} competencia={competencia} onClose={() => setSelected(null)} />
     </div>
   );
 }

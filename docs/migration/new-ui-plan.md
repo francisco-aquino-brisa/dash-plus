@@ -201,9 +201,13 @@ do `DrillModal` (Raio-X shell + stat cards + TimeSeriesChart) — o `SalesIndica
    = INTERNET+FWA; RENOVACAO não está no protótipo. (d) _Meta:_ **não existe meta na view**;
    as metas do protótipo (FTTH 2,10 · FWA 0,90 · 5G 2,00 · Banda 3,00) são placeholders,
    fonte desconhecida. (e) _Forma:_ new_ui = barras horizontais por tecnologia vs meta
-   (competência única); legado = line chart 12m por tech (sem meta, sem Banda). → **Perguntar.**
+   (competência única); legado = line chart 12m por tech (sem meta, sem Banda).
+   → **RESOLVIDO (2026-08-02):** PDU fica **travada** (bloco "sem acesso", motivo
+   "fórmula/denominador e meta em confirmação com o time de dados"). **Não** ligar
+   `vw_producao_hc_zero_venda` agora. Quando liberar: realizado-only, **line chart 12m
+   por tech** (forma legada), denominador candidato `Σtotal_vendas/Σdias_trabalhado`.
 2. **Seções extras do legado (Análise Canal + Seleção Livre).** O new_ui §2 não as mostra;
-   o legado sim. Insight 2 → manter restilizadas. → **Confirmar.**
+   o legado sim. Insight 2 → **RESOLVIDO: manter as duas, restilizadas.**
 3. **"Silent mock fallback" parece obsoleto para Vendas.** `sales/repository.ts` diz
    explicitamente que **nunca** cai pra mock (só `DATA_SOURCE=mock` serve mock); só
    `buildSalesFilterOptions` tem `try/catch → listas mock`. Cada fonte dentro de
@@ -219,6 +223,33 @@ do `DrillModal` (Raio-X shell + stat cards + TimeSeriesChart) — o `SalesIndica
 genérico (id/label/value/meta/attainment/delta/series/available/unit/polarity/description),
 reusável por Cidades e Vendas; PDU pode ganhar um componente `HBarMeta` (barras horizontais
 realizado vs meta) se a forma new_ui for aprovada.
+
+**Entregue (2026-08-02, aguardando verificação no navegador).** Cliente reconstruído em
+`components/sales/**` com as primitivas da Fase 1, na **ordem do legado** (Header → filtros →
+Banda Larga → 5G → PDU → Análise por Canal → Seleção Livre):
+
+- **`components/ui/kpi-block.tsx`** — `KpiBlock`/`IndicatorSelect` **generalizados** (VM
+  genérico `KpiBlockItem`), core compartilhado. `dashboard/KpiBlock.tsx` e o novo
+  `sales/SalesKpiBlock.tsx` viraram **wrappers finos** que mapeiam cada VM (a assinatura da
+  tela 1 não mudou → `Dashboard.tsx` intacto).
+- **`SalesFilterBar.tsx`** — chips de período (+ "Personalizado" via popover de `Calendar`
+  range, emite from/to ISO) + `ChipFilter` (Serviço·Gerente·Canal·Nicho·UF·Cidade·Tipo) com
+  cascata UF→Cidade + `FilterClearButton`. Filtro otimista + `nav-pending`.
+- **Blocos BL + 5G** via `SalesKpiBlock` (footer Meta/Média 12m/Ating.; `description` no (i);
+  drill no clique). **`SalesDrillModal.tsx`** = padrão Raio-X (stats + `TimeSeriesChart`), sem
+  "relacionados" (o `SalesIndicatorVM` não os tem; Fase 3 unifica).
+- **`SalesPduBlock.tsx`** = bloco travado "sem acesso" (decisão). **`AnaliseCanais.tsx`** =
+  `DataTable` + `maxHeight` + `Segmented`. **`SelecaoLivre.tsx`** = `TimeSeriesChart` +
+  `ChipFilter` (só indicadores com fonte).
+- **Camada de dados (só hardening, sem mexer no cálculo):** `canalAnalysis`/`freeData` ganharam
+  `try/catch` (isolamento como o resto do adapter); **removida a query morta da PDU** (`pduSeries`
+  - const `VW`) que batia na view inexistente `vw_hc_zerado_vendedor` a cada render — `pdu`/`meses`
+    agora saem `[]` no path Databricks. Data-map atualizado: "Silent mock fallback" era obsoleto
+    (os 3 repos não caem pra mock na view; só as listas de filtro degradam).
+- **Órfãos removidos:** `SalesFiltersBar`, `SalesIndicatorCard`, `dashboard/IndicatorPicker`,
+  `dashboard/HistoryChart`. `npm run check` (prettier + lint + tsc) **verde**.
+- **Pendente:** verificação no navegador (claro + escuro) após login; confirmar fórmula/meta da
+  PDU com o time de dados para destravar o bloco.
 
 ### 3. Produtividade Comercial — `/produtividade`
 
