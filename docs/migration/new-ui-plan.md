@@ -258,13 +258,93 @@ Banda Larga → 5G → PDU → Análise por Canal → Seleção Livre):
 - Indicator mapping: _TBD at migration._
 - Divergences to resolve: _TBD._
 
-### 4. Dashboard Vendedor — `/vendedor`
+### 4. Dashboard Vendedor — `/vendedor` — 🚧 _em migração (Fase 2)_
 
-- new_ui: `SCREENS.md` §4 (identificação, resultado por serviço, dias zerados,
-  pendências).
-- Current source: `lib/data/vendedor/**`.
-- Indicator mapping: _TBD at migration._
-- Divergences to resolve: _TBD._
+- new_ui: `SCREENS.md` §4 (segmented Resultados/Pendências; card de identificação;
+  resultado por serviço; dias zerados; pendências).
+- Current source: `lib/data/vendedor/**` — **reutilizada, sem tocar no cálculo.** A
+  página server (`app/(app)/vendedor/page.tsx`) já entrega o `VendedorView`
+  (`getVendedorView`) por `(matricula, competência)`; só o componente cliente
+  (`components/vendedor/**`) é reconstruído com as primitivas da Fase 1/2. Fontes de
+  verdade: `metas_vendedores_canais` (catálogo+metas por vendedor) ⋈ realizado das
+  fontes que o catálogo nomeia (`waves_consolidado_orcamento` / `consolidado_5g_pedido`
+  / `portabilidade` VE32 / `churn_*` / fidelizações) por `hash_user`/`matricula`;
+  `desempenho_hc` (perfil, funil, dias zerados, ranking, mix). Validado no warehouse
+  (Jul/26 read-only; sample: matrícula 10083 · PEREIRO/CE · ATIVO).
+
+**Mapeamento por seção (new_ui §4 → VM `VendedorView`):**
+
+| new_ui §4                            | Campo do VM                           | Fonte / fórmula (verificada, read-only)                                                                                                                                                                                        |
+| ------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Segmented Resultados/Pendências      | `tab` (UI)                            | client-side; troca Resultados ↔ aba Pendências                                                                                                                                                                                 |
+| Card de identificação                | `profile` (`VendedorProfile`)         | `desempenho_hc` (nome, cidade, canal, coord, gerência, supervisão, nível/cargo, situação, tipo_cidade, tempo_empresa) por matrícula                                                                                            |
+| Resultado por Serviço · cards        | `servicos` (`ServicoCard[]`)          | `realizado` = funil `instalado_*`/`5g_ativacao` (`desempenho_hc`); indicadores meta×realizado do catálogo (`metas_vendedores_canais`)                                                                                          |
+| Resultado por Serviço · NDU/PDU      | `servicos[].ndu`/`.pdu`               | **⚠️ TRAVADO** — fonte oficial `vw_hc_zerado_vendedor` **não existe** (col `total_realizado` idem). Substituta `vw_producao_hc_zero_venda` existe mas denominador/meta a confirmar → hoje fabrica **0/0,00** (bug a corrigir). |
+| Dias zerados                         | `diasZerados` (`DiasZeradosView`)     | `desempenho_hc` por dia (vendas por serviço = 0 no dia útil não-feriado → zerado)                                                                                                                                              |
+| Pendências (aba)                     | `pendencias` (`PendenciaOrcamento[]`) | `waves_consolidado_orcamento` — orçamentos CRIADO/EFETIVADO sem INSTALADO na competência, por `hash_user` (`pendenciasAvailable`)                                                                                              |
+| _(legado, fora do §4)_ Rankings      | `ranking` (`RankingView`)             | `desempenho_hc` — rank por mix (BL+5G) em cidade/coord/gerência/geral (janela)                                                                                                                                                 |
+| _(legado, fora do §4)_ Mix de Vendas | `mix` (`MixOferta[]`)                 | `waves_consolidado_orcamento` — ofertas (`plano`) por status, contagem distinta `orcamento_id`                                                                                                                                 |
+
+**Primitivas a reutilizar (Fase 1/2):** `KpiCard`/`LockedKpiCard`? (cards de serviço
+não são KPI-cards padrão — decidir), `Segmented` (Resultados/Pendências), `ChipFilter` +`FilterClearButton` (barra de filtros), `CompetenciaPicker` (Competência, já existe),
+`DataTable`? (Mix/Pendências — avaliar), `statusColor`/`isTrendGood`, `nav-pending`,
+filtro otimista. Busca de vendedor: `VendedorSearch` (já existe, reestilizar com tokens).
+
+**Divergências (protótipo × warehouse/dados) — RESOLVIDAS (2026-08-02):**
+
+1. **NDU/PDU por serviço travados (bloqueante).** A view oficial
+   `vw_hc_zerado_vendedor` (+ col `total_realizado`) **não existe** em nenhum catálogo
+   (confirmado 2026-08). O `databricks.ts` do vendedor ainda a consultava a **cada
+   render** (`fetchPdu`, try/catch → `{}`), fazendo os cards mostrarem **NDU 0 /
+   PDU 0,00 fabricados** — viola "Sem acesso ≠ zero". → **RESOLVIDO:** `pdu`/`ndu`
+   passam a `number | null`; **removida a query morta** (`fetchPdu` + const `VW`) como
+   Vendas fez com `pduSeries`; os cards mostram **"—"** com aviso (title) "fórmula/meta
+   em confirmação". Nenhum número real muda (`realizado`/indicadores vêm de outras fontes).
+   Mock espelha (`pdu`/`ndu` = null).
+2. **Filtro "Serviço".** new_ui §4 lista Vendedor · Competência · Serviço; o legado usa
+   um `VisibilityFilter` (liga/desliga serviços + seções). → **RESOLVIDO (usuário):
+   manter igual ao legado** — sem filtro Serviço novo; a barra fica Vendedor (busca) ·
+   Competência · Exibir (`VisibilityFilter` restilizado). Filtra os 4 cards client-side.
+3. **Blocos legados fora do §4 (Rankings + Mix de Vendas).** O new_ui §4 não os mostra;
+   o legado sim. Golden rule "manter blocos do legado" → **mantidos os dois, restilizados**,
+   na ordem do legado.
+4. **Raio-X por serviço ≠ Raio-X §5.** O botão "Ver raio-X" do card abre o `RaioXModal`
+   por-serviço (indicadores do serviço + projeção pro-rata), **não** o drill §5 por-indicador
+   (12m + relacionados) — a camada do vendedor **não** entrega série 12m por indicador
+   (histórico/quintil não implementados). → **RESOLVIDO (usuário): manter o Raio-X por
+   serviço, restilizado** no shell dos drills (eyebrow + nome + Realizado/Projeção/Ating.).
+   Projeção pro-rata por **dias úteis do calendário** (NDU travado). Fase 3 unifica.
+5. **Card de identificação.** Header `--bn-gradient-orange`, avatar (iniciais), nome,
+   matrícula, cargo (`nivel`), badges situação (ATIVO) + tipo_cidade (ONLY/HÍBRIDA/FTTH),
+   grade de campos (mantido o conjunto do legado, 8 campos). `TEMPO_EMPRESA` pode vir vazio
+   → exibe "—".
+
+**Entregue (2026-08-02, aguardando verificação no navegador).** Cliente reconstruído em
+`components/vendedor/**` com inline `--s-*`/`--bn-*` e primitivas Fase 1/2, na ordem do
+legado (Header → filtros → Segmented Resultados/Pendências → Identificação → Resultado por
+Serviço → Dias Zerados → Rankings → Mix; aba Pendências à parte):
+
+- **`VendedorFilterBar.tsx`** (novo) — sticky `--s-card`, reúne `VendedorSearch` +
+  `CompetenciaPicker` (pill) + `VisibilityFilter`, todos restilizados em tokens. Filtro
+  otimista (`uiFilters`) + `nav-pending`.
+- **`VendedorHeader.tsx`** — card de identificação (`--bn-gradient-orange`, avatar de
+  iniciais, badges, grade auto-fit com divisores hairline).
+- **`ServicoCard.tsx`** — ícone+cor por serviço (`vendedor-format.ts`), realizado, **NDU/PDU
+  "—" travados** (aviso), indicadores meta×real (Meta/Real/%/Falta) ou estado vazio, "Ver raio-X".
+- **`DiasZeradosBlock.tsx`** — faixa `--s-warn-bg` + modal de calendário (restilizado).
+- **`RankingsBlock.tsx`** / **`MixVendasBlock.tsx`** — blocos do legado restilizados.
+- **`RaioXModal.tsx`** — Raio-X por serviço no shell dos drills (sem chart 12m; projeção
+  pro-rata por dias úteis). **`vendedor-format.ts`** (novo) = ícone/cor + formato por unidade.
+- **Camada de dados (só hardening):** removida a query morta da PDU (`fetchPdu`/`VW`) que batia
+  em `vw_hc_zerado_vendedor` a cada render; `ServicoCard.pdu/ndu` agora `number | null`; mock
+  espelha. Cálculo real intocado.
+- **Órfãos:** removido `SERVICOS` (não usado); `MockDataBadge` mantido (usado por Produtividade).
+  `npm run check` (prettier + lint + tsc) **verde**.
+- **Extensão de primitiva:** nenhuma alteração destrutiva nas primitivas compartilhadas
+  (`Segmented`/`kpi-*`/`chip-filter`/etc. intactas). `CompetenciaPicker`/`VendedorSearch`/
+  `VisibilityFilter` são locais da tela (restilizados).
+- **Pendente:** verificação no navegador (claro + escuro) após login; destravar PDU quando o
+  time de dados confirmar denominador/meta.
 
 ### 5. Raio-X (drill-down)
 

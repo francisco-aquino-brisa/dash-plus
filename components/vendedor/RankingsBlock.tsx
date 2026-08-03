@@ -1,57 +1,143 @@
 "use client";
 
-import { Building, Globe, Lock, MapPin, Trophy, Users2 } from "lucide-react";
+import { Building, Globe, Lock, MapPin, Trophy, Users2, type LucideIcon } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import type { RankingEscopo, RankingView } from "@/lib/data/vendedor/types";
 
-const ICONS: Record<RankingEscopo["escopo"], React.ElementType> = {
+const ICONS: Record<RankingEscopo["escopo"], LucideIcon> = {
   cidade: MapPin,
   coordenacao: Users2,
   gerencia: Building,
   geral: Globe,
 };
 
+/**
+ * Rankings (legacy block, kept per the migration rule "manter blocos do legado"):
+ * the vendor's position by mix (BL + 5G) within cidade / coordenação / gerência /
+ * geral. Restyled with `--s-*` tokens; degrades to a dashed note when unavailable.
+ */
 export function RankingsBlock({ ranking }: { ranking: RankingView }) {
   return (
-    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
-      <header className="mb-4 flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/15 text-primary">
-          <Trophy className="h-4 w-4" />
+    <section
+      style={{
+        border: "1px solid var(--s-border)",
+        borderRadius: "var(--r-panel)",
+        background: "var(--s-card)",
+        padding: 15,
+        boxShadow: "var(--s-sh)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <header style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span
+          style={{
+            display: "grid",
+            placeItems: "center",
+            width: 30,
+            height: 30,
+            borderRadius: 9,
+            background: "var(--s-brand-weak)",
+            color: "var(--s-brand)",
+          }}
+        >
+          <Trophy size={16} />
         </span>
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Rankings</h2>
-          <p className="text-sm text-muted-foreground">{ranking.metrica || "Posição do vendedor"}</p>
+          <h2
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontSize: 17,
+              letterSpacing: "-.02em",
+            }}
+          >
+            Rankings
+          </h2>
+          <div style={{ fontSize: 11.5, color: "var(--s-t3)", marginTop: 2 }}>
+            {ranking.metrica || "Posição do vendedor"}
+          </div>
         </div>
       </header>
 
       {!ranking.available || ranking.escopos.length === 0 ? (
-        <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-secondary/20 px-3 py-4 text-sm text-muted-foreground">
-          <Lock className="h-4 w-4" /> Ranking indisponível para este vendedor no período.
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            border: "1px dashed var(--s-border-2)",
+            borderRadius: 12,
+            padding: "14px 12px",
+            fontSize: 12.5,
+            color: "var(--s-t3)",
+          }}
+        >
+          <Lock size={15} /> Ranking indisponível para este vendedor no período.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div
+          style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}
+        >
           {ranking.escopos.map((e) => {
             const Icon = ICONS[e.escopo];
 
             return (
               <div
                 key={e.escopo}
-                className="flex items-center justify-between rounded-xl border border-border bg-secondary/30 p-3"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  border: "1px solid var(--s-border)",
+                  borderRadius: 12,
+                  background: "var(--s-sunken)",
+                  padding: "11px 12px",
+                }}
               >
-                <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-medium tracking-wider uppercase">{e.label}</div>
-                    <div className="truncate text-[11px] text-muted-foreground/80" title={e.contexto}>
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, color: "var(--s-t2)" }}
+                >
+                  <Icon size={16} style={{ flex: "none" }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        letterSpacing: ".05em",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {e.label}
+                    </div>
+                    <div
+                      title={e.contexto}
+                      style={{
+                        fontSize: 11,
+                        color: "var(--s-t3)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {e.contexto}
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-foreground">
+                <div style={{ textAlign: "right", flex: "none" }}>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: 19,
+                      fontWeight: 800,
+                      color: "var(--s-t1)",
+                    }}
+                  >
                     {e.posicao != null ? `${e.posicao}º` : "—"}
                   </div>
-                  <div className="text-[10px] text-muted-foreground">de {formatNumber(e.total)}</div>
+                  <div style={{ fontSize: 10, color: "var(--s-t3)" }}>de {formatNumber(e.total)}</div>
                 </div>
               </div>
             );

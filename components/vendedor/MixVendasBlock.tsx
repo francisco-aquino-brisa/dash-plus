@@ -1,25 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Radio, Smartphone, Wifi } from "lucide-react";
+import { Globe, Radio, Wifi, Zap, type LucideIcon } from "lucide-react";
 import { formatNumber } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import type { MixOferta, StatusVenda } from "@/lib/data/vendedor/types";
 
-const SERVICO_ICONS: Record<MixOferta["servico"], React.ElementType> = {
+const SERVICO_ICONS: Record<MixOferta["servico"], LucideIcon> = {
   FTTH: Wifi,
   FWA: Radio,
-  "5G": Smartphone,
+  "5G": Zap,
 };
 
 /** Service filter buttons — "MIX" = todos; "Banda" = FTTH + FWA. */
 const SERVICO_TABS = ["MIX", "FTTH", "FWA", "5G", "Banda"] as const;
 const STATUS_TABS: StatusVenda[] = ["Criado", "Efetivado", "Instalado"];
 
-const STATUS_COLOR: Record<StatusVenda, string> = {
-  Criado: "bg-secondary text-secondary-foreground",
-  Efetivado: "bg-accent/20 text-accent-foreground",
-  Instalado: "bg-success/15 text-success",
+const STATUS_COLOR: Record<StatusVenda, { bg: string; fg: string }> = {
+  Criado: { bg: "var(--s-sunken)", fg: "var(--s-t2)" },
+  Efetivado: { bg: "var(--s-blue-bg)", fg: "var(--s-blue)" },
+  Instalado: { bg: "var(--s-ok-bg)", fg: "var(--s-ok)" },
 };
 
 function toggled<T>(set: Set<T>, v: T): Set<T> {
@@ -31,8 +30,12 @@ function toggled<T>(set: Set<T>, v: T): Set<T> {
   return next;
 }
 
+/**
+ * Mix de Vendas (legacy block, kept per the migration rule): the vendor's real
+ * offers (`plano`) with per-status counts, filterable by service and status.
+ * Restyled with `--s-*` tokens; filtering logic unchanged.
+ */
 export function MixVendasBlock({ mix }: { mix: MixOferta[] }) {
-  // Empty set = "todos". Both filters are multi-select.
   const [servicos, setServicos] = useState<Set<string>>(new Set());
   const [statuses, setStatuses] = useState<Set<StatusVenda>>(new Set());
 
@@ -45,18 +48,35 @@ export function MixVendasBlock({ mix }: { mix: MixOferta[] }) {
   const filtered = mix.filter((m) => matchServico(m) && matchStatus(m));
 
   return (
-    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
-      <header className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Mix de Vendas</h2>
-          <p className="text-sm text-muted-foreground">
-            Ofertas vendidas no período · {filtered.length} oferta(s)
-          </p>
+    <section
+      style={{
+        border: "1px solid var(--s-border)",
+        borderRadius: "var(--r-panel)",
+        background: "var(--s-card)",
+        padding: 15,
+        boxShadow: "var(--s-sh)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <header>
+        <h2
+          style={{
+            fontFamily: "var(--font-display)",
+            fontWeight: 800,
+            fontSize: 17,
+            letterSpacing: "-.02em",
+          }}
+        >
+          Mix de Vendas
+        </h2>
+        <div style={{ fontSize: 11.5, color: "var(--s-t3)", marginTop: 2 }}>
+          Ofertas vendidas no período · {filtered.length} oferta(s)
         </div>
       </header>
 
-      {/* Serviço (multi-select; MIX limpa a seleção) */}
-      <div className="mb-3 flex flex-wrap gap-1.5">
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         {SERVICO_TABS.map((s) => (
           <Chip
             key={s}
@@ -67,8 +87,7 @@ export function MixVendasBlock({ mix }: { mix: MixOferta[] }) {
           </Chip>
         ))}
       </div>
-      {/* Status (multi-select; nenhum = todos) */}
-      <div className="mb-4 flex flex-wrap gap-1.5">
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         {STATUS_TABS.map((s) => (
           <Chip key={s} active={statuses.has(s)} onClick={() => setStatuses(toggled(statuses, s))}>
             {s}
@@ -77,45 +96,97 @@ export function MixVendasBlock({ mix }: { mix: MixOferta[] }) {
       </div>
 
       {filtered.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border bg-secondary/20 px-3 py-6 text-center text-sm text-muted-foreground">
+        <p
+          style={{
+            border: "1px dashed var(--s-border-2)",
+            borderRadius: 12,
+            background: "var(--s-sunken)",
+            padding: "24px 12px",
+            textAlign: "center",
+            fontSize: 12.5,
+            color: "var(--s-t3)",
+          }}
+        >
           Nenhuma oferta para os filtros atuais.
         </p>
       ) : (
-        <div className="space-y-2">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {filtered.map((m, i) => {
             const Icon = SERVICO_ICONS[m.servico] ?? Globe;
+            const status = STATUS_COLOR[m.status];
 
             return (
               <div
                 key={`${m.titulo}-${m.servico}-${m.status}-${i}`}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary/30 p-3"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  border: "1px solid var(--s-border)",
+                  borderRadius: 12,
+                  background: "var(--s-sunken)",
+                  padding: 11,
+                }}
               >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-card text-muted-foreground">
-                    <Icon className="h-4 w-4" />
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <span
+                    style={{
+                      flex: "none",
+                      display: "grid",
+                      placeItems: "center",
+                      width: 32,
+                      height: 32,
+                      borderRadius: 9,
+                      background: "var(--s-card)",
+                      color: "var(--s-t3)",
+                    }}
+                  >
+                    <Icon size={16} />
                   </span>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-foreground">{m.titulo}</div>
-                    <div className="mt-0.5 flex items-center gap-1.5">
-                      <span className="rounded bg-card px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        {m.servico}
-                      </span>
-                      <span
-                        className={cn(
-                          "rounded px-1.5 py-0.5 text-[10px] font-medium",
-                          STATUS_COLOR[m.status],
-                        )}
-                      >
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        color: "var(--s-t1)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {m.titulo}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                      <Tag>{m.servico}</Tag>
+                      <Tag bg={status.bg} fg={status.fg}>
                         {m.status}
-                      </span>
+                      </Tag>
                     </div>
                   </div>
                 </div>
-                <div className="shrink-0 text-right">
-                  <div className="text-lg leading-none font-bold text-foreground">
+                <div style={{ flex: "none", textAlign: "right" }}>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: 18,
+                      fontWeight: 800,
+                      color: "var(--s-t1)",
+                      lineHeight: 1,
+                    }}
+                  >
                     {formatNumber(m.vendas)}
                   </div>
-                  <div className="mt-1 text-[9px] font-medium tracking-wider text-muted-foreground uppercase">
+                  <div
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: ".09em",
+                      textTransform: "uppercase",
+                      color: "var(--s-t3)",
+                      marginTop: 3,
+                    }}
+                  >
                     Vendas
                   </div>
                 </div>
@@ -139,15 +210,48 @@ function Chip({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={cn(
-        "rounded-full border px-3 py-1 text-[10px] font-medium tracking-wider uppercase transition-colors",
-        active
-          ? "border-primary/40 bg-primary/15 text-primary"
-          : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground",
-      )}
+      style={{
+        padding: "5px 11px",
+        border: `1px solid ${active ? "var(--s-brand)" : "var(--s-border)"}`,
+        borderRadius: 999,
+        background: active ? "var(--s-brand-weak)" : "var(--s-sunken)",
+        color: active ? "var(--s-brand)" : "var(--s-t2)",
+        font: "inherit",
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: ".04em",
+        textTransform: "uppercase",
+        cursor: "pointer",
+      }}
     >
       {children}
     </button>
+  );
+}
+
+function Tag({
+  children,
+  bg = "var(--s-card)",
+  fg = "var(--s-t3)",
+}: {
+  children: React.ReactNode;
+  bg?: string;
+  fg?: string;
+}) {
+  return (
+    <span
+      style={{
+        borderRadius: 5,
+        background: bg,
+        color: fg,
+        padding: "1px 6px",
+        fontSize: 10,
+        fontWeight: 700,
+      }}
+    >
+      {children}
+    </span>
   );
 }

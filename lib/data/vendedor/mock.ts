@@ -124,19 +124,18 @@ function mockServiceCards(
     efetivado: ftth.efetivado + fwa.efetivado,
     instalado: ftth.instalado + fwa.instalado,
   };
-  const ndu = 18 + Math.floor(rng() * 4);
-
+  // PDU/NDU are LOCKED everywhere (real source absent) — mock mirrors that with
+  // `null` so the mock↔databricks swap stays transparent. See types.ts / databricks.ts.
   const mk = (
     key: ServicoCard["key"],
     f: { criado: number; efetivado: number; instalado: number },
-    realizadoForPdu: number,
     indicadores: IndicadorVM[],
   ): ServicoCard => ({
     key,
     label: key,
     realizado: f.instalado,
-    pdu: +(realizadoForPdu / ndu).toFixed(2),
-    ndu,
+    pdu: null,
+    ndu: null,
     criado: f.criado,
     efetivado: f.efetivado,
     instalado: f.instalado,
@@ -151,7 +150,7 @@ function mockServiceCards(
   };
 
   const servicos = [
-    mk("FTTH", ftth, ftth.instalado, [
+    mk("FTTH", ftth, [
       mkInd("VE03", "Vendas Instaladas - FTTH", "qtd", "up", ...p(ftth.instalado)),
       mkInd("VE15", "Vendas instaladas Combo 1 Chip - FTTH", "qtd", "up", ...p(ftth.instalado * 0.5)),
       mkInd("VE49", "Vendas instaladas avulso - FTTH", "qtd", "up", ...p(ftth.instalado * 0.4)),
@@ -160,10 +159,8 @@ function mockServiceCards(
       mkInd("RE02", "Ticket Médio Oferta - FTTH", "R$", "up", 85, 84 + Math.round(rng() * 14)),
       mkInd("CA08", "Churn Safra - FTTH", "%", "down", 0.15, +(0.03 + rng() * 0.1).toFixed(3)),
     ]),
-    mk("FWA", fwa, fwa.instalado, [
-      mkInd("VE03", "Vendas Instaladas - FWA", "qtd", "up", ...p(fwa.instalado)),
-    ]),
-    mk("5G", { criado: 0, efetivado: 0, instalado: ativ5g }, ativ5g, [
+    mk("FWA", fwa, [mkInd("VE03", "Vendas Instaladas - FWA", "qtd", "up", ...p(fwa.instalado))]),
+    mk("5G", { criado: 0, efetivado: 0, instalado: ativ5g }, [
       mkInd("VE04", "Vendas Ativadas - 5G", "qtd", "up", ...p(ativ5g)),
       mkInd("VE51", "Ativação 5G avulso", "qtd", "up", ...p(ativ5g * 0.7)),
       mkInd("RE02", "Ticket Médio Oferta - 5G", "R$", "up", 29, 26 + Math.round(rng() * 10)),
@@ -171,7 +168,7 @@ function mockServiceCards(
       // Portabilidade (VE32): concluídas 5G, de `portabilidade` (≈17% das ativações).
       mkInd("VE32", "Portabilidade", "qtd", "up", ...p(ativ5g * 0.17)),
     ]),
-    mk("Banda", bl, bl.instalado, [
+    mk("Banda", bl, [
       mkInd("VE49", "Vendas instaladas avulso - Banda Larga", "qtd", "up", ...p(bl.instalado)),
       mkInd("RE01", "Ticket Médio Entrada - Banda Larga", "R$", "up", 80, 78 + Math.round(rng() * 14)),
     ]),

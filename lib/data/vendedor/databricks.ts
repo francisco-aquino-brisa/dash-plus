@@ -2,8 +2,9 @@
 // aggregated in SQL (ADR 0002), scoped to a single vendedor by matricula.
 // Sources:
 //   - desempenho_hc         → profile (+ hash_user_jwas), per-tech funnel, renovação, ranking, dias
-//   - vw_hc_zerado_vendedor → official PDU + NDU (dias úteis) per serviço
 //   - waves_consolidado_orcamento → indicadores, mix e Pendências (via indicadores.ts)
+// PDU/NDU per serviço is LOCKED (source absent — see buildServiceCards): the
+// cards render "—", never a fabricated 0.
 // matricula is a validated integer and dates are app-generated ISO → safe to
 // inline (same convention as the produtividade adapter).
 
@@ -26,7 +27,6 @@ import {
 const CAT = process.env.DATABRICKS_SALES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const SCHEMA = process.env.DATABRICKS_SALES_SCHEMA ?? "diego_barros_inteligencia_comercial_e_mercado";
 const DH = `\`${CAT}\`.\`${SCHEMA}\`.\`desempenho_hc\``;
-const VW = `\`${CAT}\`.\`projeto_brisa_performance\`.\`vw_hc_zerado_vendedor\``;
 
 const q = <T = Record<string, unknown>>(sql: string) => getDataClient().query<T>(sql);
 const str = (v: unknown): string => (v == null || v === "" ? "" : String(v));
@@ -124,53 +124,20 @@ async function fetchServiceAgg(mat: number, from: string, to: string): Promise<S
   };
 }
 
-/** PDU + NDU per serviço from the official view (light: single matricula). */
-async function fetchPdu(
-  mat: number,
-  ym: string,
-): Promise<Record<string, { pdu: number; ndu: number; realizado: number }>> {
-  const out: Record<string, { pdu: number; ndu: number; realizado: number }> = {};
-
-  try {
-    const rows = await q(`
-      SELECT servico, MAX(dias_uteis_acumulado) ndu, SUM(total_realizado) realizado
-      FROM ${VW}
-      WHERE matricula = ${mat} AND date_format(data, 'yyyy-MM') = '${ym}'
-      GROUP BY servico
-    `);
-
-    for (const r of rows) {
-      const svc = str(r.servico);
-      const ndu = num(r.ndu);
-      const realizado = num(r.realizado);
-
-      out[svc] = { ndu, realizado, pdu: ndu > 0 ? +(realizado / ndu).toFixed(2) : 0 };
-    }
-  } catch {
-    /* view can time out — cards still render without PDU */
-  }
-
-  return out;
-}
-
-function buildServiceCards(
-  agg: ServiceAgg,
-  pdu: Record<string, { pdu: number; ndu: number }>,
-  indicadores: Record<ServicoKey, IndicadorVM[]>,
-): ServicoCard[] {
-  const nduAny = pdu.FTTH?.ndu || pdu.FWA?.ndu || pdu["5G"]?.ndu || 0;
-  const mk = (
-    key: ServicoKey,
-    criado: number,
-    efetivado: number,
-    instalado: number,
-    pduKey: string,
-  ): ServicoCard => ({
+// PDU/NDU per serviço is **locked**: the official source `vw_hc_zerado_vendedor`
+// (and its `total_realizado` column) does not exist in any accessible catalog,
+// and the verified substitute (`vw_producao_hc_zero_venda`) still awaits the
+// official denominator + meta from the data team. We therefore do NOT query it
+// (the old `fetchPdu` hit the missing view on every render, only to swallow the
+// error and fabricate 0/0,00). The cards render `pdu`/`ndu` as `null` → "—"
+// ("Sem acesso ≠ zero"). See docs/data-map.md "Known breakage".
+function buildServiceCards(agg: ServiceAgg, indicadores: Record<ServicoKey, IndicadorVM[]>): ServicoCard[] {
+  const mk = (key: ServicoKey, criado: number, efetivado: number, instalado: number): ServicoCard => ({
     key,
     label: key,
     realizado: instalado,
-    pdu: pdu[pduKey]?.pdu ?? 0,
-    ndu: pdu[pduKey]?.ndu ?? nduAny,
+    pdu: null,
+    ndu: null,
     criado,
     efetivado,
     instalado,
@@ -178,10 +145,10 @@ function buildServiceCards(
   });
 
   return [
-    mk("FTTH", agg.cFtth, agg.eFtth, agg.iFtth, "FTTH"),
-    mk("FWA", agg.cFwa, agg.eFwa, agg.iFwa, "FWA"),
-    mk("5G", 0, 0, agg.ativ5g, "5G"),
-    mk("Banda", agg.cBl, agg.eBl, agg.iBl, "Banda"),
+    mk("FTTH", agg.cFtth, agg.eFtth, agg.iFtth),
+    mk("FWA", agg.cFwa, agg.eFwa, agg.iFwa),
+    mk("5G", 0, 0, agg.ativ5g),
+    mk("Banda", agg.cBl, agg.eBl, agg.iBl),
   ];
 }
 
@@ -343,9 +310,8 @@ export async function databricksVendedorView(filters: VendedorFilters): Promise<
 
   const { profile, hashUser } = found;
 
-  const [agg, pdu, diasZerados, ranking, vend, pendencias] = await Promise.all([
+  const [agg, diasZerados, ranking, vend, pendencias] = await Promise.all([
     fetchServiceAgg(mat, period.from, period.to),
-    fetchPdu(mat, period.ym),
     fetchDiasZerados(mat, period.from, period.to, period.ym, period.hojeDia),
     fetchRanking(mat, period.from, period.to),
     fetchVendedorIndicadores(mat, period.ym),
@@ -357,7 +323,7 @@ export async function databricksVendedorView(filters: VendedorFilters): Promise<
     filters,
     competenciaLabel: period.label,
     profile,
-    servicos: buildServiceCards(agg, pdu, vend.indicadores),
+    servicos: buildServiceCards(agg, vend.indicadores),
     diasZerados,
     ranking,
     mix: vend.mix,
