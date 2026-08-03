@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -123,15 +123,51 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   const [userMenu, setUserMenu] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [navPending, setNavPending] = useState(false);
+  const navTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const source = useDataSource();
 
   useEffect(() => {
     setRailed(localStorage.getItem(COLLAPSE_KEY) === "1");
   }, []);
 
+  // Clear the loader (and close menus) when the route settles. Screens report
+  // their own request-driven pending (URL filters, router.refresh) via
+  // useReportNavPending — this only covers page changes the shell triggers.
   useEffect(() => {
     setUserMenu(false);
     setMoreOpen(false);
+    setNavPending(false);
+
+    if (navTimer.current) {
+      clearTimeout(navTimer.current);
+      navTimer.current = null;
+    }
+  }, [pathname]);
+
+  // Global loader on link navigations: any internal <a> pointing at a different
+  // path kicks off a page change → show the brand loader until the route settles
+  // (the effect above clears it; an 8s fallback avoids a stuck loader).
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
+      const a = (e.target as HTMLElement | null)?.closest?.("a");
+      const href = a?.getAttribute("href");
+
+      if (!a || !href || !href.startsWith("/") || a.getAttribute("target") === "_blank") return;
+
+      if (new URL(href, window.location.origin).pathname === pathname) return;
+
+      setNavPending(true);
+
+      if (navTimer.current) clearTimeout(navTimer.current);
+
+      navTimer.current = setTimeout(() => setNavPending(false), 8000);
+    };
+
+    document.addEventListener("click", onClick, true);
+
+    return () => document.removeEventListener("click", onClick, true);
   }, [pathname]);
 
   const toggleRail = () =>
@@ -692,6 +728,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                           <button
                             onClick={() => {
                               setUserMenu(false);
+                              setNavPending(true);
                               router.push("/admin");
                             }}
                             className="bd-menuitem"

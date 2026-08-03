@@ -16,7 +16,7 @@ import type { IndicatorCardVM } from "@/lib/data/cities/indicator-blocks";
 import type { FilterOptions, Filters } from "@/lib/data/cities/types";
 import { DEFAULT_SELECTION, SELECTION_PREF_KEY } from "@/lib/data/cities/indicators";
 import { usePreference } from "@/lib/preferences/use-preference";
-import { useSetNavPending } from "@/lib/ui/nav-pending";
+import { useReportNavPending } from "@/lib/ui/nav-pending";
 import { formatMonth, formatNumber } from "@/lib/format";
 
 interface Props {
@@ -62,14 +62,8 @@ export function Dashboard({ view, options, cache, watermark }: Props) {
     setUiFilters(view.filters);
   }, [view.filters]);
 
-  // Report filter-navigation pending state to the shell (brand loading shimmer).
-  const setNavPending = useSetNavPending();
-
-  useEffect(() => {
-    setNavPending(isPending);
-
-    return () => setNavPending(false);
-  }, [isPending, setNavPending]);
+  // Drive the shell's brand loader while a filter navigation or a refresh runs.
+  useReportNavPending(isPending || refreshing);
 
   const [blSelection, setBlSelection] = usePreference<string[]>(
     SELECTION_PREF_KEY["banda-larga"],
@@ -125,7 +119,11 @@ export function Dashboard({ view, options, cache, watermark }: Props) {
 
         const data = (await res.json()) as { watermark: string };
 
-        if (data.watermark && data.watermark !== wmRef.current) router.refresh();
+        if (data.watermark && data.watermark !== wmRef.current) {
+          setRefreshing(true);
+          router.refresh();
+          setTimeout(() => setRefreshing(false), 800);
+        }
       } catch {
         /* best-effort */
       }

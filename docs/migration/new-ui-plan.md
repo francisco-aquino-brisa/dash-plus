@@ -149,12 +149,76 @@ Auto-refresh saiu da UI (polling silencioso). Filtro otimista (chip muda na hora
   Próximas telas: só chamar `useSetNavPending()` e sincronizar seu `isPending`.
 - **Scrollbar slim global** em `globals.css` (todas as telas herdam).
 
-### 2. Vendas · Canais — `/vendas`
+### 2. Vendas · Canais — `/vendas` — 🚧 _em migração (Fase 2)_
 
-- new_ui: `SCREENS.md` §2 (períodos, Banda Larga, 5G, PDU).
-- Current source: `lib/data/sales/**`.
-- Indicator mapping: _TBD at migration._
-- Divergences to resolve: _TBD._
+- new_ui: `SCREENS.md` §2 (chips de período, Banda Larga INTERNET+FWA, 5G, PDU ·
+  Produtividade por Dia Útil).
+- Current source: `lib/data/sales/**` — **reutilizada inteira, sem tocar no cálculo**
+  dos blocos/canais/livre. A página server (`app/(app)/vendas/page.tsx`) já entrega o
+  `SalesView` (`getSalesView` → `databricksSalesView`) pronto; só o componente cliente
+  (`components/sales/**`) é reconstruído com as primitivas da Fase 1. Fonte de verdade
+  dos blocos: os cubos oficiais por canal (`waves_consolidado_orcamento`,
+  `consolidado_5g_pedido`, `waves_churnsafra_consultor`, `churn_vendedor_5g`,
+  `portabilidade`) ⋈ metas de canal (`meta_geral_canais`, `metas_canais_ticket_oferta`).
+  Validado no warehouse (Jul/26 é o último mês completo; Ago/26 esparso — hoje 02/08).
+
+**Layout do legado (paridade, como na tela 1):** Header → **chips de Período** + barra de
+filtros (Serviço · Gerente · Canal · Nicho · UF · Cidade · Tipo cidade) → **Banda Larga
+(card, KPIs selecionáveis)** → **5G (card, KPIs selecionáveis)** → **PDU** → **Análise por
+Canal/Nicho** → **Seleção Livre**. As duas últimas seções o new_ui §2 **não** mostra, mas
+são do legado → mantidas e restilizadas (insight 2). Cada bloco de KPI dentro de um card
+`--s-card`, grade `repeat(auto-fill, minmax(228px,1fr))`, seletor "Indicadores (n)" +
+segmented Todos/Fora/Na meta (reuso de `KpiBlock`, hoje acoplado ao VM de Cidades → generalizar).
+
+**Mapeamento por seção (new_ui → VM `SalesView`):**
+
+| Seção (legado + §2)          | Campo do VM                       | Fonte / fórmula (verificada, read-only)                                                                                                                                                                 |
+| ---------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chips de Período             | `filters.period`                  | `resolvePeriod()` (mes_atual/anterior/7d/30d/90d/ano/custom) → competência = mês do `to`                                                                                                                |
+| Banda Larga (INTERNET+FWA)   | `blocksBL` (`SalesIndicatorVM[]`) | `indicators.ts` BANDA_LARGA — VE01/02/03/05/06, RE01/02/03/04/05/RE03f, CA08 (disp.) + VE07/08/09/05c/06c/CA03/CA09 (sem acesso). Fonte `waves` + meta `meta_geral_canais`/`metas_canais_ticket_oferta` |
+| 5G                           | `blocks5G` (`SalesIndicatorVM[]`) | `indicators.ts` CINCO_G — VE04/27/51/28/29, RE01/02/04/05, CA10/CA09, VE32/33/34/35 (disp.) + CA03/CA08c/CA01/CA02 (sem acesso). Fontes `cinco_g`/`churn_5g`/`portab` (VE34 cross-source)               |
+| PDU · Produtividade/Dia Útil | `pdu` (`PduPoint[]`)              | **⚠️ TROCAR fonte** → `vw_producao_hc_zero_venda` (a atual `vw_hc_zerado_vendedor` não existe → série vazia hoje). Σ`total_vendas`/Σ`dias_trabalhado` por `servico`. **Fórmula/meta a confirmar.**      |
+| Análise por Canal/Nicho      | `canais`                          | `desempenho_hc` — média/dia + var vs mês/semana, ancorada no último mês com atribuição de canal (legado, mantido)                                                                                       |
+| Seleção Livre                | `freeIndicators`/`freeSeries`     | `desempenho_hc` — série 12m por indicador do dropdown (legado, mantido)                                                                                                                                 |
+
+**Primitivas a reutilizar (Fase 1):** `KpiCard`/`LockedKpiCard`, `Segmented`, `ChipFilter`,
+`DateFilter` (chips de período são custom, não `DateFilter`; o "Personalizado" pode virar
+`DateFilter modes={["intervalo"]}`), `TimeSeriesChart` (drill + Seleção Livre + PDU line),
+`DataTable` (Análise por Canal, com `maxHeight`), `statusColor`/`isTrendGood`, `nav-pending`,
+filtro otimista. Componentes da tela 1 a **generalizar** (hoje acoplados a Cidades):
+`KpiBlock`+`IndicatorSelect` (VM genérico), `indicator-format` (unidade `qtd`), e o **padrão**
+do `DrillModal` (Raio-X shell + stat cards + TimeSeriesChart) — o `SalesIndicatorVM` não tem
+`related`/`average`/`targetUnit`, então adapto o padrão, não o componente (Fase 3 unifica).
+
+**Divergências (protótipo × warehouse/dados) — RESOLVER ANTES DE CODAR:**
+
+1. **PDU — fonte, fórmula, meta e forma visual (bloqueante).** (a) _Fonte:_ a atual
+   `vw_hc_zerado_vendedor` **não existe** (série vazia hoje); substituta verificada
+   `vw_producao_hc_zero_venda`. (b) _Denominador:_ `Σtotal_vendas/Σdias_trabalhado`
+   (pooled) valida jul/26 em **INTERNET 0,95 · 5G 1,50 · FWA 0,15** (bate com o esperado);
+   o denominador alternativo `dias_uteis_acumulado` por vendedor dá 2,75/1,16/0,30
+   (diverge). (c) _Serviços:_ view tem `INTERNET`(→FTTH)·`FWA`·`5G`·`RENOVACAO`; "Banda"
+   = INTERNET+FWA; RENOVACAO não está no protótipo. (d) _Meta:_ **não existe meta na view**;
+   as metas do protótipo (FTTH 2,10 · FWA 0,90 · 5G 2,00 · Banda 3,00) são placeholders,
+   fonte desconhecida. (e) _Forma:_ new_ui = barras horizontais por tecnologia vs meta
+   (competência única); legado = line chart 12m por tech (sem meta, sem Banda). → **Perguntar.**
+2. **Seções extras do legado (Análise Canal + Seleção Livre).** O new_ui §2 não as mostra;
+   o legado sim. Insight 2 → manter restilizadas. → **Confirmar.**
+3. **"Silent mock fallback" parece obsoleto para Vendas.** `sales/repository.ts` diz
+   explicitamente que **nunca** cai pra mock (só `DATA_SOURCE=mock` serve mock); só
+   `buildSalesFilterOptions` tem `try/catch → listas mock`. Cada fonte dentro de
+   `databricks.ts` já é isolada (falha → card "sem acesso", nunca derruba a tela).
+   ⚠️ `canalAnalysis` e `freeData` **não** têm try/catch — endurecer ao migrar.
+   (Nota: atualizar o data-map — a ressalva "Silent mock fallback" vale p/ vendedor/
+   produtividade, não p/ vendas hoje.)
+4. **Números do protótipo são placeholders.** §2 mostra Vendas Criadas 27.746 etc. —
+   virão do warehouse; manter formatos pt-BR. "Mês atual" (Ago/26) é esparso hoje;
+   comportamento igual ao legado, default não muda.
+
+**Extensões de primitivas previstas:** generalizar `KpiBlock`/`IndicatorSelect` para um VM
+genérico (id/label/value/meta/attainment/delta/series/available/unit/polarity/description),
+reusável por Cidades e Vendas; PDU pode ganhar um componente `HBarMeta` (barras horizontais
+realizado vs meta) se a forma new_ui for aprovada.
 
 ### 3. Produtividade Comercial — `/produtividade`
 
