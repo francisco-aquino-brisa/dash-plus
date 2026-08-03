@@ -29,11 +29,12 @@ export async function authorizeByEmail(email: string): Promise<SessionUser | nul
   const rows = await new DatabricksDataClient().query<{
     nome: unknown;
     cpf: unknown;
+    matricula: unknown;
     nivel_id: unknown;
     nivel: unknown;
     ativo: unknown;
   }>(
-    `SELECT u.nome, u.cpf, u.nivel_id, n.nome AS nivel, u.ativo
+    `SELECT u.nome, u.cpf, u.matricula, u.nivel_id, n.nome AS nivel, u.ativo
        FROM ${USERS} u
        LEFT JOIN ${NIVEIS} n ON u.nivel_id = n.id
       WHERE lower(u.email) = ? AND u.ativo = true
@@ -51,6 +52,7 @@ export async function authorizeByEmail(email: string): Promise<SessionUser | nul
     email: normalized,
     nome: String(r.nome ?? ""),
     cpf: r.cpf == null ? null : String(r.cpf),
+    matricula: r.matricula == null ? null : String(r.matricula),
     nivelId: Number(r.nivel_id ?? 0),
     nivel,
     isAdmin: nivel.toLowerCase() === "admin",

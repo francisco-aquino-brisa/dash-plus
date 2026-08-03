@@ -1,9 +1,18 @@
 "use client";
 
 import { VendedorSearch } from "./VendedorSearch";
-import { CompetenciaPicker } from "./CompetenciaPicker";
 import { VisibilityFilter, type Visibility } from "./VisibilityFilter";
+import { DateFilter } from "@/components/ui/date-filter";
+import { formatMonth } from "@/lib/format";
 import type { VendedorFilterOptions, VendedorFilters } from "@/lib/data/vendedor/types";
+
+/** Map a DateFilter month value (`Ago/26`) back to the vendedor competência
+ *  (`yyyy-MM`). Months without data map to null → the caller no-ops. */
+function ymFromDateValue(value: string, competencias: string[]): string | null {
+  const byLabel = new Map(competencias.map((ym) => [formatMonth(ym), ym]));
+
+  return byLabel.get(value) ?? null;
+}
 
 /**
  * Dashboard Vendedor filter bar (DESIGN_SYSTEM "Estrutura comum"). A sticky card
@@ -18,12 +27,15 @@ export function VendedorFilterBar({
   vis,
   onNavigate,
   onVisChange,
+  lockedToSelf = false,
 }: {
   filters: VendedorFilters;
   options: VendedorFilterOptions;
   vis: Visibility;
   onNavigate: (next: VendedorFilters) => void;
   onVisChange: (v: Visibility) => void;
+  /** A "vendedor" user is locked to their own data — hide the vendedor selector. */
+  lockedToSelf?: boolean;
 }) {
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 30, paddingTop: 4 }}>
@@ -40,15 +52,24 @@ export function VendedorFilterBar({
           boxShadow: "var(--s-sh)",
         }}
       >
-        <VendedorSearch
-          options={options.vendedores}
-          value={filters.matricula}
-          onSelect={(m) => onNavigate({ ...filters, matricula: m })}
-        />
-        <CompetenciaPicker
-          value={filters.competencia}
-          available={options.competencias}
-          onChange={(ym) => onNavigate({ ...filters, competencia: ym })}
+        {!lockedToSelf && (
+          <VendedorSearch
+            options={options.vendedores}
+            value={filters.matricula}
+            onSelect={(m) => onNavigate({ ...filters, matricula: m })}
+          />
+        )}
+        <DateFilter
+          label="Competência"
+          value={formatMonth(filters.competencia)}
+          defaultValue={formatMonth(options.competencias[0] ?? filters.competencia)}
+          onChange={(v) => {
+            const ym = ymFromDateValue(v, options.competencias);
+
+            if (ym) onNavigate({ ...filters, competencia: ym });
+          }}
+          initialMode="mes"
+          modes={["mes"]}
         />
         <div style={{ marginLeft: "auto" }}>
           <VisibilityFilter value={vis} onChange={onVisChange} />

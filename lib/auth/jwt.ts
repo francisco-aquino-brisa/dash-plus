@@ -14,6 +14,7 @@ export interface SessionUser {
   email: string; // login key (from X-Forwarded-Email / tb_usuarios)
   nome: string; // from tb_usuarios
   cpf: string | null; // join key to other tables (not used for login)
+  matricula: string | null; // tb_usuarios.matricula — keys the vendedor screen to self
   nivelId: number; // tb_usuarios.nivel_id
   nivel: string; // tb_niveis.nome
   isAdmin: boolean; // derived: nivel === "admin"
@@ -66,10 +67,13 @@ export async function verifySession(token: string | undefined): Promise<SessionU
       typeof payload.nivel === "string" &&
       typeof payload.isAdmin === "boolean"
     ) {
+      // `matricula` is lenient so cookies minted before it existed still verify
+      // (→ null until re-minted).
       return {
         email: payload.email,
         nome: payload.nome,
         cpf: (payload.cpf as string | null) ?? null,
+        matricula: typeof payload.matricula === "string" ? payload.matricula : null,
         nivelId: payload.nivelId,
         nivel: payload.nivel,
         isAdmin: payload.isAdmin,

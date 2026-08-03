@@ -23,11 +23,17 @@ export default async function VendedorPage({ searchParams }: { searchParams: Sea
 
   if (!session) redirect("/bootstrap?next=/vendedor");
 
+  // A "vendedor" user only ever sees their own raio-X: force the filter to their
+  // own matrícula (ignoring any ?matricula= in the URL) and hide the selector.
+  const lockedToSelf = session.nivel.toLowerCase() === "vendedor";
   const filters = parseFilters(searchParams);
+
+  if (lockedToSelf) filters.matricula = session.matricula ?? "";
+
   const [view, options] = await Promise.all([
     getVendedorView(filters),
     buildVendedorFilterOptions(filters.competencia),
   ]);
 
-  return <VendedorDashboard view={view} options={options} />;
+  return <VendedorDashboard view={view} options={options} lockedToSelf={lockedToSelf} />;
 }

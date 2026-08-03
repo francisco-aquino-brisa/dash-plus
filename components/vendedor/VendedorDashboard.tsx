@@ -39,7 +39,17 @@ const TABS = [
   { value: "pendencias" as const, label: "Pendências" },
 ];
 
-export function VendedorDashboard({ view, options }: { view: VendedorView; options: VendedorFilterOptions }) {
+export function VendedorDashboard({
+  view,
+  options,
+  lockedToSelf = false,
+}: {
+  view: VendedorView;
+  options: VendedorFilterOptions;
+  /** When the logged-in user is a "vendedor": lock the screen to their own data
+   * and hide the vendedor selector. */
+  lockedToSelf?: boolean;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [tab, setTab] = useState<Tab>("resultados");
@@ -89,7 +99,8 @@ export function VendedorDashboard({ view, options }: { view: VendedorView; optio
   }, [router]);
 
   const raioXCard = servicos.find((s) => s.key === raioX) ?? null;
-  const subtitle = `${profile ? profile.nome : "Selecione um vendedor"} · ${competenciaLabel}`;
+  const noProfileLabel = lockedToSelf ? "Sem dados na competência" : "Selecione um vendedor";
+  const subtitle = `${profile ? profile.nome : noProfileLabel} · ${competenciaLabel}`;
 
   return (
     <div
@@ -181,12 +192,13 @@ export function VendedorDashboard({ view, options }: { view: VendedorView; optio
         vis={vis}
         onNavigate={navigate}
         onVisChange={setVis}
+        lockedToSelf={lockedToSelf}
       />
 
       <Segmented options={TABS} value={tab} onChange={setTab} ariaLabel="Resultados ou Pendências" />
 
       {!profile ? (
-        <EmptyState />
+        <EmptyState lockedToSelf={lockedToSelf} />
       ) : tab === "resultados" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <VendedorHeader profile={profile} />
@@ -238,7 +250,7 @@ export function VendedorDashboard({ view, options }: { view: VendedorView; optio
   );
 }
 
-function EmptyState() {
+function EmptyState({ lockedToSelf }: { lockedToSelf: boolean }) {
   return (
     <div
       style={{
@@ -268,10 +280,12 @@ function EmptyState() {
         <Search size={26} />
       </span>
       <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, color: "var(--s-t1)" }}>
-        Selecione um vendedor
+        {lockedToSelf ? "Sem dados nesta competência" : "Selecione um vendedor"}
       </h2>
       <p style={{ maxWidth: 360, fontSize: 13, color: "var(--s-t3)" }}>
-        Use a busca acima (nome ou matrícula) para abrir o raio-X individual de um vendedor.
+        {lockedToSelf
+          ? "Não encontramos resultados para você na competência selecionada. Tente outra competência."
+          : "Use a busca acima (nome ou matrícula) para abrir o raio-X individual de um vendedor."}
       </p>
     </div>
   );
