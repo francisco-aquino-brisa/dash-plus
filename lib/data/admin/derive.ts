@@ -59,10 +59,11 @@ export function deriveEmail(nome: string): string {
 }
 
 /**
- * A record is `locked` when it is a seeded default that must not be edited or
+ * A nível is `locked` when it is a seeded default that must not be edited or
  * deleted (shows a "Padrão" badge instead of actions). There is no `locked`
- * column; it is derived from the name. The `admin` and `vendedor` levels and the
- * `admin`/`Administrador` cargo are locked (ADR 0005 — `admin` is the seeded level).
+ * column on `tb_niveis`; it is derived from the name — the `admin` and `vendedor`
+ * levels are locked (ADR 0005 — `admin` is the seeded level). Cargos, by contrast,
+ * carry a real `padrao` column and derive `locked` from it in the read layer.
  */
 export function isLockedNivel(nome: string): boolean {
   const n = deburr(nome).trim();

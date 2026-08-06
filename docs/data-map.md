@@ -8,6 +8,44 @@ or memory — re-verify (see the `databricks-first` skill). See
 
 Everything lives in one catalog: **`gdb_brisanet_comunidade_dev`**.
 
+## ⚠️ Migração de nomes 2026-08 (tb_/vw_ + `revan_cidade_id`) — AUTORITATIVO
+
+O time de dados renomeou os objetos (tabelas `tb_*`, views `vw_*`) e **consolidou
+as fontes comerciais dentro de `projeto_brisa_performance`** como views `vw_*`,
+adicionando `revan_cidade_id` (PK numérica de cidade, dimensão
+`projeto_brisa_performance.public_base_cidade`) — o que substitui a antiga
+gambiarra de join por nome de cidade (`cityKey`). O código já foi repontado.
+**Este mapa vale sobre a prosa antiga abaixo.**
+
+| Antes                                                          | Depois (`projeto_brisa_performance`) | + colunas                                    |
+| -------------------------------------------------------------- | ------------------------------------ | -------------------------------------------- |
+| `projeto_brisa_performance.indicadores_cidades`                | `vw_indicadores_cidades`             | `revan_cidade_id`                            |
+| `projeto_brisa_performance.indicadores_cidades_5g`             | `vw_indicadores_cidades_5g`          | `revan_cidade_id`                            |
+| `projeto_brisa_performance.metas_cidades`                      | `vw_metas_cidades`                   | `revan_cidade_id`                            |
+| `projeto_brisa_performance.metas_vendedores_canais`            | `vw_metas_vendedores_canais`         | —                                            |
+| `projeto_brisa_performance.meta_geral_canais`                  | `vw_meta_geral_canais`               | —                                            |
+| `projeto_brisa_performance.hierarquia`                         | `vw_hierarquia`                      | `email, situacao, hash_cpf, revan_cidade_id` |
+| `inteligencia_comercial_e_mercado.waves_consolidado_orcamento` | `vw_vendas_waves`                    | `revan_cidade_id`                            |
+| `inteligencia_comercial_e_mercado.consolidado_5g_pedido`       | `vw_vendas_5g`                       | `revan_cidade_id, revan_cidade_vendedor_id`  |
+| `inteligencia_comercial_e_mercado.waves_churnsafra_consultor`  | `vw_churn_4m_vendedor_bl`            | `revan_cidade_id, cpf`                       |
+| `inteligencia_comercial_e_mercado.churn_vendedor_5g`           | `vw_churn_4m_vendedor_5g`            | `revan_cidade_id, revan_cidade_vendedor_id`  |
+| `inteligencia_comercial_e_mercado.portabilidade`               | `vw_portabilidade_5g`                | `revan_cidade_id, revan_cidade_vendedor_id`  |
+| `inteligencia_comercial_e_mercado.organograma_cidades`         | `vw_organograma_cidades`             | `revan_cidade_id`                            |
+
+**Não renomeados (ficam onde estavam):** `desempenho_hc`
+(`diego_barros_inteligencia_comercial_e_mercado`) e
+`inteligencia_comercial_e_mercado.metas_canais_ticket_oferta`.
+
+**Removidos de `projeto_brisa_performance`:** `tb_usuarios_app`, `usuarios_app`,
+`setores`, `niveis`, `grants`, `capabilities`, `cadastro_usuario`. Auth usa
+`tb_usuarios` + `tb_niveis` (ADR 0005) — não afetado.
+
+**Bug de origem em `vw_vendas_waves` (corrigir na view):** a definição casta
+colunas numéricas string→BIGINT/DOUBLE direto (`bigint(orcamento_id)` etc.), mas
+a origem tem `'11877434.0'`/`'nan'` e `data`='NaT' → estoura em modo ANSI e
+derruba o funil (`COUNT(DISTINCT orcamento_id)`). DDL de correção (casts
+tolerantes) em [`fix-vw_vendas_waves.sql`](fix-vw_vendas_waves.sql).
+
 ## Verification status (last audited via warehouse queries)
 
 | Object                          | Schema                                             | Type    | Exists            | Columns used by code                                       |

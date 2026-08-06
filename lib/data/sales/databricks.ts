@@ -41,13 +41,15 @@ const DH = `${DBX}.\`desempenho_hc\``;
 
 // Official, channel-grained sources for the selectable blocks (see indicators.ts
 // and docs/data-map.md). All read-only; every formula validated vs the warehouse.
+// The commercial sources were consolidated into `projeto_brisa_performance` as
+// `vw_*` views (+ revan_cidade_id); `ticket_oferta` stays in the ICM schema.
 const ICM = `\`${CAT}\`.\`inteligencia_comercial_e_mercado\``;
 const PBP = `\`${CAT}\`.\`projeto_brisa_performance\``;
-const WAVES = `${ICM}.\`waves_consolidado_orcamento\``;
-const CINCO_G_T = `${ICM}.\`consolidado_5g_pedido\``;
-const CHURN_BL_T = `${ICM}.\`waves_churnsafra_consultor\``;
-const CHURN_5G_T = `${ICM}.\`churn_vendedor_5g\``;
-const META_CANAIS = `${PBP}.\`meta_geral_canais\``;
+const WAVES = `${PBP}.\`vw_vendas_waves\``;
+const CINCO_G_T = `${PBP}.\`vw_vendas_5g\``;
+const CHURN_BL_T = `${PBP}.\`vw_churn_4m_vendedor_bl\``;
+const CHURN_5G_T = `${PBP}.\`vw_churn_4m_vendedor_5g\``;
+const META_CANAIS = `${PBP}.\`vw_meta_geral_canais\``;
 const TICKET_OFERTA = `${ICM}.\`metas_canais_ticket_oferta\``;
 
 const q13 = "add_months(date_trunc('MM', current_date()), -11)"; // início da janela de 12 meses
@@ -64,7 +66,7 @@ const PORTAB_T = `(
     MAX(nicho) AS nicho,
     MAX(cidade_venda) AS cidade_venda,
     MAX(CASE WHEN upper(trim(STATUS)) = 'PORTADO' THEN 1 ELSE 0 END) AS portado
-  FROM ${ICM}.\`portabilidade\`
+  FROM ${PBP}.\`vw_portabilidade_5g\`
   WHERE coalesce(N_do_pedido, '') <> ''
     AND coalesce(cidade_venda, '') <> ''
     AND to_date(data) >= ${q13}

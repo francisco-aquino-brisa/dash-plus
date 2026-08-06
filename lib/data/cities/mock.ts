@@ -136,6 +136,8 @@ function generate(months: string[]): CityIndicatorRecord[] {
           competencia,
           id_cidade: `${c.uf}-${ci}`,
           id_cidade_src: `${competencia}-${c.uf}-${ci}`,
+          // Synthetic stable Revan city id (mirrors public_base_cidade PK).
+          revan_cidade_id: String(1000 + ci),
           cidade: `${c.nome} / ${c.uf}`,
           uf: c.uf,
           gerencia: c.gerencia,

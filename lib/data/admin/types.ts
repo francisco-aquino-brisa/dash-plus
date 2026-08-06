@@ -19,7 +19,7 @@ export interface Cargo {
   id: number;
   nome: string;
   descricao: string | null;
-  /** Derived: true for the seeded `Administrador` cargo. */
+  /** From the `padrao` column: true for seeded default cargos (padrao = 1). */
   locked: boolean;
   /** People assigned to this cargo. */
   pessoas: number;

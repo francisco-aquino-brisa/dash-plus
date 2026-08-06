@@ -2,7 +2,7 @@ import "server-only";
 
 import { DatabricksDataClient } from "@/lib/data/databricks";
 import { T } from "./tables";
-import { isLockedCargo, isLockedNivel } from "./derive";
+import { isLockedNivel } from "./derive";
 import type { AdminData, Cargo, Capacidade, Nivel, Pagina, Usuario } from "./types";
 
 /**
@@ -63,25 +63,27 @@ export async function readNiveis(client: DatabricksDataClient): Promise<Nivel[]>
 
 export async function readCargos(client: DatabricksDataClient): Promise<Cargo[]> {
   return safe("cargos", async () => {
-    const rows = await client.query<{ id: unknown; nome: unknown; descricao: unknown; pessoas: unknown }>(
-      `SELECT c.id, c.nome, c.descricao, count(u.id) AS pessoas
+    const rows = await client.query<{
+      id: unknown;
+      nome: unknown;
+      descricao: unknown;
+      padrao: unknown;
+      pessoas: unknown;
+    }>(
+      `SELECT c.id, c.nome, c.descricao, c.padrao, count(u.id) AS pessoas
          FROM ${T.cargos} c
          LEFT JOIN ${T.usuarios} u ON u.cargo_id = c.id
-        GROUP BY c.id, c.nome, c.descricao
+        GROUP BY c.id, c.nome, c.descricao, c.padrao
         ORDER BY c.id`,
     );
 
-    return rows.map((r) => {
-      const nome = toStr(r.nome);
-
-      return {
-        id: toNum(r.id),
-        nome,
-        descricao: toNullStr(r.descricao),
-        locked: isLockedCargo(nome),
-        pessoas: toNum(r.pessoas),
-      };
-    });
+    return rows.map((r) => ({
+      id: toNum(r.id),
+      nome: toStr(r.nome),
+      descricao: toNullStr(r.descricao),
+      locked: toNum(r.padrao) === 1,
+      pessoas: toNum(r.pessoas),
+    }));
   });
 }
 

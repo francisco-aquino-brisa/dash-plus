@@ -14,8 +14,9 @@ import { T } from "./tables";
  * INSERTs omit all three and UPDATEs set `atualizado_em` explicitly. Every value
  * is passed as an ordinal `?` parameter — never interpolated into the SQL.
  *
- * The locked defaults (`admin`/`vendedor` levels, `admin`/`Administrador` cargo)
- * are protected by a SQL-level guard so a stale client cannot edit or delete them.
+ * The locked defaults are protected by a SQL-level guard so a stale client cannot
+ * edit or delete them: níveis by name (`admin`/`vendedor`), cargos by the real
+ * `padrao` column (`padrao = 1`).
  */
 
 function client(): DatabricksDataClient {
@@ -53,13 +54,13 @@ export function createCargo(nome: string, descricao: string | null): Promise<voi
 export function updateCargo(id: number, nome: string, descricao: string | null): Promise<void> {
   return run(
     `UPDATE ${T.cargos} SET nome = ?, descricao = ?, atualizado_em = CURRENT_TIMESTAMP()
-      WHERE id = ? AND lower(nome) NOT IN ('administrador', 'admin')`,
+      WHERE id = ? AND coalesce(padrao, 0) = 0`,
     [nome, descricao, id],
   );
 }
 
 export function deleteCargo(id: number): Promise<void> {
-  return run(`DELETE FROM ${T.cargos} WHERE id = ? AND lower(nome) NOT IN ('administrador', 'admin')`, [id]);
+  return run(`DELETE FROM ${T.cargos} WHERE id = ? AND coalesce(padrao, 0) = 0`, [id]);
 }
 
 // ── Páginas ─────────────────────────────────────────────────────────────────

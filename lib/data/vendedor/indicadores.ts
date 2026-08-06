@@ -33,12 +33,13 @@ import type {
 } from "./types";
 
 const CAT = process.env.DATABRICKS_SALES_CATALOG ?? "gdb_brisanet_comunidade_dev";
-const ICM = `\`${CAT}\`.\`inteligencia_comercial_e_mercado\``;
-const METAS = `\`${CAT}\`.\`projeto_brisa_performance\`.\`metas_vendedores_canais\``;
-const WAVES = `${ICM}.\`waves_consolidado_orcamento\``;
-const CINCO_G = `${ICM}.\`consolidado_5g_pedido\``;
-const CHURN_BL = `${ICM}.\`waves_churnsafra_consultor\``;
-const CHURN_5G = `${ICM}.\`churn_vendedor_5g\``;
+const PBP = `\`${CAT}\`.\`projeto_brisa_performance\``;
+// Commercial sources consolidated into projeto_brisa_performance as `vw_*` views.
+const METAS = `${PBP}.\`vw_metas_vendedores_canais\``;
+const WAVES = `${PBP}.\`vw_vendas_waves\``;
+const CINCO_G = `${PBP}.\`vw_vendas_5g\``;
+const CHURN_BL = `${PBP}.\`vw_churn_4m_vendedor_bl\``;
+const CHURN_5G = `${PBP}.\`vw_churn_4m_vendedor_5g\``;
 // Portabilidade 5G: transacional, várias linhas por pedido (SOLICITADO + PORTADO,
 // espelhado). Pré-agregamos por N_do_pedido → 1 linha/pedido (vendedor = MAX(hash_user),
 // competência do evento mais recente, `portado` = teve alguma linha PORTADO). VE32 =
@@ -49,7 +50,7 @@ const PORTAB = `(
     MAX(hash_user) AS hash_user,
     date_format(MAX(to_date(data)), 'yyyy-MM') AS ym,
     MAX(CASE WHEN upper(trim(STATUS)) = 'PORTADO' THEN 1 ELSE 0 END) AS portado
-  FROM ${ICM}.\`portabilidade\`
+  FROM ${PBP}.\`vw_portabilidade_5g\`
   WHERE coalesce(N_do_pedido, '') <> '' AND coalesce(hash_user, '') <> ''
   GROUP BY N_do_pedido
 ) p`;

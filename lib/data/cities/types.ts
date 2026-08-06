@@ -21,6 +21,9 @@ export interface CityIndicatorRecord {
   id_cidade: string;
   /** Raw source `id_cidade` (month-prefixed, e.g. "052026CIDADEUF") — joins to metas_cidades. */
   id_cidade_src: string;
+  /** Numeric Revan city id (`public_base_cidade` PK) — stable join key to the
+   * commercial sources (waves/5g/churn/portabilidade), immune to name spelling. */
+  revan_cidade_id: string;
   /** "Cidade / UF". */
   cidade: string;
   uf: string;
