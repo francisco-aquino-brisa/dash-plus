@@ -20,6 +20,7 @@ import {
   type ServicoKey,
   type VendedorFilterOptions,
   type VendedorFilters,
+  type VendedorOption,
   type VendedorProfile,
   type VendedorView,
 } from "./types";
@@ -333,39 +334,63 @@ export async function databricksVendedorView(filters: VendedorFilters): Promise<
   };
 }
 
-export async function databricksVendedorFilterOptions(ym: string): Promise<Partial<VendedorFilterOptions>> {
+export async function databricksVendedorFilterOptions(_ym: string): Promise<Partial<VendedorFilterOptions>> {
+  // The vendedor list is no longer materialized here — the picker searches
+  // server-side (see `databricksVendedorSearch`), so we only need the competências.
+  let competencias: string[] = [];
+
+  try {
+    const rows = await q(
+      `SELECT DISTINCT date_format(data, 'yyyy-MM') ym FROM ${DH} ORDER BY ym DESC LIMIT 24`,
+    );
+
+    competencias = rows.map((r) => str(r.ym)).filter(Boolean);
+  } catch {
+    competencias = [];
+  }
+
+  return { vendedores: [], competencias };
+}
+
+/**
+ * Server-side vendedor search for the picker (max 100). Matches nome/matrícula
+ * (case-insensitive); an empty query returns the first 100 by name. Replaces the
+ * old "load 3000 and filter in the browser" — there are ~12k vendedores. The
+ * competência window scopes it; the term is a `?` param (never interpolated).
+ */
+export async function databricksVendedorSearch(
+  ym: string,
+  query: string,
+  limit = 100,
+): Promise<VendedorOption[]> {
   const period = resolveCompetencia(ym);
-  const [vendedores, competencias] = await Promise.all([
-    (async () => {
-      try {
-        const rows = await q(`
-          SELECT MATRICULA, MAX(NOME) nome, MAX(cidade_atuacao_jwas) cidade
-          FROM ${DH}
-          WHERE data BETWEEN DATE'${period.from}' AND DATE'${period.to}' AND NOME IS NOT NULL
-          GROUP BY MATRICULA ORDER BY nome LIMIT 3000
-        `);
+  const n = Math.min(100, Math.max(1, Math.floor(limit) || 100));
+  const term = query.trim().toLowerCase();
+  const params: unknown[] = [];
+  let filter = "";
 
-        return rows.map((r) => ({
-          matricula: num(r.MATRICULA),
-          nome: str(r.nome),
-          cidade: str(r.cidade) || "—",
-        }));
-      } catch {
-        return [];
-      }
-    })(),
-    (async () => {
-      try {
-        const rows = await q(
-          `SELECT DISTINCT date_format(data, 'yyyy-MM') ym FROM ${DH} ORDER BY ym DESC LIMIT 24`,
-        );
+  if (term) {
+    const like = `%${term}%`;
 
-        return rows.map((r) => str(r.ym)).filter(Boolean);
-      } catch {
-        return [];
-      }
-    })(),
-  ]);
+    filter = ` AND (lower(NOME) LIKE ? OR CAST(MATRICULA AS STRING) LIKE ?)`;
+    params.push(like, like);
+  }
 
-  return { vendedores, competencias };
+  try {
+    const rows = await getDataClient().query<Record<string, unknown>>(
+      `SELECT MATRICULA, MAX(NOME) nome, MAX(cidade_atuacao_jwas) cidade
+         FROM ${DH}
+        WHERE data BETWEEN DATE'${period.from}' AND DATE'${period.to}' AND NOME IS NOT NULL${filter}
+        GROUP BY MATRICULA ORDER BY nome LIMIT ${n}`,
+      params,
+    );
+
+    return rows.map((r) => ({
+      matricula: num(r.MATRICULA),
+      nome: str(r.nome),
+      cidade: str(r.cidade) || "—",
+    }));
+  } catch {
+    return [];
+  }
 }

@@ -46,6 +46,8 @@ export interface DateFilterProps {
   /** Which modes to offer. A single mode hides the mode switch entirely. */
   modes?: DateMode[];
   align?: "start" | "end";
+  /** Popover stacking — raise above a modal (default 50). */
+  zIndex?: number;
 }
 
 export function DateFilter({
@@ -56,6 +58,7 @@ export function DateFilter({
   initialMode = "mes",
   modes = ["mes", "dia", "intervalo"],
   align = "start",
+  zIndex = 50,
 }: DateFilterProps) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DateMode>(modes.includes(initialMode) ? initialMode : modes[0]);
@@ -94,7 +97,7 @@ export function DateFilter({
           align={align}
           sideOffset={6}
           style={{
-            zIndex: 50,
+            zIndex,
             width: 288,
             maxWidth: "calc(100vw - 32px)",
             padding: 8,

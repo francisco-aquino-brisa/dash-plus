@@ -150,6 +150,7 @@ export function SalesFilterBar({
             defaultValue={ALL}
             onChange={(v) => pick("cidade", v)}
             align="end"
+            maxVisible={100}
           />
           <ChipFilter
             label="Tipo cidade"

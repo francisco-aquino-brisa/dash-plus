@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useState, type CSSProperties } from "react";
+import { forwardRef, useMemo, useState, type CSSProperties } from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Command as CommandPrimitive } from "cmdk";
@@ -28,6 +28,9 @@ export interface ChipFilterProps {
   onChange: (value: string) => void;
   /** Right-align the popover for the last chips in a row (avoids overflow). */
   align?: "start" | "end";
+  /** Cap how many options are rendered at once (perf for long lists like Cidade).
+   *  Typing narrows within the full list; only the first `maxVisible` matches mount. */
+  maxVisible?: number;
 }
 
 const AUTO_SEARCH_THRESHOLD = 7;
@@ -47,6 +50,7 @@ export function ChipFilter({
   defaultValue,
   onChange,
   align = "start",
+  maxVisible,
 }: ChipFilterProps) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
@@ -117,7 +121,7 @@ export function ChipFilter({
                   <X size={15} />
                 </DialogPrimitive.Close>
               </div>
-              <OptionList options={options} value={value} onPick={pick} padded />
+              <OptionList options={options} value={value} onPick={pick} maxVisible={maxVisible} padded />
             </DialogPrimitive.Content>
           </DialogPrimitive.Portal>
         </DialogPrimitive.Root>
@@ -148,7 +152,7 @@ export function ChipFilter({
             animation: "bdIn .14s ease both",
           }}
         >
-          <OptionList options={options} value={value} onPick={pick} />
+          <OptionList options={options} value={value} onPick={pick} maxVisible={maxVisible} />
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>
@@ -212,20 +216,29 @@ function OptionList({
   value,
   onPick,
   padded = false,
+  maxVisible,
 }: {
   options: string[];
   value: string;
   onPick: (v: string) => void;
   padded?: boolean;
+  maxVisible?: number;
 }) {
   const [query, setQuery] = useState("");
   const searchable = options.length > AUTO_SEARCH_THRESHOLD;
-  const shownCount = query ? options.filter((o) => norm(o).includes(norm(query))).length : options.length;
+  // Filter manually (cmdk `shouldFilter={false}`) so we can cap how many items
+  // actually mount — rendering thousands of chips is what makes the popover lag.
+  const matches = useMemo(
+    () => (query ? options.filter((o) => norm(o).includes(norm(query))) : options),
+    [options, query],
+  );
+  const visible = maxVisible ? matches.slice(0, maxVisible) : matches;
+  const hidden = matches.length - visible.length;
 
   return (
     <CommandPrimitive
       loop
-      filter={(val, search) => (norm(val).includes(norm(search)) ? 1 : 0)}
+      shouldFilter={false}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -264,17 +277,17 @@ function OptionList({
             }}
           />
           <span style={{ flex: "none", fontSize: 10, fontWeight: 700, color: "var(--s-t3)" }}>
-            {shownCount}/{options.length}
+            {matches.length}/{options.length}
           </span>
         </div>
       )}
       <CommandPrimitive.List style={{ overflowY: "auto", maxHeight: 240 }}>
-        <CommandPrimitive.Empty
-          style={{ padding: "18px 8px", textAlign: "center", fontSize: 12, color: "var(--s-t3)" }}
-        >
-          Nada encontrado
-        </CommandPrimitive.Empty>
-        {options.map((o) => {
+        {visible.length === 0 && (
+          <div style={{ padding: "18px 8px", textAlign: "center", fontSize: 12, color: "var(--s-t3)" }}>
+            Nada encontrado
+          </div>
+        )}
+        {visible.map((o) => {
           const active = o === value;
 
           return (
@@ -312,6 +325,11 @@ function OptionList({
             </CommandPrimitive.Item>
           );
         })}
+        {hidden > 0 && (
+          <div style={{ padding: "8px 10px 4px", fontSize: 10.5, fontWeight: 600, color: "var(--s-t3)" }}>
+            +{hidden} — refine a busca para ver mais
+          </div>
+        )}
       </CommandPrimitive.List>
     </CommandPrimitive>
   );

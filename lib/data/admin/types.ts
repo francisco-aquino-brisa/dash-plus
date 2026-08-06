@@ -53,6 +53,8 @@ export interface Usuario {
   cargoId: number | null;
   cargoNome: string | null;
   ativo: boolean;
+  /** Whether the user is synced with the source system (`tb_usuarios.sincronizado`). */
+  sincronizado: boolean;
 }
 
 /**

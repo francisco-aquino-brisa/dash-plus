@@ -7,7 +7,7 @@ import { cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";
 import { resolveCompetencia } from "./dates";
 import { mockVendedorFilterOptions, mockVendedorView } from "./mock";
-import type { VendedorFilters, VendedorFilterOptions, VendedorView } from "./types";
+import type { VendedorFilters, VendedorFilterOptions, VendedorOption, VendedorView } from "./types";
 
 function cacheKey(f: VendedorFilters): string {
   return `vendedor:v2:${f.matricula}|${resolveCompetencia(f.competencia).ym}`;
@@ -38,10 +38,36 @@ export async function buildVendedorFilterOptions(competencia: string): Promise<V
     const real = await databricksVendedorFilterOptions(resolveCompetencia(competencia).ym);
 
     return {
-      vendedores: real.vendedores?.length ? real.vendedores : base.vendedores,
+      // The vendedor list is not shipped anymore — the picker searches server-side.
+      vendedores: [],
       competencias: real.competencias?.length ? real.competencias : base.competencias,
     };
   } catch {
     return base;
   }
+}
+
+/**
+ * Search vendedores for the picker (max 100). Server-side against Databricks;
+ * in mock mode, filters the mock list in memory. The screen no longer ships the
+ * whole vendedor list to the client.
+ */
+export async function searchVendedores(
+  competencia: string,
+  query: string,
+  limit = 100,
+): Promise<VendedorOption[]> {
+  if (!isDatabricks()) {
+    const all = mockVendedorFilterOptions().vendedores;
+    const q = query.trim().toLowerCase();
+    const hits = q
+      ? all.filter((v) => v.nome.toLowerCase().includes(q) || String(v.matricula).includes(q))
+      : all;
+
+    return hits.slice(0, limit);
+  }
+
+  const { databricksVendedorSearch } = await import("./databricks");
+
+  return databricksVendedorSearch(resolveCompetencia(competencia).ym, query, limit);
 }

@@ -142,7 +142,7 @@ export async function readUsuarios(client: DatabricksDataClient): Promise<Usuari
   return safe("usuarios", async () => {
     const rows = await client.query<Record<string, unknown>>(
       `SELECT u.id, u.nome, u.email, u.nivel_id, n.nome AS nivel_nome,
-              u.cargo_id, c.nome AS cargo_nome, u.ativo
+              u.cargo_id, c.nome AS cargo_nome, u.ativo, u.sincronizado
          FROM ${T.usuarios} u
          LEFT JOIN ${T.niveis} n ON n.id = u.nivel_id
          LEFT JOIN ${T.cargos} c ON c.id = u.cargo_id
@@ -158,6 +158,8 @@ export async function readUsuarios(client: DatabricksDataClient): Promise<Usuari
       cargoId: r.cargo_id == null ? null : toNum(r.cargo_id),
       cargoNome: toNullStr(r.cargo_nome),
       ativo: r.ativo === true,
+      // `sincronizado` is a nullable tinyint (1 = synced); null/0 → not synced.
+      sincronizado: r.sincronizado === true || toNum(r.sincronizado) === 1,
     }));
   });
 }

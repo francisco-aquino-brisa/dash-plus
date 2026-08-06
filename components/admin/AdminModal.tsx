@@ -17,14 +17,17 @@ export function ModalShell({
   onClose,
   children,
   maxWidth = 440,
+  modal = true,
 }: {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
   maxWidth?: number;
+  /** Non-modal (false) lets a portaled popover inside stay clickable (e.g. DateFilter). */
+  modal?: boolean;
 }) {
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={(o) => !o && onClose()}>
+    <DialogPrimitive.Root open={open} onOpenChange={(o) => !o && onClose()} modal={modal}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
           style={{

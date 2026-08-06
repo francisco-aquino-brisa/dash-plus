@@ -146,6 +146,7 @@ export function ProdFilterBar({
             defaultValue={ALL}
             onChange={(v) => pick("cidade", v)}
             align="end"
+            maxVisible={100}
           />
           {dirtyCount > 0 && <FilterClearButton count={dirtyCount} onClear={onReset} />}
         </div>

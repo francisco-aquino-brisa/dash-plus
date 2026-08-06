@@ -193,6 +193,7 @@ export function VendedorDashboard({
         onNavigate={navigate}
         onVisChange={setVis}
         lockedToSelf={lockedToSelf}
+        selectedVendedorLabel={profile?.nome ?? ""}
       />
 
       <Segmented options={TABS} value={tab} onChange={setTab} ariaLabel="Resultados ou Pendências" />

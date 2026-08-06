@@ -28,6 +28,7 @@ export function VendedorFilterBar({
   onNavigate,
   onVisChange,
   lockedToSelf = false,
+  selectedVendedorLabel = "",
 }: {
   filters: VendedorFilters;
   options: VendedorFilterOptions;
@@ -36,6 +37,8 @@ export function VendedorFilterBar({
   onVisChange: (v: Visibility) => void;
   /** A "vendedor" user is locked to their own data — hide the vendedor selector. */
   lockedToSelf?: boolean;
+  /** Name of the currently selected vendedor (for the pill; search is server-side). */
+  selectedVendedorLabel?: string;
 }) {
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 30, paddingTop: 4 }}>
@@ -54,8 +57,9 @@ export function VendedorFilterBar({
       >
         {!lockedToSelf && (
           <VendedorSearch
-            options={options.vendedores}
             value={filters.matricula}
+            selectedLabel={selectedVendedorLabel}
+            competencia={filters.competencia}
             onSelect={(m) => onNavigate({ ...filters, matricula: m })}
           />
         )}

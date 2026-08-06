@@ -114,6 +114,7 @@ export function CitiesFilterBar({
           defaultValue={ALL}
           onChange={(v) => pick("cidade", v)}
           align="end"
+          maxVisible={100}
         />
         <ChipFilter
           label="Tecnologia"

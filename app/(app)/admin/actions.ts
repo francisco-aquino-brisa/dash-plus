@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/session";
-import { deriveEmail, normalizeCapabilityLabel } from "@/lib/data/admin/derive";
+import { normalizeCapabilityLabel } from "@/lib/data/admin/derive";
+import {
+  findHierarquiaCandidate,
+  readUsuarioIdentity,
+  searchHierarquiaCandidates,
+  type HierarquiaCandidate,
+} from "@/lib/data/admin/hierarquia";
 import type { ActionResult } from "@/lib/data/admin/types";
 import * as write from "@/lib/data/admin/write";
 
@@ -157,27 +163,65 @@ export async function removeCapacidade(id: number): Promise<ActionResult> {
 
 // ── Usuários ──────────────────────────────────────────────────────────────────
 
+/**
+ * Search hierarchy candidates for the "Vincular usuário" picker (admin-only).
+ * Returns [] when unauthorized so the client control degrades to empty.
+ */
+export async function searchUsuarioCandidates(query: string): Promise<HierarquiaCandidate[]> {
+  const session = await getSession();
+
+  if (!session?.isAdmin) return [];
+
+  return searchHierarquiaCandidates(query ?? "");
+}
+
 export async function saveUsuario(input: {
   id?: number;
-  nome: string;
+  /** Selected candidate e-mail (create only) — re-validated against the hierarchy. */
+  email?: string;
   nivelId: number | null;
   cargoId: number | null;
   ativo?: boolean;
 }): Promise<ActionResult> {
-  const nome = clean(input.nome);
+  if (input.id) {
+    // Edit: only nível/cargo/status change. Nome/e-mail come from the stored row,
+    // never the client, so a forged payload cannot rewrite another user's identity.
+    const denied = await guard();
 
-  if (!nome) return { ok: false, error: "Informe o nome do usuário." };
+    if (denied) return denied;
 
-  // Email is derived from the name (DESIGN_SYSTEM §5), never taken from the client.
-  const email = deriveEmail(nome);
+    const identity = await readUsuarioIdentity(input.id);
 
-  if (!email) return { ok: false, error: "Não foi possível derivar o e-mail a partir do nome." };
+    if (!identity) return { ok: false, error: "Usuário não encontrado." };
 
-  return mutate(() =>
-    input.id
-      ? write.updateUsuario(input.id, nome, email, input.nivelId, input.cargoId, input.ativo ?? true)
-      : write.createUsuario(nome, email, input.nivelId, input.cargoId),
-  );
+    return mutate(() =>
+      write.updateUsuario(
+        input.id!,
+        identity.nome,
+        identity.email,
+        input.nivelId,
+        input.cargoId,
+        input.ativo ?? true,
+      ),
+    );
+  }
+
+  // Create: bind a person selected from the hierarchy. The e-mail is resolved back
+  // to its canonical identity server-side (must exist there and not be registered).
+  const denied = await guard();
+
+  if (denied) return denied;
+
+  const candidate = await findHierarquiaCandidate(input.email ?? "");
+
+  if (!candidate) {
+    return {
+      ok: false,
+      error: "Selecione um usuário válido da hierarquia (com e-mail e ainda não cadastrado).",
+    };
+  }
+
+  return mutate(() => write.createUsuario(candidate.nome, candidate.email, input.nivelId, input.cargoId));
 }
 
 export async function removeUsuario(id: number): Promise<ActionResult> {

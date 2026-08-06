@@ -1,22 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { AtSign } from "lucide-react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { AtSign, CircleCheck, CircleX } from "lucide-react";
 import { AdminScreen } from "./AdminScreen";
 import { AdminModal } from "./AdminModal";
 import { ConfirmDelete } from "./ConfirmDelete";
 import { AdminSelect } from "./AdminSelect";
-import { Chip, Field, Panel, RowActions } from "./primitives";
+import { AsyncSelect, type AsyncOption } from "./AsyncSelect";
+import { Chip, Panel, RowActions } from "./primitives";
 import { useAdminAction } from "./useAdminAction";
 import { textMatches } from "./filter";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { deriveEmail, nivelChipTone, statusChipTone } from "@/lib/data/admin/derive";
-import { removeUsuario, saveUsuario } from "@/app/(app)/admin/actions";
+import { nivelChipTone, statusChipTone } from "@/lib/data/admin/derive";
+import { removeUsuario, saveUsuario, searchUsuarioCandidates } from "@/app/(app)/admin/actions";
 import type { Cargo, Nivel, Usuario } from "@/lib/data/admin/types";
 
 interface Draft {
   id?: number;
   nome: string;
+  email: string;
   nivelId: number | null;
   cargoId: number | null;
   ativo: boolean;
@@ -76,6 +78,12 @@ export function UsuariosScreen({
       render: (u) => <Chip tone={statusChipTone(u.ativo)}>{u.ativo ? "Ativo" : "Inativo"}</Chip>,
     },
     {
+      key: "sincronizado",
+      header: "Sincronizado",
+      align: "center",
+      render: (u) => <SyncIndicator on={u.sincronizado} />,
+    },
+    {
       key: "acoes",
       header: "",
       align: "right",
@@ -85,13 +93,29 @@ export function UsuariosScreen({
 
   function openNew() {
     setError(null);
-    setDraft({ nome: "", nivelId: niveis[0]?.id ?? null, cargoId: null, ativo: true });
+    setDraft({ nome: "", email: "", nivelId: niveis[0]?.id ?? null, cargoId: null, ativo: true });
   }
 
   function openEdit(u: Usuario) {
     setError(null);
-    setDraft({ id: u.id, nome: u.nome, nivelId: u.nivelId, cargoId: u.cargoId, ativo: u.ativo });
+    setDraft({
+      id: u.id,
+      nome: u.nome,
+      email: u.email,
+      nivelId: u.nivelId,
+      cargoId: u.cargoId,
+      ativo: u.ativo,
+    });
   }
+
+  // Search hierarchy candidates (server-side, max 100), mapped to the picker shape.
+  const searchCandidates = useCallback(
+    (query: string): Promise<AsyncOption[]> =>
+      searchUsuarioCandidates(query).then((rows) =>
+        rows.map((r) => ({ value: r.email, label: r.nome, hint: r.email })),
+      ),
+    [],
+  );
 
   function submit() {
     if (!draft) return;
@@ -100,7 +124,8 @@ export function UsuariosScreen({
       () =>
         saveUsuario({
           id: draft.id,
-          nome: draft.nome,
+          // On create, the selected candidate e-mail; on edit, the server keeps the stored identity.
+          email: draft.id ? undefined : draft.email,
           nivelId: draft.nivelId,
           cargoId: draft.cargoId,
           ativo: draft.ativo,
@@ -118,8 +143,6 @@ export function UsuariosScreen({
     );
   }
 
-  const previewEmail = draft ? deriveEmail(draft.nome) : "";
-
   return (
     <AdminScreen
       title="Usuários"
@@ -133,6 +156,7 @@ export function UsuariosScreen({
           rows={rows}
           rowKey={(u) => String(u.id)}
           minWidth={720}
+          pageSize={25}
           empty={{ title: "Nenhum usuário", hint: "Vincule a primeira pessoa a um nível de acesso." }}
         />
       </Panel>
@@ -145,37 +169,63 @@ export function UsuariosScreen({
           title={draft.id ? "Editar usuário" : "Vincular usuário"}
           onSubmit={submit}
           submitLabel={draft.id ? "Salvar" : "Vincular"}
-          submitDisabled={!draft.nome.trim() || !previewEmail}
+          submitDisabled={!draft.email}
           busy={busy}
           error={error}
         >
-          <Field
-            label="Nome completo"
-            value={draft.nome}
-            onChange={(nome) => setDraft({ ...draft, nome })}
-            placeholder="Ex.: Marcia Chaves de Aquino"
-            autoFocus
-          />
-          {/* Email is derived from the name (DESIGN_SYSTEM §5) — confirmation, not a field. */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "9px 12px",
-              borderRadius: 10,
-              background: "var(--s-sunken)",
-              border: "1px dashed var(--s-border-2)",
-              color: previewEmail ? "var(--s-t2)" : "var(--s-t3)",
-              fontSize: 12.5,
-              fontWeight: 600,
-            }}
-          >
-            <AtSign size={14} style={{ flex: "none", color: "var(--s-t3)" }} />
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {previewEmail || "O e-mail é gerado a partir do nome"}
-            </span>
-          </div>
+          {draft.id ? (
+            // Edit: identity is fixed (came from the hierarchy) — show it, don't re-pick.
+            <div>
+              <FieldLabel>Usuário</FieldLabel>
+              <div
+                style={{
+                  padding: "9px 12px",
+                  borderRadius: 10,
+                  background: "var(--s-sunken)",
+                  border: "1px solid var(--s-border)",
+                }}
+              >
+                <span style={{ display: "block", fontWeight: 800, color: "var(--s-t1)", fontSize: 13.5 }}>
+                  {draft.nome}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <AsyncSelect
+              label="Usuário"
+              value={draft.email ? { value: draft.email, label: draft.nome, hint: draft.email } : null}
+              onChange={(opt) => setDraft({ ...draft, nome: opt?.label ?? "", email: opt?.value ?? "" })}
+              search={searchCandidates}
+              placeholder="Selecionar pessoa da hierarquia…"
+              searchPlaceholder="Buscar por nome, e-mail, matrícula…"
+              emptyText="Nenhuma pessoa disponível (sem e-mail ou já cadastrada)."
+            />
+          )}
+          {/* Email is the real address from the hierarchy — read-only, shown once a person is picked. */}
+          {draft.email && (
+            <div>
+              <FieldLabel>E-mail (login)</FieldLabel>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "9px 12px",
+                  borderRadius: 10,
+                  background: "var(--s-sunken)",
+                  border: "1px solid var(--s-border)",
+                  color: "var(--s-t2)",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                }}
+              >
+                <AtSign size={14} style={{ flex: "none", color: "var(--s-t3)" }} />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {draft.email}
+                </span>
+              </div>
+            </div>
+          )}
           <AdminSelect
             label="Nível de acesso"
             value={draft.nivelId}
@@ -210,6 +260,37 @@ export function UsuariosScreen({
         />
       )}
     </AdminScreen>
+  );
+}
+
+/** Boolean sync status as a suggestive icon: green check when synced, muted ✕ when not. */
+function SyncIndicator({ on }: { on: boolean }) {
+  return (
+    <span
+      title={on ? "Sincronizado" : "Não sincronizado"}
+      aria-label={on ? "Sincronizado" : "Não sincronizado"}
+      style={{ display: "inline-flex", color: on ? "var(--s-ok)" : "var(--s-t3)" }}
+    >
+      {on ? <CircleCheck size={18} strokeWidth={2.2} /> : <CircleX size={18} strokeWidth={2.2} />}
+    </span>
+  );
+}
+
+function FieldLabel({ children }: { children: ReactNode }) {
+  return (
+    <span
+      style={{
+        display: "block",
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: ".06em",
+        textTransform: "uppercase",
+        color: "var(--s-t3)",
+        marginBottom: 6,
+      }}
+    >
+      {children}
+    </span>
   );
 }
 
