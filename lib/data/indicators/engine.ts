@@ -2,7 +2,7 @@ import "server-only";
 
 import { DatabricksDataClient } from "@/lib/data/databricks";
 import { SOURCE_META, type PreviewFilters, type PreviewResult } from "./sources";
-import { expressionColumns, type CalcSpec, type Filtro, type Medida } from "./spec";
+import { expressionColumns, type CalcSpec, type Condicao, type Grupo, type Medida } from "./spec";
 
 export type { PreviewFilters, PreviewResult };
 
@@ -52,14 +52,18 @@ function assertExpr(expr: string, cols: Set<string>): string {
   return expr;
 }
 
-function filterCond(f: Filtro, params: unknown[], cols: Set<string>): string {
-  const col = assertCol(f.coluna, cols);
-  const op = f.operador ?? "igual";
+function condSql(c: Condicao, params: unknown[], cols: Set<string>): string {
+  const col = assertCol(c.coluna, cols);
+  const op = c.operador ?? "igual";
+
+  if (op === "nulo") return `${col} IS NULL`;
+
+  if (op === "nao_nulo") return `${col} IS NOT NULL`;
 
   if (op === "em" || op === "nao_em") {
-    const vals = Array.isArray(f.valor)
-      ? f.valor
-      : String(f.valor)
+    const vals = Array.isArray(c.valor)
+      ? c.valor
+      : String(c.valor)
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean);
@@ -73,14 +77,31 @@ function filterCond(f: Filtro, params: unknown[], cols: Set<string>): string {
     return `${col} ${op === "em" ? "IN" : "NOT IN"} (${ph})`;
   }
 
-  params.push(Array.isArray(f.valor) ? f.valor.join(",") : f.valor);
+  params.push(Array.isArray(c.valor) ? c.valor.join(",") : c.valor);
 
   return `${col} ${OPS[op] ?? "="} ?`;
 }
 
+/**
+ * Build a filter group into SQL, recursively — each group wraps its items in
+ * parentheses joined by its `juncao` (E/OU), so nested AND/OR is deterministic.
+ */
+function buildGrupo(g: Grupo | undefined, params: unknown[], cols: Set<string>): string | null {
+  if (!g || g.itens.length === 0) return null;
+
+  const parts = g.itens
+    .map((n) => (n.tipo === "grupo" ? buildGrupo(n, params, cols) : condSql(n, params, cols)))
+    .filter((p): p is string => !!p);
+
+  if (parts.length === 0) return null;
+
+  const j = g.juncao === "ou" ? " OR " : " AND ";
+
+  return `(${parts.join(j)})`;
+}
+
 function measureAgg(m: Medida, params: unknown[], cols: Set<string>): string {
-  const conds = (m.filtros ?? []).map((f) => filterCond(f, params, cols));
-  const cond = conds.length ? conds.join(" AND ") : null;
+  const cond = buildGrupo(m.filtros, params, cols);
 
   if (m.agregacao === "contagem") return cond ? `COUNT(CASE WHEN ${cond} THEN 1 END)` : "COUNT(*)";
 
@@ -146,7 +167,9 @@ export async function runPreview(
 
   const where: string[] = [`${tsExpr(meta.competencia)} >= add_months(current_date(), -12)`];
 
-  for (const f of spec.filtros ?? []) where.push(filterCond(f, params, cols));
+  const specCond = buildGrupo(spec.filtros, params, cols);
+
+  if (specCond) where.push(specCond);
 
   const sql = `SELECT ${ymExpr(meta.competencia)} AS ym, ${numSql} AS num, ${denSql} AS den
        FROM \`${CAT}\`.\`${SCHEMA}\`.\`${spec.fonte}\`

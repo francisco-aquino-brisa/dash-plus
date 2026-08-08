@@ -5,6 +5,9 @@
  *
  * The `forma` carries the aggregation semantics (not `formato`): `simples` sums
  * the measure, `razao` recomputes Σnum ÷ Σden, `variacao_mensal` is mês − mês−1.
+ *
+ * Filters form a TREE: a `Grupo` joins its `itens` (conditions or nested groups)
+ * by `juncao` (E/OU), so `(a OR b) AND c` and `a OR (b AND c)` are expressible.
  */
 
 export type Forma = "simples" | "razao" | "variacao_mensal";
@@ -13,20 +16,45 @@ export type Formato = "inteiro" | "percentual" | "moeda" | "decimal";
 export type Polaridade = "maior_melhor" | "menor_melhor";
 export type Periodo = "atual" | "mes_anterior";
 export type Operador =
-  "igual" | "diferente" | "em" | "nao_em" | "maior" | "maior_igual" | "menor" | "menor_igual";
+  | "igual"
+  | "diferente"
+  | "em"
+  | "nao_em"
+  | "maior"
+  | "maior_igual"
+  | "menor"
+  | "menor_igual"
+  | "nulo"
+  | "nao_nulo";
 
-export interface Filtro {
+/** How a group's items are joined (E/OU). */
+export type Conector = "e" | "ou";
+
+/** A leaf comparison. In builder state `valor` is a string; serialized to an array for em/nao_em. */
+export interface Condicao {
   coluna: string;
   operador?: Operador;
-  /** In the builder state this is always a string; serialization arrays it for `em`/`nao_em`. */
   valor: string | string[];
+}
+
+/** A group of items (conditions or nested groups) joined by `juncao`. */
+export interface Grupo {
+  juncao: Conector;
+  itens: FiltroNo[];
+}
+
+export type FiltroNo = ({ tipo: "condicao" } & Condicao) | ({ tipo: "grupo" } & Grupo);
+
+/** Operators that take no value (IS NULL / IS NOT NULL). */
+export function operadorSemValor(op: Operador | undefined): boolean {
+  return op === "nulo" || op === "nao_nulo";
 }
 
 export interface Medida {
   agregacao: Agregacao;
   coluna?: string;
   expressao?: string;
-  filtros?: Filtro[];
+  filtros?: Grupo;
   periodo?: Periodo;
 }
 
@@ -36,7 +64,7 @@ export interface CalcSpec {
   medida?: Medida;
   numerador?: Medida;
   denominador?: Medida;
-  filtros?: Filtro[];
+  filtros?: Grupo;
   formato: Formato;
   polaridade: Polaridade;
 }
@@ -81,12 +109,27 @@ export const OPERADORES: { value: Operador; label: string }[] = [
   { value: "maior_igual", label: "≥ maior ou igual" },
   { value: "menor", label: "< menor" },
   { value: "menor_igual", label: "≤ menor ou igual" },
+  { value: "nulo", label: "vazio (nulo)" },
+  { value: "nao_nulo", label: "preenchido (não nulo)" },
+];
+
+export const CONECTORES: { value: Conector; label: string }[] = [
+  { value: "e", label: "E" },
+  { value: "ou", label: "OU" },
 ];
 
 // ── Constructors ──────────────────────────────────────────────────────────────
 
 export function emptyMedida(): Medida {
   return { agregacao: "soma", coluna: "" };
+}
+
+export function emptyCondicao(): FiltroNo {
+  return { tipo: "condicao", coluna: "", operador: "igual", valor: "" };
+}
+
+export function emptyGrupo(): Grupo {
+  return { juncao: "e", itens: [] };
 }
 
 export function emptySpec(): CalcSpec {
@@ -99,31 +142,82 @@ export function emptySpec(): CalcSpec {
   };
 }
 
-// ── Parse / serialize ───────────────────────────────────────────────────────
+// ── Parse ─────────────────────────────────────────────────────────────────────
 
-/** Parse stored JSON into an editable spec (arrays of `valor` joined for editing). */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+function toNode(raw: any): FiltroNo | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const isGrupo = Array.isArray(raw.itens) || raw.tipo === "grupo" || raw.juncao != null;
+
+  if (isGrupo) {
+    return {
+      tipo: "grupo",
+      juncao: raw.juncao === "ou" ? "ou" : "e",
+      itens: (raw.itens ?? []).map(toNode).filter(Boolean) as FiltroNo[],
+    };
+  }
+
+  return {
+    tipo: "condicao",
+    coluna: String(raw.coluna ?? ""),
+    operador: raw.operador,
+    valor: Array.isArray(raw.valor) ? raw.valor.join(", ") : String(raw.valor ?? ""),
+  };
+}
+
+/** Normalize either the legacy flat array (implicit AND) or a group object into a Grupo. */
+function normGrupo(raw: any): Grupo | undefined {
+  if (raw == null) return undefined;
+
+  if (Array.isArray(raw)) {
+    return { juncao: "e", itens: raw.map(toNode).filter(Boolean) as FiltroNo[] };
+  }
+
+  if (typeof raw === "object") {
+    return {
+      juncao: raw.juncao === "ou" ? "ou" : "e",
+      itens: (raw.itens ?? []).map(toNode).filter(Boolean) as FiltroNo[],
+    };
+  }
+
+  return undefined;
+}
+
+/** Parse stored JSON into an editable spec (list `valor`s joined, filters as a tree). */
 export function parseSpec(json: string | null | undefined): CalcSpec | null {
   if (!json || !json.trim()) return null;
 
   try {
-    const raw = JSON.parse(json) as CalcSpec;
-    const inMedida = (m?: Medida): Medida | undefined => m && { ...m, filtros: m.filtros?.map(inFiltro) };
+    const raw = JSON.parse(json) as any;
+    const inMedida = (m?: any): Medida | undefined =>
+      m && {
+        agregacao: m.agregacao,
+        coluna: m.coluna,
+        expressao: m.expressao,
+        periodo: m.periodo,
+        filtros: normGrupo(m.filtros),
+      };
 
     return {
-      ...raw,
+      forma: raw.forma,
+      fonte: raw.fonte,
       medida: inMedida(raw.medida),
       numerador: inMedida(raw.numerador),
       denominador: inMedida(raw.denominador),
-      filtros: raw.filtros?.map(inFiltro),
+      filtros: normGrupo(raw.filtros),
+      formato: raw.formato,
+      polaridade: raw.polaridade,
     };
   } catch {
     return null;
   }
 }
 
-function inFiltro(f: Filtro): Filtro {
-  return { ...f, valor: Array.isArray(f.valor) ? f.valor.join(", ") : String(f.valor ?? "") };
-}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ── Serialize ─────────────────────────────────────────────────────────────────
 
 /** Serialize the editable spec to canonical JSON — prunes empties, arrays list values. */
 export function serializeSpec(spec: CalcSpec): string {
@@ -136,7 +230,9 @@ export function serializeSpec(spec: CalcSpec): string {
     out.medida = outMedida(spec.medida);
   }
 
-  if (spec.filtros?.length) out.filtros = spec.filtros.map(outFiltro);
+  const g = outRoot(spec.filtros);
+
+  if (g !== undefined) out.filtros = g;
 
   out.formato = spec.formato;
   out.polaridade = spec.polaridade;
@@ -152,28 +248,47 @@ function outMedida(m?: Medida): Record<string, unknown> | undefined {
   if (m.expressao?.trim()) o.expressao = m.expressao.trim();
   else if (m.coluna?.trim()) o.coluna = m.coluna.trim();
 
-  if (m.filtros?.length) o.filtros = m.filtros.map(outFiltro);
+  const g = outRoot(m.filtros);
+
+  if (g !== undefined) o.filtros = g;
 
   if (m.periodo && m.periodo !== "atual") o.periodo = m.periodo;
 
   return o;
 }
 
-function outFiltro(f: Filtro): Record<string, unknown> {
-  const op = f.operador && f.operador !== "igual" ? f.operador : undefined;
+/** Root group: emit the simple all-"e"-of-conditions case as a flat array (doc-friendly). */
+function outRoot(g?: Grupo): unknown {
+  if (!g || g.itens.length === 0) return undefined;
+
+  if (g.juncao === "e" && g.itens.every((n) => n.tipo === "condicao")) {
+    return g.itens.map((n) => outCond(n as Condicao));
+  }
+
+  return outGrupo(g);
+}
+
+function outGrupo(g: Grupo): Record<string, unknown> {
+  return { juncao: g.juncao, itens: g.itens.map((n) => (n.tipo === "grupo" ? outGrupo(n) : outCond(n))) };
+}
+
+function outCond(c: Condicao): Record<string, unknown> {
+  const op = c.operador && c.operador !== "igual" ? c.operador : undefined;
   const isList = op === "em" || op === "nao_em";
-  const raw = Array.isArray(f.valor) ? f.valor.join(", ") : String(f.valor ?? "");
-  const valor = isList
-    ? raw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : raw;
-  const o: Record<string, unknown> = { coluna: f.coluna };
+  const o: Record<string, unknown> = { coluna: c.coluna };
 
   if (op) o.operador = op;
 
-  o.valor = valor;
+  if (!operadorSemValor(c.operador)) {
+    const raw = Array.isArray(c.valor) ? c.valor.join(", ") : String(c.valor ?? "");
+
+    o.valor = isList
+      ? raw
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : raw;
+  }
 
   return o;
 }
@@ -238,7 +353,7 @@ export function validateSpec(spec: CalcSpec, columnsBySource: Record<string, str
             issues.push({ path, message: `${label}: coluna "${c}" não existe na fonte.` });
     }
 
-    (m.filtros ?? []).forEach((f, i) => checkFilter(f, `${label} · filtro ${i + 1}`, cols, issues));
+    checkGrupo(m.filtros, `${label} · filtros`, cols, issues);
   };
 
   if (spec.forma === "razao") {
@@ -248,19 +363,35 @@ export function validateSpec(spec: CalcSpec, columnsBySource: Record<string, str
     checkMeasure(spec.medida, "medida", "Medida");
   }
 
-  (spec.filtros ?? []).forEach((f, i) => checkFilter(f, `Filtro ${i + 1}`, cols, issues));
+  checkGrupo(spec.filtros, "Filtros", cols, issues);
 
   return issues;
 }
 
-function checkFilter(f: Filtro, label: string, cols: string[] | undefined, issues: SpecIssue[]): void {
-  if (!f.coluna?.trim()) {
+function checkGrupo(
+  g: Grupo | undefined,
+  label: string,
+  cols: string[] | undefined,
+  issues: SpecIssue[],
+): void {
+  if (!g) return;
+
+  g.itens.forEach((n, i) => {
+    if (n.tipo === "grupo") checkGrupo(n, `${label} › grupo ${i + 1}`, cols, issues);
+    else checkCondicao(n, `${label} › ${i + 1}`, cols, issues);
+  });
+}
+
+function checkCondicao(c: Condicao, label: string, cols: string[] | undefined, issues: SpecIssue[]): void {
+  if (!c.coluna?.trim()) {
     issues.push({ path: label, message: `${label}: sem coluna.` });
-  } else if (cols && !cols.includes(f.coluna.trim())) {
-    issues.push({ path: label, message: `${label}: coluna "${f.coluna}" não existe na fonte.` });
+  } else if (cols && !cols.includes(c.coluna.trim())) {
+    issues.push({ path: label, message: `${label}: coluna "${c.coluna}" não existe na fonte.` });
   }
 
-  const raw = Array.isArray(f.valor) ? f.valor.join(",") : String(f.valor ?? "");
+  if (operadorSemValor(c.operador)) return; // nulo / não nulo dispensam valor
+
+  const raw = Array.isArray(c.valor) ? c.valor.join(",") : String(c.valor ?? "");
 
   if (!raw.trim()) issues.push({ path: label, message: `${label}: sem valor.` });
 }

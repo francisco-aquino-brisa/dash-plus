@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Eye } from "lucide-react";
+import { CheckCircle2, ChevronDown, Circle, CircleDashed, Eye } from "lucide-react";
 import { AdminScreen } from "./AdminScreen";
 import { Chip, Panel } from "./primitives";
 import { textMatches } from "./filter";
@@ -17,6 +17,7 @@ function isAtivo(status: string | null): boolean {
 
 export function IndicadoresScreen({ indicadores }: { indicadores: IndicadorGeral[] }) {
   const [query, setQuery] = useState("");
+  const [onlyMissing, setOnlyMissing] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const toggle = (key: string) =>
@@ -30,15 +31,28 @@ export function IndicadoresScreen({ indicadores }: { indicadores: IndicadorGeral
     });
 
   const groups = useMemo(() => {
-    const filtered = indicadores.filter((ind) =>
-      textMatches(
-        query,
-        ind.id,
-        ind.nome,
-        ind.categoria,
-        ...ind.servicos.flatMap((s) => [s.servico, s.indicadorServico]),
-      ),
-    );
+    const filtered = indicadores.filter((ind) => {
+      if (
+        !textMatches(
+          query,
+          ind.id,
+          ind.nome,
+          ind.categoria,
+          ...ind.servicos.flatMap((s) => [s.servico, s.indicadorServico]),
+        )
+      ) {
+        return false;
+      }
+
+      if (onlyMissing) {
+        const total = ind.servicos.length;
+        const done = ind.servicos.filter((s) => !!s.especificacaoCalculo?.trim()).length;
+
+        if (!(total > 0 && done < total)) return false;
+      }
+
+      return true;
+    });
 
     const map = new Map<string, IndicadorGeral[]>();
 
@@ -55,7 +69,7 @@ export function IndicadoresScreen({ indicadores }: { indicadores: IndicadorGeral
       .map((k) => ({ key: k, label: k, tone: categoryTone(k) }));
 
     return [...known, ...extra].map((c) => ({ ...c, items: map.get(c.key) ?? [] }));
-  }, [indicadores, query]);
+  }, [indicadores, query, onlyMissing]);
 
   const columns: Column<IndicadorGeral>[] = [
     {
@@ -87,6 +101,40 @@ export function IndicadoresScreen({ indicadores }: { indicadores: IndicadorGeral
             ))}
           </span>
         ),
+    },
+    {
+      key: "calculo",
+      header: "Cálculo",
+      render: (i) => {
+        const total = i.servicos.length;
+        const done = i.servicos.filter((s) => !!s.especificacaoCalculo?.trim()).length;
+
+        if (total === 0) return <span style={{ color: "var(--s-t3)" }}>—</span>;
+
+        const { Icon, color } =
+          done === total
+            ? { Icon: CheckCircle2, color: "var(--s-ok)" }
+            : done === 0
+              ? { Icon: Circle, color: "var(--s-t3)" }
+              : { Icon: CircleDashed, color: "var(--s-warn)" };
+
+        return (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              color,
+              fontWeight: 700,
+              fontSize: 12.5,
+            }}
+            title={`${done} de ${total} serviço(s) com cálculo definido`}
+          >
+            <Icon size={15} />
+            {done}/{total}
+          </span>
+        );
+      },
     },
     {
       key: "status",
@@ -130,6 +178,33 @@ export function IndicadoresScreen({ indicadores }: { indicadores: IndicadorGeral
       title="Indicadores"
       subtitle="Catálogo de indicadores e suas fórmulas, por categoria"
       search={{ value: query, onChange: setQuery, placeholder: "Buscar por código, nome ou serviço…" }}
+      extra={
+        <button
+          type="button"
+          onClick={() => setOnlyMissing((v) => !v)}
+          aria-pressed={onlyMissing}
+          className="bd-ghost"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            height: 44,
+            padding: "0 14px",
+            borderRadius: 12,
+            border: `1px solid ${onlyMissing ? "var(--s-brand)" : "var(--s-border)"}`,
+            background: onlyMissing ? "var(--s-brand-weak)" : "var(--s-card)",
+            color: onlyMissing ? "var(--s-brand)" : "var(--s-t2)",
+            font: "inherit",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <CircleDashed size={15} />
+          Somente sem cálculo
+        </button>
+      }
     >
       {groups.length === 0 && (
         <Panel style={{ padding: 24 }}>
@@ -195,7 +270,7 @@ export function IndicadoresScreen({ indicadores }: { indicadores: IndicadorGeral
                   columns={columns}
                   rows={g.items}
                   rowKey={(i) => i.id}
-                  minWidth={620}
+                  minWidth={700}
                   empty={{ title: "Nenhum indicador", hint: "Sem itens nesta categoria." }}
                 />
               </Panel>

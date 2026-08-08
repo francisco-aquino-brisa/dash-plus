@@ -8,6 +8,8 @@ import { salvarCalculo } from "@/app/(app)/admin/indicadores/actions";
 import { sourceOptions } from "@/lib/data/indicators/sources";
 import {
   AGREGACOES,
+  emptyCondicao,
+  emptyGrupo,
   emptyMedida,
   emptySpec,
   FORMAS,
@@ -19,7 +21,10 @@ import {
   serializeSpec,
   validateSpec,
   type CalcSpec,
-  type Filtro,
+  type Condicao,
+  type Conector,
+  type FiltroNo,
+  type Grupo,
   type Medida,
 } from "@/lib/data/indicators/spec";
 
@@ -139,11 +144,11 @@ export function CalcBuilderForm({
       )}
 
       {/* Indicator-level filters */}
-      <FiltroList
+      <GrupoEditor
         title="Filtros (aplicados a todas as medidas)"
         columns={columns}
-        filtros={spec.filtros ?? []}
-        onChange={(filtros) => set({ filtros })}
+        grupo={spec.filtros}
+        onChange={(g) => set({ filtros: g })}
       />
 
       {/* Format / polarity */}
@@ -343,119 +348,216 @@ function MeasureEditor({
         />
       )}
 
-      <FiltroList
+      <GrupoEditor
         title="Filtros da medida"
         columns={columns}
-        filtros={value.filtros ?? []}
-        onChange={(filtros) => set({ filtros })}
+        grupo={value.filtros}
+        onChange={(g) => set({ filtros: g })}
       />
     </Section>
   );
 }
 
-// ── Filter list ───────────────────────────────────────────────────────────────
+// ── Filter tree (groups of conditions / nested groups) ─────────────────────────
 
-function FiltroList({
-  title,
+function GrupoEditor({
+  grupo,
   columns,
-  filtros,
   onChange,
+  title,
+  depth = 0,
 }: {
-  title: string;
+  grupo: Grupo | undefined;
   columns: string[];
-  filtros: Filtro[];
-  onChange: (f: Filtro[]) => void;
+  onChange: (g: Grupo) => void;
+  title?: string;
+  depth?: number;
 }) {
-  const add = () => onChange([...filtros, { coluna: "", operador: "igual", valor: "" }]);
-  const update = (i: number, patch: Partial<Filtro>) =>
-    onChange(filtros.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
-  const remove = (i: number) => onChange(filtros.filter((_, idx) => idx !== i));
+  const g = grupo ?? emptyGrupo();
+
+  const setJuncao = (j: Conector) => onChange({ ...g, juncao: j });
+  const addCond = () => onChange({ ...g, itens: [...g.itens, emptyCondicao()] });
+  const addGrupo = () => onChange({ ...g, itens: [...g.itens, { tipo: "grupo", juncao: "e", itens: [] }] });
+  const updateItem = (i: number, node: FiltroNo) =>
+    onChange({ ...g, itens: g.itens.map((n, idx) => (idx === i ? node : n)) });
+  const removeItem = (i: number) => onChange({ ...g, itens: g.itens.filter((_, idx) => idx !== i) });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ ...labelStyle, marginBottom: 0 }}>{title}</span>
-        <button
-          type="button"
-          onClick={add}
-          className="bd-ghost"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            height: 26,
-            padding: "0 8px",
-            borderRadius: 8,
-            border: "1px solid var(--s-border)",
-            background: "var(--s-card)",
-            color: "var(--s-t2)",
-            font: "inherit",
-            fontSize: 11.5,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={13} /> Filtro
-        </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        {title && <span style={{ ...labelStyle, marginBottom: 0 }}>{title}</span>}
+        {g.itens.length > 1 && (
+          <div style={{ display: "flex", gap: 6 }}>
+            <ModeTab active={g.juncao === "e"} onClick={() => setJuncao("e")}>
+              E
+            </ModeTab>
+            <ModeTab active={g.juncao === "ou"} onClick={() => setJuncao("ou")}>
+              OU
+            </ModeTab>
+          </div>
+        )}
+        <span style={{ flex: 1 }} />
+        <AddBtn onClick={addCond}>Condição</AddBtn>
+        {depth < 2 && <AddBtn onClick={addGrupo}>Grupo</AddBtn>}
       </div>
 
-      {filtros.map((f, i) => {
-        const isList = f.operador === "em" || f.operador === "nao_em";
+      {g.itens.length === 0 && (
+        <span style={{ fontSize: 11.5, color: "var(--s-t3)", fontStyle: "italic" }}>Sem filtros.</span>
+      )}
 
-        return (
-          <div key={i} style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
-            <div style={{ flex: 1.2, minWidth: 0 }}>
-              <SelectField
-                label={i === 0 ? "Coluna" : ""}
-                value={f.coluna}
-                options={columns.map((c) => ({ value: c, label: c }))}
-                placeholder="coluna…"
-                onChange={(v) => update(i, { coluna: v })}
-              />
+      {g.itens.map((n, i) =>
+        n.tipo === "grupo" ? (
+          <div
+            key={i}
+            style={{
+              border: "1px solid var(--s-border)",
+              borderLeft: "3px solid var(--s-brand)",
+              borderRadius: 10,
+              background: "var(--s-card)",
+              padding: 10,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".08em", color: "var(--s-t3)" }}>
+                GRUPO
+              </span>
+              <span style={{ flex: 1 }} />
+              <RemoveBtn onClick={() => removeItem(i)} label="Remover grupo" />
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <SelectField
-                label={i === 0 ? "Operador" : ""}
-                value={f.operador ?? "igual"}
-                options={OPERADORES}
-                onChange={(v) => update(i, { operador: v as Filtro["operador"] })}
-              />
-            </div>
-            <div style={{ flex: 1.2, minWidth: 0 }}>
-              <label style={{ display: "block" }}>
-                {i === 0 && <span style={labelStyle}>Valor</span>}
-                <input
-                  value={Array.isArray(f.valor) ? f.valor.join(", ") : f.valor}
-                  onChange={(e) => update(i, { valor: e.target.value })}
-                  placeholder={isList ? "A, B, C" : "valor"}
-                  style={controlStyle}
-                />
-              </label>
-            </div>
-            <button
-              type="button"
-              onClick={() => remove(i)}
-              aria-label="Remover filtro"
-              className="bd-ghost"
-              style={{
-                flex: "none",
-                display: "grid",
-                placeItems: "center",
-                width: 40,
-                height: 40,
-                borderRadius: 10,
-                border: "1px solid var(--s-border)",
-                background: "var(--s-card)",
-                color: "var(--s-bad)",
-                cursor: "pointer",
-              }}
-            >
-              <Trash2 size={14} />
-            </button>
+            <GrupoEditor
+              grupo={n}
+              columns={columns}
+              onChange={(gg) => updateItem(i, { tipo: "grupo", ...gg })}
+              depth={depth + 1}
+            />
           </div>
-        );
-      })}
+        ) : (
+          <CondicaoRow
+            key={i}
+            cond={n}
+            columns={columns}
+            onChange={(c) => updateItem(i, { tipo: "condicao", ...c })}
+            onRemove={() => removeItem(i)}
+          />
+        ),
+      )}
     </div>
+  );
+}
+
+function CondicaoRow({
+  cond: c,
+  columns,
+  onChange,
+  onRemove,
+}: {
+  cond: Condicao;
+  columns: string[];
+  onChange: (c: Condicao) => void;
+  onRemove: () => void;
+}) {
+  const isList = c.operador === "em" || c.operador === "nao_em";
+  const isNull = c.operador === "nulo" || c.operador === "nao_nulo";
+  const set = (patch: Partial<Condicao>) => onChange({ ...c, ...patch });
+
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <div style={{ flex: 1.2, minWidth: 0 }}>
+        <SelectField
+          label=""
+          value={c.coluna}
+          options={columns.map((col) => ({ value: col, label: col }))}
+          placeholder="coluna…"
+          onChange={(v) => set({ coluna: v })}
+        />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <SelectField
+          label=""
+          value={c.operador ?? "igual"}
+          options={OPERADORES}
+          onChange={(v) => set({ operador: v as Condicao["operador"] })}
+        />
+      </div>
+      <div style={{ flex: 1.2, minWidth: 0 }}>
+        {isNull ? (
+          <div
+            style={{
+              ...controlStyle,
+              display: "flex",
+              alignItems: "center",
+              background: "var(--s-card)",
+              color: "var(--s-t3)",
+            }}
+          >
+            —
+          </div>
+        ) : (
+          <input
+            value={Array.isArray(c.valor) ? c.valor.join(", ") : c.valor}
+            onChange={(e) => set({ valor: e.target.value })}
+            placeholder={isList ? "A, B, C" : "valor"}
+            style={controlStyle}
+          />
+        )}
+      </div>
+      <RemoveBtn onClick={onRemove} label="Remover condição" />
+    </div>
+  );
+}
+
+function AddBtn({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="bd-ghost"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        height: 26,
+        padding: "0 8px",
+        borderRadius: 8,
+        border: "1px solid var(--s-border)",
+        background: "var(--s-card)",
+        color: "var(--s-t2)",
+        font: "inherit",
+        fontSize: 11.5,
+        fontWeight: 700,
+        cursor: "pointer",
+      }}
+    >
+      <Plus size={13} /> {children}
+    </button>
+  );
+}
+
+function RemoveBtn({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="bd-ghost"
+      style={{
+        flex: "none",
+        display: "grid",
+        placeItems: "center",
+        width: 36,
+        height: 36,
+        borderRadius: 9,
+        border: "1px solid var(--s-border)",
+        background: "var(--s-card)",
+        color: "var(--s-bad)",
+        cursor: "pointer",
+      }}
+    >
+      <Trash2 size={14} />
+    </button>
   );
 }
 

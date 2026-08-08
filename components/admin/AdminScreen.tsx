@@ -17,12 +17,15 @@ export function AdminScreen({
   subtitle,
   search,
   action,
+  extra,
   children,
 }: {
   title: string;
   subtitle: string;
   search?: { value: string; onChange: (v: string) => void; placeholder?: string };
   action?: { label: string; onClick: () => void };
+  /** Extra control rendered in the search row, right after the search input. */
+  extra?: ReactNode;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -88,11 +91,12 @@ export function AdminScreen({
         </div>
 
         {/* Search + primary action */}
-        {(search || action) && (
+        {(search || action || extra) && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             {search && (
               <SearchInput value={search.value} onChange={search.onChange} placeholder={search.placeholder} />
             )}
+            {extra}
             {action && (
               <PrimaryButton onClick={action.onClick} style={{ height: 44 }}>
                 <Plus size={16} />
