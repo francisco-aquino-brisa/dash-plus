@@ -1,34 +1,38 @@
-import { UserRound } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Instant fallback while the server aggregates the vendedor view-model.
 export default function VendedorLoading() {
   return (
-    <div className="min-h-screen pb-12">
-      <header className="border-b border-border bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-4 sm:px-6">
-          <span className="bg-gradient-primary shadow-glow grid h-10 w-10 place-items-center rounded-xl text-primary-foreground">
-            <UserRound className="h-5 w-5" />
-          </span>
-          <div>
-            <h1 className="text-xl leading-tight font-bold">
-              Dashboard <span className="text-gradient">Vendedor</span>
-            </h1>
-            <p className="text-xs text-muted-foreground">Carregando dados…</p>
-          </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 16px 40px" }}>
+      <div style={{ padding: "2px 2px 0" }}>
+        <div
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: ".11em",
+            textTransform: "uppercase",
+            color: "var(--s-brand)",
+          }}
+        >
+          Raio-X individual
         </div>
-      </header>
+        <h1
+          style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-.025em", lineHeight: 1.05, marginTop: 4 }}
+        >
+          Dashboard Vendedor
+        </h1>
+        <p style={{ fontSize: 13, color: "var(--s-t3)", marginTop: 4 }}>Carregando dados…</p>
+      </div>
 
-      <main className="mx-auto max-w-[1600px] space-y-6 px-4 py-6 sm:px-6">
-        <Skeleton className="h-16 w-full rounded-xl" />
-        <Skeleton className="h-28 w-full rounded-2xl" />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-56 w-full rounded-2xl" />
-          ))}
-        </div>
-        <Skeleton className="h-72 w-full rounded-2xl" />
-      </main>
+      <Skeleton className="h-14 w-full" style={{ borderRadius: "var(--r-panel)" }} />
+      <Skeleton className="h-9 w-56" style={{ borderRadius: 999 }} />
+      <Skeleton className="h-28 w-full" style={{ borderRadius: "var(--r-panel)" }} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(215px, 1fr))", gap: 10 }}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-64 w-full" style={{ borderRadius: 14 }} />
+        ))}
+      </div>
+      <Skeleton className="h-32 w-full" style={{ borderRadius: "var(--r-panel)" }} />
     </div>
   );
 }

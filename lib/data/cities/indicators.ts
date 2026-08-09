@@ -799,24 +799,3 @@ export const SELECTION_PREF_KEY: Record<IndicatorBlock, string> = {
   "banda-larga": "cidades.blocos.banda-larga.selecionados",
   "5g": "cidades.blocos.5g.selecionados",
 };
-
-// ── Detail modal: the top stat cards (add/remove) ────────────────────────────
-/** Stat slots shown above the chart in the indicator detail modal. */
-export type DetailStat = "current" | "target" | "attainment" | "average" | "delta";
-
-export const DETAIL_STAT_LABELS: Record<DetailStat, string> = {
-  current: "Atual",
-  target: "Meta",
-  attainment: "Atingimento",
-  average: "Média 12m",
-  delta: "Variação mês",
-};
-
-/** Canonical order for rendering + the picker. */
-export const DETAIL_STAT_ORDER: DetailStat[] = ["current", "target", "attainment", "average", "delta"];
-
-/** Default stat cards (the historical set). */
-export const DEFAULT_DETAIL_STATS: DetailStat[] = ["current", "target", "attainment", "average"];
-
-/** localStorage preference key for the detail-modal stat selection. */
-export const DETAIL_STATS_PREF_KEY = "cidades.detalhe.stats";

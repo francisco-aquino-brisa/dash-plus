@@ -1,34 +1,26 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, ClipboardList, Clock, Radio, Search, Smartphone, UserRound, Wifi } from "lucide-react";
-import { MockDataBadge } from "@/components/ui/mock-data-badge";
-import { cn } from "@/lib/utils";
-import { VendedorSearch } from "./VendedorSearch";
-import { CompetenciaPicker } from "./CompetenciaPicker";
-import { VisibilityFilter, type Visibility } from "./VisibilityFilter";
+import { ClipboardList, Clock, RefreshCw, Search, Zap, type LucideIcon } from "lucide-react";
+import { Segmented } from "@/components/ui/segmented";
+import { useSetNavPending } from "@/lib/ui/nav-pending";
+import { VendedorFilterBar } from "./VendedorFilterBar";
 import { VendedorHeader } from "./VendedorHeader";
 import { ServicoCard } from "./ServicoCard";
 import { DiasZeradosBlock } from "./DiasZeradosBlock";
 import { RankingsBlock } from "./RankingsBlock";
 import { MixVendasBlock } from "./MixVendasBlock";
 import { RaioXModal } from "./RaioXModal";
+import { type Visibility } from "./VisibilityFilter";
+import { SERVICO_STYLE } from "./vendedor-format";
 import {
-  SERVICOS,
   type PendenciaOrcamento,
   type ServicoKey,
   type VendedorFilterOptions,
   type VendedorFilters,
   type VendedorView,
 } from "@/lib/data/vendedor/types";
-
-const CHART_VAR: Record<ServicoKey, string> = {
-  FTTH: "var(--chart-1)",
-  FWA: "var(--chart-2)",
-  "5G": "var(--chart-3)",
-  Banda: "var(--chart-4)",
-};
 
 const INITIAL_VIS: Visibility = {
   FTTH: true,
@@ -42,35 +34,51 @@ const INITIAL_VIS: Visibility = {
 
 type Tab = "resultados" | "pendencias";
 
+const TABS = [
+  { value: "resultados" as const, label: "Resultados" },
+  { value: "pendencias" as const, label: "Pendências" },
+];
+
 export function VendedorDashboard({
   view,
   options,
-  usesMock,
+  lockedToSelf = false,
 }: {
   view: VendedorView;
   options: VendedorFilterOptions;
-  usesMock: boolean;
+  /** When the logged-in user is a "vendedor": lock the screen to their own data
+   * and hide the vendedor selector. */
+  lockedToSelf?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [tab, setTab] = useState<Tab>("resultados");
   const [raioX, setRaioX] = useState<ServicoKey | null>(null);
   const [vis, setVis] = useState<Visibility>(INITIAL_VIS);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const {
-    filters,
-    profile,
-    servicos,
-    diasZerados,
-    ranking,
-    mix,
-    pendencias,
-    pendenciasAvailable,
-    competenciaLabel,
-  } = view;
+  const { profile, servicos, diasZerados, ranking, mix, pendencias, pendenciasAvailable, competenciaLabel } =
+    view;
+
+  // Optimistic filters: the chips reflect the new value instantly while the
+  // server request (which recomputes the VM) runs behind the transition.
+  const [uiFilters, setUiFilters] = useState<VendedorFilters>(view.filters);
+
+  useEffect(() => {
+    setUiFilters(view.filters);
+  }, [view.filters]);
+
+  const setNavPending = useSetNavPending();
+
+  useEffect(() => {
+    setNavPending(isPending);
+
+    return () => setNavPending(false);
+  }, [isPending, setNavPending]);
 
   const navigate = useCallback(
     (next: VendedorFilters) => {
+      setUiFilters(next); // reflect immediately, request afterwards
       const p = new URLSearchParams();
 
       if (next.matricula) p.set("matricula", next.matricula);
@@ -84,181 +92,209 @@ export function VendedorDashboard({
     [router],
   );
 
+  const manualRefresh = useCallback(() => {
+    setRefreshing(true);
+    router.refresh();
+    setTimeout(() => setRefreshing(false), 800);
+  }, [router]);
+
   const raioXCard = servicos.find((s) => s.key === raioX) ?? null;
-  const isCurrentMonth = diasZerados.hoje != null;
+  const noProfileLabel = lockedToSelf ? "Sem dados na competência" : "Selecione um vendedor";
+  const subtitle = `${profile ? profile.nome : noProfileLabel} · ${competenciaLabel}`;
 
   return (
-    <div className="min-h-screen pb-24 lg:pb-12">
-      <header className="border-b border-border bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <span className="bg-gradient-primary shadow-glow grid h-10 w-10 place-items-center rounded-xl text-primary-foreground">
-              <UserRound className="h-5 w-5" />
-            </span>
-            <div>
-              <h1 className="text-xl leading-tight font-bold">
-                Dashboard <span className="text-gradient">Vendedor</span>
-              </h1>
-              <p className="text-xs text-muted-foreground">Raio-X individual · {competenciaLabel}</p>
-            </div>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        padding: "16px 16px 40px",
+        opacity: isPending ? 0.6 : 1,
+        pointerEvents: isPending ? "none" : "auto",
+        transition: "opacity .18s",
+        animation: "bdIn .3s ease both",
+      }}
+    >
+      {/* Header */}
+      <header
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+          padding: "2px 2px 0",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: ".11em",
+              textTransform: "uppercase",
+              color: "var(--s-brand)",
+            }}
+          >
+            Raio-X individual
           </div>
-          {usesMock && <MockDataBadge />}
+          <h1
+            style={{
+              fontSize: 30,
+              fontWeight: 800,
+              letterSpacing: "-.025em",
+              lineHeight: 1.05,
+              marginTop: 4,
+            }}
+          >
+            Dashboard Vendedor
+          </h1>
+          <p
+            style={{
+              fontSize: 13,
+              color: "var(--s-t3)",
+              marginTop: 4,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {subtitle}
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={manualRefresh}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+            height: 34,
+            padding: "0 14px",
+            border: "1px solid var(--s-border)",
+            borderRadius: 999,
+            background: "var(--s-card)",
+            color: "var(--s-t2)",
+            font: "inherit",
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          <RefreshCw size={14} style={{ animation: refreshing ? "bdSpin 1s linear infinite" : undefined }} />
+          Atualizar
+        </button>
       </header>
 
-      <main
-        className={cn(
-          "mx-auto max-w-[1600px] space-y-6 px-4 py-6 transition-opacity sm:px-6",
-          isPending && "pointer-events-none opacity-60",
-        )}
-      >
-        {/* Controls */}
-        <div className="sticky top-10 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background/70 p-2 backdrop-blur">
-          <VendedorSearch
-            options={options.vendedores}
-            value={filters.matricula}
-            onSelect={(m) => navigate({ ...filters, matricula: m })}
-          />
-          <CompetenciaPicker
-            value={filters.competencia}
-            onChange={(ym) => navigate({ ...filters, competencia: ym })}
-          />
-          <div className="ml-auto">
-            <VisibilityFilter value={vis} onChange={setVis} />
-          </div>
+      <VendedorFilterBar
+        filters={uiFilters}
+        options={options}
+        vis={vis}
+        onNavigate={navigate}
+        onVisChange={setVis}
+        lockedToSelf={lockedToSelf}
+        selectedVendedorLabel={profile?.nome ?? ""}
+      />
+
+      <Segmented options={TABS} value={tab} onChange={setTab} ariaLabel="Resultados ou Pendências" />
+
+      {!profile ? (
+        <EmptyState lockedToSelf={lockedToSelf} />
+      ) : tab === "resultados" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <VendedorHeader profile={profile} />
+
+          <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <h2
+              style={{
+                fontFamily: "var(--font-display)",
+                fontWeight: 800,
+                fontSize: 17,
+                letterSpacing: "-.02em",
+                padding: "0 2px",
+              }}
+            >
+              Resultado por Serviço
+            </h2>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(215px, 1fr))",
+                gap: 10,
+                alignItems: "stretch",
+              }}
+            >
+              {servicos
+                .filter((s) => vis[s.key])
+                .map((s) => (
+                  <ServicoCard key={s.key} card={s} onOpen={setRaioX} />
+                ))}
+            </div>
+          </section>
+
+          {vis.diasZerados && <DiasZeradosBlock dias={diasZerados} />}
+          {vis.rankings && <RankingsBlock ranking={ranking} />}
+          {vis.mix && <MixVendasBlock mix={mix} />}
         </div>
-
-        {/* Desktop tabs */}
-        <div className="hidden lg:block">
-          <TabSwitch tab={tab} onChange={setTab} />
-        </div>
-
-        {!profile ? (
-          <EmptyState />
-        ) : tab === "resultados" ? (
-          <div className="space-y-6">
-            <VendedorHeader profile={profile} />
-
-            <section>
-              <h2 className="mb-3 text-lg font-semibold">Resultado por Serviço</h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {servicos
-                  .filter((s) => vis[s.key])
-                  .map((s) => (
-                    <ServicoCard key={s.key} card={s} chartVar={CHART_VAR[s.key]} onOpen={setRaioX} />
-                  ))}
-              </div>
-            </section>
-
-            {vis.diasZerados && <DiasZeradosBlock dias={diasZerados} />}
-            {vis.rankings && <RankingsBlock ranking={ranking} />}
-            {vis.mix && <MixVendasBlock mix={mix} />}
-          </div>
-        ) : (
-          <PendenciasTab pendencias={pendencias} available={pendenciasAvailable} />
-        )}
-
-        <footer className="pt-6 text-center text-xs text-muted-foreground">
-          Brisanet · Dashboard Vendedor · v1
-        </footer>
-      </main>
-
-      {/* Mobile bottom-nav (faithful to the prototype) */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-border bg-card/95 px-6 py-2 backdrop-blur lg:hidden">
-        <BottomTab
-          icon={BarChart3}
-          label="Resultados"
-          active={tab === "resultados"}
-          onClick={() => setTab("resultados")}
-        />
-        <BottomTab
-          icon={ClipboardList}
-          label="Pendências"
-          active={tab === "pendencias"}
-          onClick={() => setTab("pendencias")}
-        />
-      </nav>
+      ) : (
+        <PendenciasTab pendencias={pendencias} available={pendenciasAvailable} />
+      )}
 
       <RaioXModal
         card={raioXCard}
         ano={diasZerados.ano}
         mes={diasZerados.mes}
-        isCurrentMonth={isCurrentMonth}
+        hoje={diasZerados.hoje}
         onClose={() => setRaioX(null)}
       />
     </div>
   );
 }
 
-function TabSwitch({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
+function EmptyState({ lockedToSelf }: { lockedToSelf: boolean }) {
   return (
-    <div className="inline-flex rounded-lg border border-border bg-secondary/40 p-1">
-      {(["resultados", "pendencias"] as const).map((t) => (
-        <button
-          key={t}
-          onClick={() => onChange(t)}
-          className={cn(
-            "rounded-md px-4 py-1.5 text-sm font-medium capitalize transition-colors",
-            tab === t
-              ? "shadow-elegant bg-card text-foreground"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {t === "resultados" ? "Resultados" : "Pendências"}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function BottomTab({
-  icon: Icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: React.ElementType;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex flex-col items-center gap-1 py-1 transition-colors",
-        active ? "text-primary" : "text-muted-foreground",
-      )}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 10,
+        border: "1px dashed var(--s-border-2)",
+        borderRadius: "var(--r-panel)",
+        background: "var(--s-card)",
+        padding: "72px 24px",
+        textAlign: "center",
+      }}
     >
-      <Icon className={cn("h-5 w-5", active && "stroke-[2.5px]")} />
-      <span className="text-[10px] font-medium tracking-wider uppercase">{label}</span>
-    </button>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-card/30 px-6 py-20 text-center">
-      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
-        <Search className="h-7 w-7" />
+      <span
+        style={{
+          display: "grid",
+          placeItems: "center",
+          width: 56,
+          height: 56,
+          borderRadius: 16,
+          background: "var(--s-brand-weak)",
+          color: "var(--s-brand)",
+        }}
+      >
+        <Search size={26} />
       </span>
-      <h2 className="text-lg font-semibold text-foreground">Selecione um vendedor</h2>
-      <p className="max-w-sm text-sm text-muted-foreground">
-        Use a busca acima (nome ou matrícula) para abrir o raio-X individual de um vendedor.
+      <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, color: "var(--s-t1)" }}>
+        {lockedToSelf ? "Sem dados nesta competência" : "Selecione um vendedor"}
+      </h2>
+      <p style={{ maxWidth: 360, fontSize: 13, color: "var(--s-t3)" }}>
+        {lockedToSelf
+          ? "Não encontramos resultados para você na competência selecionada. Tente outra competência."
+          : "Use a busca acima (nome ou matrícula) para abrir o raio-X individual de um vendedor."}
       </p>
     </div>
   );
 }
 
-const PENDENCIA_ICONS: Record<PendenciaOrcamento["servico"], React.ElementType> = {
-  FTTH: Wifi,
-  FWA: Radio,
-  "5G": Smartphone,
-};
-
-const PENDENCIA_STATUS: Record<PendenciaOrcamento["status"], { label: string; className: string }> = {
-  aguardando_efetivacao: { label: "Aguardando Efetivação", className: "bg-accent text-accent-foreground" },
-  aguardando_instalacao: { label: "Aguardando Instalação", className: "bg-warning text-warning-foreground" },
+const PENDENCIA_STATUS: Record<PendenciaOrcamento["status"], { label: string; bg: string; fg: string }> = {
+  aguardando_efetivacao: { label: "Aguardando Efetivação", bg: "var(--s-blue-bg)", fg: "var(--s-blue)" },
+  aguardando_instalacao: { label: "Aguardando Instalação", bg: "var(--s-warn-bg)", fg: "var(--s-warn)" },
 };
 
 type PendenciaFiltro = "todos" | PendenciaOrcamento["status"];
@@ -269,17 +305,50 @@ const PENDENCIA_FILTROS: { key: PendenciaFiltro; label: string }[] = [
   { key: "aguardando_instalacao", label: "Aguardando Instalação" },
 ];
 
+const PENDENCIA_ICON: Record<PendenciaOrcamento["servico"], LucideIcon> = {
+  FTTH: SERVICO_STYLE.FTTH.icon,
+  FWA: SERVICO_STYLE.FWA.icon,
+  "5G": Zap,
+};
+
 function PendenciasTab({ pendencias, available }: { pendencias: PendenciaOrcamento[]; available: boolean }) {
   const [filtro, setFiltro] = useState<PendenciaFiltro>("todos");
 
   if (!available) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-card/30 px-6 py-20 text-center">
-        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-warning/10 text-warning">
-          <Clock className="h-7 w-7" />
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 10,
+          border: "1px dashed var(--s-border-2)",
+          borderRadius: "var(--r-panel)",
+          background: "var(--s-card)",
+          padding: "64px 24px",
+          textAlign: "center",
+        }}
+      >
+        <span
+          style={{
+            display: "grid",
+            placeItems: "center",
+            width: 56,
+            height: 56,
+            borderRadius: 16,
+            background: "var(--s-warn-bg)",
+            color: "var(--s-warn)",
+          }}
+        >
+          <Clock size={26} />
         </span>
-        <h2 className="text-lg font-semibold text-foreground">Orçamentos Pendentes</h2>
-        <p className="max-w-md text-sm text-muted-foreground">
+        <h2
+          style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, color: "var(--s-t1)" }}
+        >
+          Orçamentos Pendentes
+        </h2>
+        <p style={{ maxWidth: 420, fontSize: 13, color: "var(--s-t3)" }}>
           Não foi possível carregar os orçamentos pendentes agora. Tente novamente em instantes.
         </p>
       </div>
@@ -289,74 +358,179 @@ function PendenciasTab({ pendencias, available }: { pendencias: PendenciaOrcamen
   const filtered = pendencias.filter((p) => filtro === "todos" || p.status === filtro);
 
   return (
-    <section className="shadow-elegant rounded-2xl border border-border bg-card/40 p-5 backdrop-blur">
-      <header className="mb-4 flex items-center gap-3">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-warning/10 text-warning">
-          <ClipboardList className="h-5 w-5" />
+    <section
+      style={{
+        border: "1px solid var(--s-border)",
+        borderRadius: "var(--r-panel)",
+        background: "var(--s-card)",
+        padding: 15,
+        boxShadow: "var(--s-sh)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <header style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span
+          style={{
+            display: "grid",
+            placeItems: "center",
+            width: 30,
+            height: 30,
+            borderRadius: 9,
+            background: "var(--s-warn-bg)",
+            color: "var(--s-warn)",
+          }}
+        >
+          <ClipboardList size={16} />
         </span>
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Orçamentos Pendentes</h2>
-          <p className="text-sm text-muted-foreground">{pendencias.length} orçamento(s) aguardando ação</p>
+          <h2
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontSize: 17,
+              letterSpacing: "-.02em",
+            }}
+          >
+            Orçamentos Pendentes
+          </h2>
+          <div style={{ fontSize: 11.5, color: "var(--s-t3)", marginTop: 2 }}>
+            {pendencias.length} orçamento(s) aguardando ação
+          </div>
         </div>
       </header>
 
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {PENDENCIA_FILTROS.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFiltro(f.key)}
-            className={cn(
-              "rounded-full border px-3 py-1 text-[10px] font-medium tracking-wider uppercase transition-colors",
-              filtro === f.key
-                ? "border-primary/40 bg-primary/15 text-primary"
-                : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {PENDENCIA_FILTROS.map((f) => {
+          const active = filtro === f.key;
+
+          return (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setFiltro(f.key)}
+              style={{
+                padding: "5px 11px",
+                border: `1px solid ${active ? "var(--s-brand)" : "var(--s-border)"}`,
+                borderRadius: 999,
+                background: active ? "var(--s-brand-weak)" : "var(--s-sunken)",
+                color: active ? "var(--s-brand)" : "var(--s-t2)",
+                font: "inherit",
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: ".04em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              {f.label}
+            </button>
+          );
+        })}
       </div>
 
       {filtered.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border bg-secondary/20 px-3 py-10 text-center text-sm text-muted-foreground">
+        <p
+          style={{
+            border: "1px dashed var(--s-border-2)",
+            borderRadius: 12,
+            background: "var(--s-sunken)",
+            padding: "28px 12px",
+            textAlign: "center",
+            fontSize: 12.5,
+            color: "var(--s-t3)",
+          }}
+        >
           {pendencias.length === 0
             ? "Nenhum orçamento pendente na competência."
             : "Nenhum orçamento para o filtro atual."}
         </p>
       ) : (
-        <div className="space-y-2">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {filtered.map((p) => {
-            const Icon = PENDENCIA_ICONS[p.servico] ?? Wifi;
+            const Icon = PENDENCIA_ICON[p.servico];
             const status = PENDENCIA_STATUS[p.status];
 
             return (
               <div
                 key={p.orcamentoId}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary/30 p-3"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  border: "1px solid var(--s-border)",
+                  borderRadius: 12,
+                  background: "var(--s-sunken)",
+                  padding: 11,
+                }}
               >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="bg-gradient-primary grid h-11 w-11 shrink-0 place-items-center rounded-xl text-primary-foreground">
-                    <Icon className="h-5 w-5" />
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <span
+                    style={{
+                      flex: "none",
+                      display: "grid",
+                      placeItems: "center",
+                      width: 32,
+                      height: 32,
+                      borderRadius: 9,
+                      background: status.bg,
+                      color: status.fg,
+                    }}
+                  >
+                    <Icon size={16} />
                   </span>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-foreground">{p.cliente}</div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                      <span className="rounded bg-card px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        {p.servico}
-                      </span>
-                      <span className="rounded bg-card px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        {p.avulso ? "Avulso" : "Combo"}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground">Nº {p.orcamentoId}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        color: "var(--s-t1)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {p.cliente}
                     </div>
-                    <div className="mt-0.5 truncate text-xs text-muted-foreground">{p.plano}</div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: 6,
+                        marginTop: 3,
+                      }}
+                    >
+                      <Tag>{p.servico}</Tag>
+                      <Tag>{p.avulso ? "Avulso" : "Combo"}</Tag>
+                      <span style={{ fontSize: 10.5, color: "var(--s-t3)" }}>Nº {p.orcamentoId}</span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "var(--s-t3)",
+                        marginTop: 2,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {p.plano}
+                    </div>
                   </div>
                 </div>
                 <span
-                  className={cn(
-                    "shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold",
-                    status.className,
-                  )}
+                  style={{
+                    flex: "none",
+                    borderRadius: 999,
+                    background: status.bg,
+                    color: status.fg,
+                    padding: "4px 10px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
                 >
                   {status.label}
                 </span>
@@ -366,5 +540,22 @@ function PendenciasTab({ pendencias, available }: { pendencias: PendenciaOrcamen
         </div>
       )}
     </section>
+  );
+}
+
+function Tag({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      style={{
+        borderRadius: 5,
+        background: "var(--s-card)",
+        color: "var(--s-t3)",
+        padding: "1px 6px",
+        fontSize: 10,
+        fontWeight: 700,
+      }}
+    >
+      {children}
+    </span>
   );
 }

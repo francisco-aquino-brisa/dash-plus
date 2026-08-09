@@ -12,7 +12,9 @@ import type { CityDataset, FilterOptions } from "./types";
 // entries instead of serving them until the watermark advances.
 // v3: dropped the empty/'/'-cidade WHERE filters so unassigned rows are counted
 // again when no filter is applied — bump to discard the filtered dataset.
-const CACHE_KEY = "cities:dataset:v3";
+// v4: migrated to the `vw_*` layer in projeto_brisa_performance and re-keyed the
+// commercial enrich joins on `revan_cidade_id` (was city-name) — new numbers.
+const CACHE_KEY = "cities:dataset:v4";
 
 /** Cheap freshness probe used by the auto-refresh flag. */
 export async function getCitiesWatermark(): Promise<string> {

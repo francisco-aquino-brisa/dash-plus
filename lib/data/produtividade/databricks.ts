@@ -10,14 +10,12 @@
 
 import { getDataClient } from "../client";
 import { FUNNEL_COLS, blocked, num, pct, ratio } from "../_shared";
-import { formatMonth } from "../../format";
 import { resolveProdPeriod } from "./dates";
-import type { KpiBlock, PduPoint, ProdFilters, ProdFilterOptions, ProdView, VendedorRow } from "./types";
+import type { KpiBlock, ProdFilters, ProdFilterOptions, ProdView, VendedorRow } from "./types";
 
 const CAT = process.env.DATABRICKS_SALES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const DBX = `\`${CAT}\`.\`${process.env.DATABRICKS_SALES_SCHEMA ?? "diego_barros_inteligencia_comercial_e_mercado"}\``;
 const DH = `${DBX}.\`desempenho_hc\``;
-const VW = `\`${CAT}\`.\`projeto_brisa_performance\`.\`vw_hc_zerado_vendedor\``;
 
 /** Mode-aware dimension WHERE for desempenho_hc. */
 function whereDH(f: ProdFilters, params: unknown[]): string {
@@ -34,25 +32,6 @@ function whereDH(f: ProdFilters, params: unknown[]): string {
   }
 
   if (f.cidade) (cl.push("cidade_atuacao_jwas = ?"), params.push(f.cidade));
-
-  return cl.length ? ` AND ${cl.join(" AND ")}` : "";
-}
-
-/** Mode-aware dimension WHERE for vw_hc_zerado_vendedor (PDU). */
-function whereVW(f: ProdFilters, params: unknown[]): string {
-  const cl: string[] = [];
-
-  if (f.mode === "externas") {
-    if (f.gerencia) (cl.push("gerencia_cidade = ?"), params.push(f.gerencia));
-
-    if (f.coordenacao) (cl.push("coordenacao = ?"), params.push(f.coordenacao));
-  } else {
-    if (f.gerente) (cl.push("gerente_cidade = ?"), params.push(f.gerente));
-
-    if (f.nicho) (cl.push("nicho = ?"), params.push(f.nicho));
-  }
-
-  if (f.cidade) (cl.push("cidade_atuacao = ?"), params.push(f.cidade));
 
   return cl.length ? ` AND ${cl.join(" AND ")}` : "";
 }
@@ -85,49 +64,66 @@ async function indicadores(f: ProdFilters): Promise<KpiBlock[]> {
     FROM ${DH}
     WHERE data BETWEEN DATE'${p.prevFrom}' AND DATE'${p.to}'${whereDH(f, params)}
   `;
-  const r = (await getDataClient().query<Record<string, unknown>>(sql, params))[0] ?? {};
-  const cri = num(r.cur_c),
-    efe = num(r.cur_e),
-    ins = num(r.cur_i),
-    g5 = num(r.cur_g);
 
-  return [
-    {
-      label: "Vendas Criadas",
-      value: cri,
-      meta: 0,
-      delta: pct(cri, num(r.prev_c)),
-      available: true,
-      helper: tag,
-    },
-    {
-      label: "Vendas Efetivadas",
-      value: efe,
-      meta: 0,
-      delta: pct(efe, num(r.prev_e)),
-      available: true,
-      helper: `Efetivados x Criados: ${ratio(efe, cri).toFixed(1).replace(".", ",")}%`,
-    },
-    {
-      label: "Vendas Instaladas",
-      value: ins,
-      meta: 0,
-      delta: pct(ins, num(r.prev_i)),
-      available: true,
-      helper: `Instalados x Efetivados: ${ratio(ins, efe).toFixed(1).replace(".", ",")}%`,
-    },
-    {
-      label: "Vendas Ativadas 5G",
-      value: g5,
-      meta: 0,
-      delta: pct(g5, num(r.prev_g)),
-      available: true,
-      helper: "Chip pago/grátis: sem acesso",
-    },
-    blocked("Ticket Médio Entrada"),
-    blocked("Ticket Médio Entrada 5G"),
-    blocked("Churn Safra"),
-  ];
+  try {
+    const r = (await getDataClient().query<Record<string, unknown>>(sql, params))[0] ?? {};
+    const cri = num(r.cur_c),
+      efe = num(r.cur_e),
+      ins = num(r.cur_i),
+      g5 = num(r.cur_g);
+
+    return [
+      {
+        label: "Vendas Criadas",
+        value: cri,
+        meta: 0,
+        delta: pct(cri, num(r.prev_c)),
+        available: true,
+        helper: tag,
+      },
+      {
+        label: "Vendas Efetivadas",
+        value: efe,
+        meta: 0,
+        delta: pct(efe, num(r.prev_e)),
+        available: true,
+        helper: `Efetivados x Criados: ${ratio(efe, cri).toFixed(1).replace(".", ",")}%`,
+      },
+      {
+        label: "Vendas Instaladas",
+        value: ins,
+        meta: 0,
+        delta: pct(ins, num(r.prev_i)),
+        available: true,
+        helper: `Instalados x Efetivados: ${ratio(ins, efe).toFixed(1).replace(".", ",")}%`,
+      },
+      {
+        label: "Vendas Ativadas 5G",
+        value: g5,
+        meta: 0,
+        delta: pct(g5, num(r.prev_g)),
+        available: true,
+        helper: "Chip pago/grátis: sem acesso",
+      },
+      blocked("Ticket Médio Entrada"),
+      blocked("Ticket Médio Entrada 5G"),
+      blocked("Churn Safra"),
+    ];
+  } catch (e) {
+    // Isolated: a failure degrades the cards to "sem acesso", never crashes the
+    // screen (and never a mock fallback).
+    console.warn("[produtividade] indicadores indisponíveis:", (e as Error).message);
+
+    return [
+      blocked("Vendas Criadas"),
+      blocked("Vendas Efetivadas"),
+      blocked("Vendas Instaladas"),
+      blocked("Vendas Ativadas 5G"),
+      blocked("Ticket Médio Entrada"),
+      blocked("Ticket Médio Entrada 5G"),
+      blocked("Churn Safra"),
+    ];
+  }
 }
 
 async function ranking(f: ProdFilters): Promise<VendedorRow[]> {
@@ -143,72 +139,46 @@ async function ranking(f: ProdFilters): Promise<VendedorRow[]> {
     HAVING SUM(criado_bl) + SUM(efetivado_bl) + SUM(instalado_bl) + SUM(\`5g_ativacao\`) > 0
     ORDER BY efetivado DESC NULLS LAST LIMIT 15
   `;
-  const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
 
-  return rows.map((r) => {
-    const criado = num(r.criado),
-      efetivado = num(r.efetivado),
-      instalado = num(r.instalado);
-
-    return {
-      nome: String(r.nome ?? "—"),
-      grupo: String(r.grupo ?? "—"),
-      cidade: String(r.cidade ?? "—"),
-      criado,
-      efetivado,
-      instalado,
-      ativ5g: num(r.ativ5g),
-      efetVsCriado: ratio(efetivado, criado),
-      instVsEfet: ratio(instalado, efetivado),
-    };
-  });
-}
-
-async function pduSeries(f: ProdFilters): Promise<PduPoint[]> {
-  // PDU source (vw_hc_zerado_vendedor) is absent from the warehouse — isolate so
-  // it shows as unavailable instead of taking the screen down (not a mock fallback).
   try {
-    const params: unknown[] = [];
-    const sql = `
-    SELECT date_format(data, 'yyyy-MM') ym, servico,
-      SUM(total_realizado)
-        / NULLIF(COUNT(DISTINCT CASE WHEN situacao_hc = 'ATIVO' THEN matricula END), 0)
-        / NULLIF(MAX(dias_uteis_acumulado), 0) AS pdu
-    FROM ${VW}
-    WHERE servico IN ('FTTH', 'FWA', '5G')
-      AND data >= add_months(date_trunc('MM', current_date()), -11)${whereVW(f, params)}
-    GROUP BY 1, 2 ORDER BY 1
-  `;
     const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
-    const byMonth = new Map<string, PduPoint>();
 
-    for (const r of rows) {
-      const ym = String(r.ym);
+    return rows.map((r) => {
+      const criado = num(r.criado),
+        efetivado = num(r.efetivado),
+        instalado = num(r.instalado);
 
-      if (!byMonth.has(ym)) byMonth.set(ym, { mes: formatMonth(ym), FTTH: 0, FWA: 0, "5G": 0 });
-
-      const point = byMonth.get(ym)!;
-      const svc = String(r.servico);
-      const val = +num(r.pdu).toFixed(2);
-
-      if (svc === "FTTH") point.FTTH = val;
-      else if (svc === "FWA") point.FWA = val;
-      else if (svc === "5G") point["5G"] = val;
-    }
-
-    return Array.from(byMonth.values());
+      return {
+        nome: String(r.nome ?? "—"),
+        grupo: String(r.grupo ?? "—"),
+        cidade: String(r.cidade ?? "—"),
+        criado,
+        efetivado,
+        instalado,
+        ativ5g: num(r.ativ5g),
+        efetVsCriado: ratio(efetivado, criado),
+        instVsEfet: ratio(instalado, efetivado),
+      };
+    });
   } catch (e) {
-    console.warn("[produtividade] PDU indisponível (fonte ausente no Databricks):", (e as Error).message);
+    // Isolated: on failure the ranking degrades to empty, never crashes the screen.
+    console.warn("[produtividade] ranking indisponível:", (e as Error).message);
 
     return [];
   }
 }
 
+// PDU (Produtividade por Dia Útil): the block is LOCKED in the UI — the source
+// `vw_hc_zerado_vendedor` does not exist in the warehouse and the verified
+// substitute's official denominator/meta are pending confirmation with the data
+// team (same decision as Vendas · Canais, see new-ui-plan §2/§3). So the adapter
+// returns an empty series instead of firing a guaranteed-to-fail query every
+// render; the screen renders "sem acesso". Wire the substitute when confirmed.
+
 export async function databricksProdView(filters: ProdFilters): Promise<ProdView> {
-  const [inds, rank, pdu, watermark] = await Promise.all([
+  const [inds, rank, watermark] = await Promise.all([
     indicadores(filters),
     ranking(filters),
-    pduSeries(filters),
     databricksProdWatermark(),
   ]);
 
@@ -218,7 +188,7 @@ export async function databricksProdView(filters: ProdFilters): Promise<ProdView
     periodLabel: resolveProdPeriod(filters).label,
     indicadores: inds,
     ranking: rank,
-    pdu,
+    pdu: [], // locked (see the note above)
     tamAvailable: false, // TAM-by-meta needs a per-vendedor meta we cannot access yet
     watermark,
   };

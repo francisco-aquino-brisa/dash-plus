@@ -71,10 +71,15 @@ export interface ServicoCard {
   label: string;
   /** Total realizado in the service (funnel "instalado" grain). */
   realizado: number;
-  /** Official PDU (produção / dia útil) — pdu_acumulada_hc_ativo, per vendedor. */
-  pdu: number;
-  /** NDU = accumulated dias úteis (dias_uteis_acumulado). */
-  ndu: number;
+  /**
+   * Official PDU (produção / dia útil). **LOCKED** — the official source
+   * `vw_hc_zerado_vendedor` does not exist and the substitute's denominator/meta
+   * are pending confirmation with the data team, so this is `null` ("sem acesso"),
+   * never a fabricated 0. See docs/data-map.md "Known breakage".
+   */
+  pdu: number | null;
+  /** NDU = accumulated dias úteis. **LOCKED** (same as `pdu`) → `null`. */
+  ndu: number | null;
   criado: number;
   efetivado: number;
   instalado: number;
@@ -176,10 +181,3 @@ export interface VendedorFilterOptions {
   /** Available competências as yyyy-MM, newest first. */
   competencias: string[];
 }
-
-export const SERVICOS: { key: ServicoKey; label: string; chart: string }[] = [
-  { key: "FTTH", label: "FTTH", chart: "chart-1" },
-  { key: "FWA", label: "FWA", chart: "chart-2" },
-  { key: "5G", label: "5G", chart: "chart-3" },
-  { key: "Banda", label: "Banda", chart: "chart-4" },
-];

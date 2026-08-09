@@ -11,6 +11,9 @@ pnpm-lock.yaml
 yarn.lock
 next-env.d.ts
 
+# Databricks CLI sync snapshots (gitignored, auto-generated)
+.databricks/
+
 # Assets
 public/
 *.min.js

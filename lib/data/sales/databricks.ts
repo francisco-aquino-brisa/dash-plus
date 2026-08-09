@@ -37,18 +37,19 @@ import {
 
 const CAT = process.env.DATABRICKS_SALES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const DBX = `\`${CAT}\`.\`${process.env.DATABRICKS_SALES_SCHEMA ?? "diego_barros_inteligencia_comercial_e_mercado"}\``;
-const VW = `\`${CAT}\`.\`projeto_brisa_performance\`.\`vw_hc_zerado_vendedor\``;
 const DH = `${DBX}.\`desempenho_hc\``;
 
 // Official, channel-grained sources for the selectable blocks (see indicators.ts
 // and docs/data-map.md). All read-only; every formula validated vs the warehouse.
+// The commercial sources were consolidated into `projeto_brisa_performance` as
+// `vw_*` views (+ revan_cidade_id); `ticket_oferta` stays in the ICM schema.
 const ICM = `\`${CAT}\`.\`inteligencia_comercial_e_mercado\``;
 const PBP = `\`${CAT}\`.\`projeto_brisa_performance\``;
-const WAVES = `${ICM}.\`waves_consolidado_orcamento\``;
-const CINCO_G_T = `${ICM}.\`consolidado_5g_pedido\``;
-const CHURN_BL_T = `${ICM}.\`waves_churnsafra_consultor\``;
-const CHURN_5G_T = `${ICM}.\`churn_vendedor_5g\``;
-const META_CANAIS = `${PBP}.\`meta_geral_canais\``;
+const WAVES = `${PBP}.\`vw_vendas_waves\``;
+const CINCO_G_T = `${PBP}.\`vw_vendas_5g\``;
+const CHURN_BL_T = `${PBP}.\`vw_churn_4m_vendedor_bl\``;
+const CHURN_5G_T = `${PBP}.\`vw_churn_4m_vendedor_5g\``;
+const META_CANAIS = `${PBP}.\`vw_meta_geral_canais\``;
 const TICKET_OFERTA = `${ICM}.\`metas_canais_ticket_oferta\``;
 
 const q13 = "add_months(date_trunc('MM', current_date()), -11)"; // início da janela de 12 meses
@@ -65,7 +66,7 @@ const PORTAB_T = `(
     MAX(nicho) AS nicho,
     MAX(cidade_venda) AS cidade_venda,
     MAX(CASE WHEN upper(trim(STATUS)) = 'PORTADO' THEN 1 ELSE 0 END) AS portado
-  FROM ${ICM}.\`portabilidade\`
+  FROM ${PBP}.\`vw_portabilidade_5g\`
   WHERE coalesce(N_do_pedido, '') <> ''
     AND coalesce(cidade_venda, '') <> ''
     AND to_date(data) >= ${q13}
@@ -105,66 +106,13 @@ export async function databricksSalesWatermark(): Promise<string> {
   }
 }
 
-/**
- * Official PDU = total_realizado / HC ativo / dias úteis, by tecnologia, by month.
- * The PDU source (vw_hc_zerado_vendedor) is currently absent from the warehouse,
- * so this is isolated: on any error it returns an empty series (PDU shows as
- * unavailable) instead of taking the whole screen down. NOT a mock fallback —
- * the rest of the screen still serves real data. See docs/data-map.md.
- */
-async function pduSeries(f: SalesFilters): Promise<PduPoint[]> {
-  try {
-    const params: unknown[] = [];
-    const cl: string[] = [];
-
-    if (f.gerente) (cl.push("gerente_cidade = ?"), params.push(f.gerente));
-
-    if (f.canal) (cl.push("canal = ?"), params.push(f.canal));
-
-    if (f.nicho) (cl.push("nicho = ?"), params.push(f.nicho));
-
-    if (f.uf) (cl.push("UF = ?"), params.push(f.uf));
-
-    if (f.cidade) (cl.push("cidade_atuacao = ?"), params.push(f.cidade));
-
-    if (f.tipo) (cl.push("tipo_cidade = ?"), params.push(f.tipo));
-
-    const dim = cl.length ? ` AND ${cl.join(" AND ")}` : "";
-
-    const sql = `
-      SELECT date_format(data, 'yyyy-MM') ym, servico,
-        SUM(total_realizado)
-          / NULLIF(COUNT(DISTINCT CASE WHEN situacao_hc = 'ATIVO' THEN matricula END), 0)
-          / NULLIF(MAX(dias_uteis_acumulado), 0) AS pdu
-      FROM ${VW}
-      WHERE servico IN ('FTTH', 'FWA', '5G')
-        AND data >= add_months(date_trunc('MM', current_date()), -11)${dim}
-      GROUP BY 1, 2 ORDER BY 1
-    `;
-    const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
-    const byMonth = new Map<string, PduPoint>();
-
-    for (const r of rows) {
-      const ym = String(r.ym);
-
-      if (!byMonth.has(ym)) byMonth.set(ym, { mes: formatMonth(ym), FTTH: 0, FWA: 0, "5G": 0 });
-
-      const point = byMonth.get(ym)!;
-      const svc = String(r.servico);
-      const val = +num(r.pdu).toFixed(2);
-
-      if (svc === "FTTH") point.FTTH = val;
-      else if (svc === "FWA") point.FWA = val;
-      else if (svc === "5G") point["5G"] = val;
-    }
-
-    return Array.from(byMonth.values());
-  } catch (e) {
-    console.warn("[sales] PDU indisponível (fonte ausente no Databricks):", (e as Error).message);
-
-    return [];
-  }
-}
+// PDU (Produtividade por Dia Útil): the block is currently LOCKED in the UI — the
+// original source `vw_hc_zerado_vendedor` does not exist, and the verified
+// substitute `vw_producao_hc_zero_venda`'s official denominator/meta are pending
+// confirmation with the data team (see docs/data-map.md + new-ui-plan §2). So the
+// adapter returns an empty series (the screen renders "sem acesso") instead of
+// firing a guaranteed-to-fail query against the absent view every render. When the
+// formula is confirmed, wire the substitute here.
 
 // Channel/niche momentum. The channel attribution (canal_waves) lags by ~1 month
 // — the current month is often unattributed — so we anchor all windows to the
@@ -195,17 +143,26 @@ async function canalAnalysis(
     FROM base b CROSS JOIN anc
     GROUP BY b.dim ORDER BY cur30 DESC NULLS LAST LIMIT 15
   `;
-  const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
 
-  return rows
-    .filter((r) => r.dim && num(r.cur30) > 0)
-    .map((r) => ({
-      canal: String(r.dim),
-      gerente: String(r.gerente ?? "—"),
-      mediaDia: Math.round(num(r.cur30) / 30),
-      vsMesAnterior: pct(num(r.m_cur), num(r.m_prev)),
-      vsSemanaAnterior: pct(num(r.w_cur), num(r.w_prev)),
-    }));
+  try {
+    const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
+
+    return rows
+      .filter((r) => r.dim && num(r.cur30) > 0)
+      .map((r) => ({
+        canal: String(r.dim),
+        gerente: String(r.gerente ?? "—"),
+        mediaDia: Math.round(num(r.cur30) / 30),
+        vsMesAnterior: pct(num(r.m_cur), num(r.m_prev)),
+        vsSemanaAnterior: pct(num(r.w_cur), num(r.w_prev)),
+      }));
+  } catch (e) {
+    // Isolated like every other source: a failure degrades this table, not the
+    // whole screen (never a mock fallback).
+    console.warn(`[sales] análise por ${dimCol} indisponível:`, (e as Error).message);
+
+    return [];
+  }
 }
 
 const FREE_COL: Record<string, string> = {
@@ -250,15 +207,22 @@ async function freeData(
     WHERE data >= add_months(date_trunc('MM', current_date()), -11)${dimWhereDH(f, params)}
     GROUP BY 1 ORDER BY 1
   `;
-  const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
   const series: Record<string, { mes: string; valor: number }[]> = {};
 
   for (const nome of available) series[nome] = [];
 
-  for (const r of rows) {
-    const mes = formatMonth(String(r.ym));
+  try {
+    const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
 
-    for (const nome of available) series[nome].push({ mes, valor: num(r[nome]) });
+    for (const r of rows) {
+      const mes = formatMonth(String(r.ym));
+
+      for (const nome of available) series[nome].push({ mes, valor: num(r[nome]) });
+    }
+  } catch (e) {
+    // Isolated: on failure the Seleção Livre degrades to empty series (its
+    // indicators drop out), never the whole screen.
+    console.warn("[sales] seleção livre indisponível:", (e as Error).message);
   }
 
   return {
@@ -516,10 +480,9 @@ async function computeBlock(
 
 export async function databricksSalesView(filters: SalesFilters): Promise<SalesView> {
   const competencia = resolvePeriod(filters).to.slice(0, 7); // yyyy-MM do mês do período
-  const [blocksBL, blocks5G, pdu, canalBL, canal5G, nichoBL, nicho5G, free, watermark] = await Promise.all([
+  const [blocksBL, blocks5G, canalBL, canal5G, nichoBL, nicho5G, free, watermark] = await Promise.all([
     computeBlock("banda-larga", filters, competencia),
     computeBlock("5g", filters, competencia),
-    pduSeries(filters),
     canalAnalysis(filters, "criado_bl", "canal_waves"),
     canalAnalysis(filters, "`5g_ativacao`", "canal_waves"),
     canalAnalysis(filters, "criado_bl", "nicho"),
@@ -527,13 +490,15 @@ export async function databricksSalesView(filters: SalesFilters): Promise<SalesV
     freeData(filters),
     databricksSalesWatermark(),
   ]);
+  // PDU is locked in the UI (see the note above) → empty series, no query.
+  const pdu: PduPoint[] = [];
 
   return {
     filters,
     source: "databricks",
     periodLabel: resolvePeriod(filters).label,
     competencia,
-    meses: pdu.map((p) => p.mes),
+    meses: [],
     blocksBL,
     blocks5G,
     pdu,
