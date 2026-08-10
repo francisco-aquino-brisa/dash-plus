@@ -117,15 +117,6 @@ export function indicatorKey(block: IndicatorBlock, id: string): string {
   return `${block}:${id}`;
 }
 
-const BLOCKED = (
-  id: string,
-  block: IndicatorBlock,
-  label: string,
-  unit: IndicatorUnit,
-  polarity: Polarity,
-  description: string,
-): IndicatorDef => ({ id, block, label, unit, polarity, available: false, description });
-
 // ── Banda Larga (INTERNET + FWA) ─────────────────────────────────────────────
 const BANDA_LARGA: IndicatorDef[] = [
   {

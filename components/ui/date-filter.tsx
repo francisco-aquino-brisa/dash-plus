@@ -30,7 +30,6 @@ const MODES: { value: DateMode; label: string }[] = [
 ];
 
 const pad = (n: number) => String(n).padStart(2, "0");
-const monthLabel = (d: Date) => `${MN[d.getMonth()]}/${String(d.getFullYear()).slice(-2)}`;
 const dayLabel = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 const rangeLabel = (a: Date, b: Date) =>
   `${pad(a.getDate())}/${pad(a.getMonth() + 1)} – ${pad(b.getDate())}/${pad(b.getMonth() + 1)}/${b.getFullYear()}`;
@@ -151,7 +150,7 @@ export function DateFilter({
                 </NavButton>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
-                {MN.map((m, i) => {
+                {MN.map((m) => {
                   const cellVal = `${m}/${String(year).slice(-2)}`;
                   const active = value === cellVal;
 

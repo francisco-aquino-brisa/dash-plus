@@ -334,6 +334,7 @@ export async function databricksVendedorView(filters: VendedorFilters): Promise<
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function databricksVendedorFilterOptions(_ym: string): Promise<Partial<VendedorFilterOptions>> {
   // The vendedor list is no longer materialized here — the picker searches
   // server-side (see `databricksVendedorSearch`), so we only need the competências.

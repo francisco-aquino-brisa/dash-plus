@@ -81,17 +81,35 @@ function dimWhereDH(
 ): string {
   const cl: string[] = [];
 
-  if (f.gerente) (cl.push("GERENTE_CANAL = ?"), params.push(f.gerente));
+  if (f.gerente) {
+    cl.push("GERENTE_CANAL = ?");
+    params.push(f.gerente);
+  }
 
-  if (f.canal && !opts.skipCanal) (cl.push("canal_waves = ?"), params.push(f.canal));
+  if (f.canal && !opts.skipCanal) {
+    cl.push("canal_waves = ?");
+    params.push(f.canal);
+  }
 
-  if (f.nicho && !opts.skipNicho) (cl.push("nicho = ?"), params.push(f.nicho));
+  if (f.nicho && !opts.skipNicho) {
+    cl.push("nicho = ?");
+    params.push(f.nicho);
+  }
 
-  if (f.uf) (cl.push("UF = ?"), params.push(f.uf));
+  if (f.uf) {
+    cl.push("UF = ?");
+    params.push(f.uf);
+  }
 
-  if (f.cidade) (cl.push("cidade_atuacao_jwas = ?"), params.push(f.cidade));
+  if (f.cidade) {
+    cl.push("cidade_atuacao_jwas = ?");
+    params.push(f.cidade);
+  }
 
-  if (f.tipo) (cl.push("TIPO_CIDADE = ?"), params.push(f.tipo));
+  if (f.tipo) {
+    cl.push("TIPO_CIDADE = ?");
+    params.push(f.tipo);
+  }
 
   return cl.length ? ` AND ${cl.join(" AND ")}` : "";
 }
@@ -331,7 +349,10 @@ async function sourceMonthly(
   for (const [key, col] of Object.entries(spec.dims)) {
     const v = filters[key as keyof SalesFilters];
 
-    if (v) (where.push(`${col} = ?`), params.push(v));
+    if (v) {
+      where.push(`${col} = ?`);
+      params.push(v);
+    }
   }
 
   const cols = defs.map((d) => `${d.valueExpr} AS \`${d.id}\``).join(", ");
@@ -372,9 +393,15 @@ async function funnelMetas(
       `servico IN (${servicos.map(() => "?").join(", ")})`,
     ];
 
-    if (filters.canal) (where.push("canal = ?"), params.push(filters.canal));
+    if (filters.canal) {
+      where.push("canal = ?");
+      params.push(filters.canal);
+    }
 
-    if (filters.gerente) (where.push("gerente = ?"), params.push(filters.gerente));
+    if (filters.gerente) {
+      where.push("gerente = ?");
+      params.push(filters.gerente);
+    }
 
     const sql = `SELECT date_format(data, 'yyyy-MM') ym, id_indicador, SUM(meta) meta FROM ${META_CANAIS} WHERE ${where.join(" AND ")} GROUP BY 1, 2`;
     const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
