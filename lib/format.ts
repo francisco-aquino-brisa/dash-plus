@@ -23,3 +23,17 @@ export function formatChartLabel(n: number) {
 export function formatPct(n: number, digits = 2) {
   return `${n.toFixed(digits)}%`;
 }
+
+/**
+ * Full BRL amount with thousand separators, e.g. 4448568.24 → "R$ 4.448.568,24".
+ * Money is never abbreviated/rounded for display — the exact value is always
+ * shown (and repeated in a hover tooltip so it stays legible when a cell clips).
+ */
+export function formatBRL(n: number, decimals = 2) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(n);
+}

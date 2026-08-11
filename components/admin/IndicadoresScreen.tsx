@@ -2,10 +2,15 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, ChevronDown, Circle, CircleDashed, Eye } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, ChevronDown, Circle, CircleDashed, Eye, Trash2 } from "lucide-react";
 import { AdminScreen } from "./AdminScreen";
+import { ConfirmDelete } from "./ConfirmDelete";
+import { IndicadorCreateModal } from "./IndicadorCreateModal";
 import { Chip, Panel } from "./primitives";
+import { useAdminAction } from "./useAdminAction";
 import { textMatches } from "./filter";
+import { removerIndicador } from "@/app/(app)/admin/indicadores/actions";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { statusChipTone } from "@/lib/data/admin/derive";
 import { CATEGORY_META, categoryTone, servicoTone } from "@/lib/data/indicators/ui";
@@ -19,6 +24,22 @@ export function IndicadoresScreen({ indicadores }: { indicadores: IndicadorGeral
   const [query, setQuery] = useState("");
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [creating, setCreating] = useState(false);
+  const [target, setTarget] = useState<IndicadorGeral | null>(null);
+  const { busy, error: deleteError, run } = useAdminAction();
+  const router = useRouter();
+
+  function confirmDelete() {
+    if (!target) return;
+
+    run(
+      () => removerIndicador(target.id),
+      () => {
+        setTarget(null);
+        router.refresh();
+      },
+    );
+  }
 
   const toggle = (key: string) =>
     setCollapsed((prev) => {
@@ -146,29 +167,50 @@ export function IndicadoresScreen({ indicadores }: { indicadores: IndicadorGeral
       header: "",
       align: "right",
       render: (i) => (
-        <Link
-          href={`/admin/indicadores/${encodeURIComponent(i.id)}`}
-          className="bd-ghost"
-          aria-label={`Ver ${i.id}`}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            height: 32,
-            padding: "0 12px",
-            borderRadius: 9,
-            border: "1px solid var(--s-border)",
-            background: "var(--s-card)",
-            color: "var(--s-t2)",
-            font: "inherit",
-            fontSize: 12,
-            fontWeight: 700,
-            textDecoration: "none",
-          }}
-        >
-          <Eye size={14} />
-          Ver
-        </Link>
+        <span style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
+          <Link
+            href={`/admin/indicadores/${encodeURIComponent(i.id)}`}
+            className="bd-ghost"
+            aria-label={`Ver ${i.id}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              height: 32,
+              padding: "0 12px",
+              borderRadius: 9,
+              border: "1px solid var(--s-border)",
+              background: "var(--s-card)",
+              color: "var(--s-t2)",
+              font: "inherit",
+              fontSize: 12,
+              fontWeight: 700,
+              textDecoration: "none",
+            }}
+          >
+            <Eye size={14} />
+            Ver
+          </Link>
+          <button
+            type="button"
+            onClick={() => setTarget(i)}
+            aria-label={`Excluir ${i.id}`}
+            className="bd-ghost"
+            style={{
+              display: "grid",
+              placeItems: "center",
+              width: 32,
+              height: 32,
+              borderRadius: 9,
+              border: "1px solid var(--s-border)",
+              background: "var(--s-card)",
+              color: "var(--s-bad)",
+              cursor: "pointer",
+            }}
+          >
+            <Trash2 size={14} />
+          </button>
+        </span>
       ),
     },
   ];
@@ -178,6 +220,7 @@ export function IndicadoresScreen({ indicadores }: { indicadores: IndicadorGeral
       title="Indicadores"
       subtitle="Catálogo de indicadores e suas fórmulas, por categoria"
       search={{ value: query, onChange: setQuery, placeholder: "Buscar por código, nome ou serviço…" }}
+      action={{ label: "Novo indicador", onClick: () => setCreating(true) }}
       extra={
         <button
           type="button"
@@ -278,6 +321,28 @@ export function IndicadoresScreen({ indicadores }: { indicadores: IndicadorGeral
           </section>
         );
       })}
+
+      {creating && (
+        <IndicadorCreateModal
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            setCreating(false);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {target && (
+        <ConfirmDelete
+          open
+          onClose={() => setTarget(null)}
+          onConfirm={confirmDelete}
+          question="Excluir este indicador?"
+          recordName={`${target.id} · ${target.nome} (${target.servicos.length} serviço(s))`}
+          busy={busy}
+          error={deleteError}
+        />
+      )}
     </AdminScreen>
   );
 }

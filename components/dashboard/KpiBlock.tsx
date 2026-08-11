@@ -2,7 +2,7 @@
 
 import { KpiBlock as GenericKpiBlock, type KpiBlockItem } from "@/components/ui/kpi-block";
 import type { IndicatorCardVM } from "@/lib/data/cities/indicator-blocks";
-import { formatIndicatorValue, iconForIndicator } from "./indicator-format";
+import { formatIndicatorValue, fullIndicatorValue, iconForIndicator } from "./indicator-format";
 
 /**
  * Cities KPI block (SCREENS §1.2) — a thin adapter over the generic
@@ -37,12 +37,14 @@ export function KpiBlock({
           icon: iconForIndicator(vm.id, vm.unit),
           label: vm.label,
           value: formatIndicatorValue(vm.unit, vm.value, vm.decimals),
+          valueFull: fullIndicatorValue(vm.unit, vm.value, vm.decimals),
           trend: vm.delta,
           atingimento: vm.attainment,
           inverse: vm.polarity === "down",
           stats: vm.footer.map((f) => ({
             label: f.label,
             value: f.display,
+            full: f.full,
             status: f.tone !== "default",
           })),
           sparkline: vm.series.map((s) => s.valor),

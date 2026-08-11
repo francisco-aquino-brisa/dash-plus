@@ -14,7 +14,7 @@ import type { CityDataset, FilterOptions } from "./types";
 // again when no filter is applied — bump to discard the filtered dataset.
 // v4: migrated to the `vw_*` layer in projeto_brisa_performance and re-keyed the
 // commercial enrich joins on `revan_cidade_id` (was city-name) — new numbers.
-const CACHE_KEY = "cities:dataset:v4";
+const CACHE_KEY = "cities:dataset:v5";
 
 /** Cheap freshness probe used by the auto-refresh flag. */
 export async function getCitiesWatermark(): Promise<string> {

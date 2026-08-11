@@ -17,6 +17,7 @@ export function ConfirmDelete({
   question,
   recordName,
   busy,
+  error,
 }: {
   open: boolean;
   onClose: () => void;
@@ -24,6 +25,8 @@ export function ConfirmDelete({
   question: string;
   recordName: string;
   busy?: boolean;
+  /** Surfaces a refused deletion (e.g. a business-rule guard) instead of failing silently. */
+  error?: string | null;
 }) {
   return (
     <ModalShell open={open} onClose={onClose} maxWidth={420}>
@@ -58,6 +61,21 @@ export function ConfirmDelete({
         <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--s-t2)" }}>{recordName}</div>
         <div style={{ fontSize: 12.5, color: "var(--s-t3)" }}>Não dá para desfazer.</div>
       </div>
+      {error && (
+        <div
+          style={{
+            padding: "9px 12px",
+            borderRadius: 10,
+            background: "var(--s-bad-bg)",
+            color: "var(--s-bad)",
+            fontSize: 12,
+            fontWeight: 700,
+            textAlign: "center",
+          }}
+        >
+          {error}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 10 }}>
         <SecondaryButton onClick={onClose} disabled={busy}>
           Cancelar

@@ -12,7 +12,7 @@ import { mockSalesView, SALES_FILTER_LISTS } from "./mock";
 import { PERIODS, type SalesFilters, type SalesFilterOptions, type SalesView } from "./types";
 
 function cacheKey(f: SalesFilters): string {
-  return `sales:v2:${[f.period, f.from, f.to, f.servico, f.gerente, f.canal, f.nicho, f.uf, f.cidade, f.tipo].join("|")}`;
+  return `sales:v4:${[f.period, f.from, f.to, f.servico, f.gerente, f.canal, f.nicho, f.uf, f.cidade, f.tipo].join("|")}`;
 }
 
 export async function getSalesView(filters: SalesFilters): Promise<SalesView> {

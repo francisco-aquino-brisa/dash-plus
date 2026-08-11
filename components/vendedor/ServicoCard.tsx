@@ -5,7 +5,7 @@ import { ChevronRight } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { statusColor } from "@/lib/ui/status";
 import type { IndicadorVM, ServicoCard as ServicoCardType, ServicoKey } from "@/lib/data/vendedor/types";
-import { SERVICO_STYLE, formatIndicadorValue } from "./vendedor-format";
+import { SERVICO_STYLE, formatIndicadorValue, fullIndicadorValue } from "./vendedor-format";
 
 const LOCK_HINT =
   "PDU/NDU: fonte oficial indisponível — fórmula (denominador) e meta em confirmação com o time de dados.";
@@ -151,7 +151,9 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 /** One catalog indicator: label + Meta / Real / % / Falta cells. */
 function IndicadorRow({ ind }: { ind: IndicadorVM }) {
   const meta = formatIndicadorValue(ind.meta, ind.formato);
+  const metaFull = fullIndicadorValue(ind.meta, ind.formato);
   const real = ind.disponivel ? formatIndicadorValue(ind.realizado, ind.formato) : "—";
+  const realFull = ind.disponivel ? fullIndicadorValue(ind.realizado, ind.formato) : "";
   const pct = ind.disponivel && ind.meta > 0 ? `${Math.round(ind.atingimento)}%` : "—";
   const falta = ind.disponivel && ind.polaridade === "up" ? formatNumber(ind.falta) : "—";
   const pctColor =
@@ -172,8 +174,13 @@ function IndicadorRow({ ind }: { ind: IndicadorVM }) {
         {ind.label}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 5 }}>
-        <Cell label="Meta" value={meta} />
-        <Cell label="Real" value={real} color={ind.disponivel ? "var(--s-t1)" : "var(--s-t3)"} />
+        <Cell label="Meta" value={meta} full={metaFull} />
+        <Cell
+          label="Real"
+          value={real}
+          full={realFull}
+          color={ind.disponivel ? "var(--s-t1)" : "var(--s-t3)"}
+        />
         <Cell label="%" value={pct} color={pctColor} />
         <Cell label="Falta" value={falta} color={falta === "—" ? "var(--s-t3)" : "var(--s-t1)"} />
       </div>
@@ -181,7 +188,17 @@ function IndicadorRow({ ind }: { ind: IndicadorVM }) {
   );
 }
 
-function Cell({ label, value, color }: { label: string; value: string; color?: string }) {
+function Cell({
+  label,
+  value,
+  full,
+  color,
+}: {
+  label: string;
+  value: string;
+  full?: string;
+  color?: string;
+}) {
   const box: CSSProperties = {
     border: "1px solid var(--s-border)",
     borderRadius: 7,
@@ -205,6 +222,7 @@ function Cell({ label, value, color }: { label: string; value: string; color?: s
         {label}
       </div>
       <div
+        title={full || undefined}
         style={{
           fontSize: 11,
           fontWeight: 700,

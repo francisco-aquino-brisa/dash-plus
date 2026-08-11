@@ -6,6 +6,7 @@ import { PrimaryButton } from "./primitives";
 import { SelectMenu } from "./SelectMenu";
 import { salvarCalculo } from "@/app/(app)/admin/indicadores/actions";
 import { sourceOptions } from "@/lib/data/indicators/sources";
+import { specToSql } from "@/lib/data/indicators/to-sql";
 import {
   AGREGACOES,
   emptyCondicao,
@@ -72,9 +73,11 @@ export function CalcBuilderForm({
   const [spec, setSpec] = useState<CalcSpec>(() => parseSpec(initialJson) ?? emptySpec());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [view, setView] = useState<"json" | "sql">("json");
 
   const columns = sourceColumns[spec.fonte] ?? [];
   const json = useMemo(() => serializeSpec(spec), [spec]);
+  const sql = useMemo(() => specToSql(spec), [spec]);
   const issues = useMemo(() => validateSpec(spec, sourceColumns), [spec, sourceColumns]);
   const valid = issues.length === 0;
 
@@ -204,12 +207,23 @@ export function CalcBuilderForm({
         </div>
       )}
 
-      {/* JSON preview */}
+      {/* JSON / SQL preview */}
       <div>
-        <span style={labelStyle}>especificacao_calculo (JSON)</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ ...labelStyle, marginBottom: 0 }}>especificacao_calculo</span>
+          <span style={{ flex: 1 }} />
+          <div style={{ display: "flex", gap: 6 }}>
+            <ModeTab active={view === "json"} onClick={() => setView("json")}>
+              JSON
+            </ModeTab>
+            <ModeTab active={view === "sql"} onClick={() => setView("sql")}>
+              SQL
+            </ModeTab>
+          </div>
+        </div>
         <pre
           style={{
-            margin: 0,
+            marginTop: 6,
             padding: "10px 12px",
             borderRadius: 10,
             border: "1px solid var(--s-border)",
@@ -223,7 +237,7 @@ export function CalcBuilderForm({
             overflow: "auto",
           }}
         >
-          {json}
+          {view === "json" ? json : sql}
         </pre>
       </div>
 
@@ -509,7 +523,8 @@ function CondicaoRow({
   );
 }
 
-function AddBtn({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+/** Small add/remove buttons — exported for reuse in the indicador/serviço CRUD forms. */
+export function AddBtn({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
@@ -536,7 +551,7 @@ function AddBtn({ onClick, children }: { onClick: () => void; children: ReactNod
   );
 }
 
-function RemoveBtn({ onClick, label }: { onClick: () => void; label: string }) {
+export function RemoveBtn({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button
       type="button"
@@ -586,7 +601,8 @@ function Grid2({ children }: { children: ReactNode }) {
   return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>{children}</div>;
 }
 
-function ModeTab({
+/** Small tab toggle (E/OU, Coluna/Expressão, JSON/SQL) — exported for reuse in the detail screen. */
+export function ModeTab({
   active,
   onClick,
   children,

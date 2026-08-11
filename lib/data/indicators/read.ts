@@ -114,3 +114,29 @@ export async function readIndicador(id: string): Promise<IndicadorGeral | null> 
     return null;
   }
 }
+
+// ── Write-path guards ─────────────────────────────────────────────────────────
+// Delta enforces no uniqueness constraint on `id` — the app must check itself
+// before INSERT (see write.ts). Small, targeted counts; never used for listing.
+
+async function countWhere(table: string, column: string, value: string): Promise<number> {
+  const rows = await new DatabricksDataClient().query<{ n: unknown }>(
+    `SELECT count(*) AS n FROM ${table} WHERE ${column} = ?`,
+    [value],
+  );
+
+  return Number(rows[0]?.n ?? 0);
+}
+
+export async function indicadorGeralExists(id: string): Promise<boolean> {
+  return (await countWhere(IND.gerais, "id", id)) > 0;
+}
+
+export async function indicadorServicoExists(id: string): Promise<boolean> {
+  return (await countWhere(IND.servicos, "id", id)) > 0;
+}
+
+/** How many serviços an indicador currently has — guards "must keep at least one". */
+export async function countServicosDoIndicador(idIndicadorGeral: string): Promise<number> {
+  return countWhere(IND.servicos, "id_indicador_geral", idIndicadorGeral);
+}

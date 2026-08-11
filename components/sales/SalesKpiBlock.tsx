@@ -2,7 +2,7 @@
 
 import { KpiBlock as GenericKpiBlock, type KpiBlockItem } from "@/components/ui/kpi-block";
 import type { SalesIndicatorVM } from "@/lib/data/sales/indicators";
-import { formatSalesValue, iconForSales } from "./sales-format";
+import { formatSalesValue, fullSalesValue, iconForSales } from "./sales-format";
 
 /**
  * Vendas · Canais KPI block (SCREENS §2) — a thin adapter over the generic
@@ -48,6 +48,7 @@ export function SalesKpiBlock({
             icon: iconForSales(vm.id, vm.unit),
             label: vm.label,
             value: formatSalesValue(vm.unit, vm.value, vm.decimals),
+            valueFull: fullSalesValue(vm.unit, vm.value, vm.decimals),
             trend: vm.delta,
             atingimento: vm.attainment,
             inverse,
@@ -55,8 +56,13 @@ export function SalesKpiBlock({
               {
                 label: "Meta",
                 value: vm.meta !== null ? formatSalesValue(vm.unit, vm.meta, vm.decimals) : "—",
+                full: vm.meta !== null ? fullSalesValue(vm.unit, vm.meta, vm.decimals) : undefined,
               },
-              { label: "Média 12m", value: formatSalesValue(vm.unit, media, vm.decimals) },
+              {
+                label: "Média 12m",
+                value: formatSalesValue(vm.unit, media, vm.decimals),
+                full: fullSalesValue(vm.unit, media, vm.decimals),
+              },
               {
                 label: "Ating.",
                 value: vm.attainment !== null ? `${Math.round(vm.attainment)}%` : "—",
