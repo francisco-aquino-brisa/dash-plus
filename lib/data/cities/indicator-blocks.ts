@@ -19,12 +19,14 @@ import {
   type Polarity,
 } from "./indicators";
 import { applyFilters, previousMonth, projection, sum } from "./compute";
-import { formatNumber, formatPct } from "@/lib/format";
+import { formatBRL, formatNumber, formatPct } from "@/lib/format";
 
 /** A resolved footer column: label + formatted value + color tone. */
 export interface FooterStatVM {
   label: string;
   display: string;
+  /** Exact value for the hover tooltip when `display` is abbreviated (e.g. R$). */
+  full?: string;
   tone: "good" | "warn" | "bad" | "default";
 }
 
@@ -88,11 +90,16 @@ export function defaultDecimals(unit: IndicatorUnit): number {
 }
 
 function fmtUnit(unit: IndicatorUnit, v: number, decimals = 1): string {
-  if (unit === "currency") return `R$ ${v.toFixed(decimals).replace(".", ",")}`;
+  if (unit === "currency") return formatBRL(v, Math.max(decimals, 2));
 
   if (unit === "percent") return formatPct(v, decimals);
 
   return formatNumber(v);
+}
+
+/** Exact (un-abbreviated) string for a value's hover tooltip; "" for non-currency. */
+function fullUnit(unit: IndicatorUnit, v: number, decimals = 1): string {
+  return unit === "currency" ? formatBRL(v, Math.max(decimals, 2)) : "";
 }
 
 /** Sum one or several numeric fields across rows. */
@@ -308,6 +315,7 @@ function resolveFooter(def: IndicatorDef, ctx: FooterCtx): FooterStatVM[] {
       return {
         label: "Meta",
         display: ctx.target === null ? "—" : fmtUnit(targetUnit, ctx.target, dec),
+        full: ctx.target === null ? undefined : fullUnit(targetUnit, ctx.target, dec) || undefined,
         tone: "default",
       };
     }
@@ -315,7 +323,12 @@ function resolveFooter(def: IndicatorDef, ctx: FooterCtx): FooterStatVM[] {
     if (slot === "projection") {
       const dec = def.decimals ?? defaultDecimals(def.unit);
 
-      return { label: "Projeção", display: fmtUnit(def.unit, ctx.projected, dec), tone: "default" };
+      return {
+        label: "Projeção",
+        display: fmtUnit(def.unit, ctx.projected, dec),
+        full: fullUnit(def.unit, ctx.projected, dec) || undefined,
+        tone: "default",
+      };
     }
 
     if (slot === "attainment") {
@@ -331,10 +344,12 @@ function resolveFooter(def: IndicatorDef, ctx: FooterCtx): FooterStatVM[] {
 
     const unit = slot.unit ?? "qtd";
     const v = computeValue(slot.compute, ctx.compute);
+    const dec = slot.decimals ?? defaultDecimals(unit);
 
     return {
       label: slot.label,
-      display: fmtUnit(unit, v, slot.decimals ?? defaultDecimals(unit)),
+      display: fmtUnit(unit, v, dec),
+      full: fullUnit(unit, v, dec) || undefined,
       tone: "default",
     };
   });

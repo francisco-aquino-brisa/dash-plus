@@ -51,7 +51,7 @@ const PORTAB = `(
     date_format(MAX(to_date(data)), 'yyyy-MM') AS ym,
     MAX(CASE WHEN upper(trim(STATUS)) = 'PORTADO' THEN 1 ELSE 0 END) AS portado
   FROM ${PBP}.\`vw_portabilidade_5g\`
-  WHERE coalesce(N_do_pedido, '') <> '' AND coalesce(hash_user, '') <> ''
+  WHERE N_do_pedido IS NOT NULL AND coalesce(hash_user, '') <> ''
   GROUP BY N_do_pedido
 ) p`;
 // Renovações live in a different catalog and join by matricula (not hash_user).

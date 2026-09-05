@@ -10,7 +10,7 @@ import { mockVendedorFilterOptions, mockVendedorView } from "./mock";
 import type { VendedorFilters, VendedorFilterOptions, VendedorOption, VendedorView } from "./types";
 
 function cacheKey(f: VendedorFilters): string {
-  return `vendedor:v2:${f.matricula}|${resolveCompetencia(f.competencia).ym}`;
+  return `vendedor:v3:${f.matricula}|${resolveCompetencia(f.competencia).ym}`;
 }
 
 export async function getVendedorView(filters: VendedorFilters): Promise<VendedorView> {

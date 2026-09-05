@@ -42,15 +42,18 @@ const DH = `${DBX}.\`desempenho_hc\``;
 // Official, channel-grained sources for the selectable blocks (see indicators.ts
 // and docs/data-map.md). All read-only; every formula validated vs the warehouse.
 // The commercial sources were consolidated into `projeto_brisa_performance` as
-// `vw_*` views (+ revan_cidade_id); `ticket_oferta` stays in the ICM schema.
-const ICM = `\`${CAT}\`.\`inteligencia_comercial_e_mercado\``;
+// `vw_*` views (+ revan_cidade_id). The ICM schema itself is no longer granted to
+// the app principal, so `ticket_oferta` must also be read through a PBP view
+// (`vw_metas_canais_ticket_oferta`, definer's-rights pass-through — see
+// docs/fix-migracao-vw-casts.sql). Until that view exists the meta line degrades
+// gracefully (RE02 shows Real only).
 const PBP = `\`${CAT}\`.\`projeto_brisa_performance\``;
 const WAVES = `${PBP}.\`vw_vendas_waves\``;
 const CINCO_G_T = `${PBP}.\`vw_vendas_5g\``;
 const CHURN_BL_T = `${PBP}.\`vw_churn_4m_vendedor_bl\``;
 const CHURN_5G_T = `${PBP}.\`vw_churn_4m_vendedor_5g\``;
 const META_CANAIS = `${PBP}.\`vw_meta_geral_canais\``;
-const TICKET_OFERTA = `${ICM}.\`metas_canais_ticket_oferta\``;
+const TICKET_OFERTA = `${PBP}.\`vw_metas_canais_ticket_oferta\``;
 
 const q13 = "add_months(date_trunc('MM', current_date()), -11)"; // início da janela de 12 meses
 
@@ -67,7 +70,7 @@ const PORTAB_T = `(
     MAX(cidade_venda) AS cidade_venda,
     MAX(CASE WHEN upper(trim(STATUS)) = 'PORTADO' THEN 1 ELSE 0 END) AS portado
   FROM ${PBP}.\`vw_portabilidade_5g\`
-  WHERE coalesce(N_do_pedido, '') <> ''
+  WHERE N_do_pedido IS NOT NULL
     AND coalesce(cidade_venda, '') <> ''
     AND to_date(data) >= ${q13}
   GROUP BY N_do_pedido
@@ -81,17 +84,35 @@ function dimWhereDH(
 ): string {
   const cl: string[] = [];
 
-  if (f.gerente) (cl.push("GERENTE_CANAL = ?"), params.push(f.gerente));
+  if (f.gerente) {
+    cl.push("GERENTE_CANAL = ?");
+    params.push(f.gerente);
+  }
 
-  if (f.canal && !opts.skipCanal) (cl.push("canal_waves = ?"), params.push(f.canal));
+  if (f.canal && !opts.skipCanal) {
+    cl.push("canal_waves = ?");
+    params.push(f.canal);
+  }
 
-  if (f.nicho && !opts.skipNicho) (cl.push("nicho = ?"), params.push(f.nicho));
+  if (f.nicho && !opts.skipNicho) {
+    cl.push("nicho = ?");
+    params.push(f.nicho);
+  }
 
-  if (f.uf) (cl.push("UF = ?"), params.push(f.uf));
+  if (f.uf) {
+    cl.push("UF = ?");
+    params.push(f.uf);
+  }
 
-  if (f.cidade) (cl.push("cidade_atuacao_jwas = ?"), params.push(f.cidade));
+  if (f.cidade) {
+    cl.push("cidade_atuacao_jwas = ?");
+    params.push(f.cidade);
+  }
 
-  if (f.tipo) (cl.push("TIPO_CIDADE = ?"), params.push(f.tipo));
+  if (f.tipo) {
+    cl.push("TIPO_CIDADE = ?");
+    params.push(f.tipo);
+  }
 
   return cl.length ? ` AND ${cl.join(" AND ")}` : "";
 }
@@ -331,7 +352,10 @@ async function sourceMonthly(
   for (const [key, col] of Object.entries(spec.dims)) {
     const v = filters[key as keyof SalesFilters];
 
-    if (v) (where.push(`${col} = ?`), params.push(v));
+    if (v) {
+      where.push(`${col} = ?`);
+      params.push(v);
+    }
   }
 
   const cols = defs.map((d) => `${d.valueExpr} AS \`${d.id}\``).join(", ");
@@ -372,9 +396,15 @@ async function funnelMetas(
       `servico IN (${servicos.map(() => "?").join(", ")})`,
     ];
 
-    if (filters.canal) (where.push("canal = ?"), params.push(filters.canal));
+    if (filters.canal) {
+      where.push("canal = ?");
+      params.push(filters.canal);
+    }
 
-    if (filters.gerente) (where.push("gerente = ?"), params.push(filters.gerente));
+    if (filters.gerente) {
+      where.push("gerente = ?");
+      params.push(filters.gerente);
+    }
 
     const sql = `SELECT date_format(data, 'yyyy-MM') ym, id_indicador, SUM(meta) meta FROM ${META_CANAIS} WHERE ${where.join(" AND ")} GROUP BY 1, 2`;
     const rows = await getDataClient().query<Record<string, unknown>>(sql, params);

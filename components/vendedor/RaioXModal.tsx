@@ -6,7 +6,7 @@ import { Lock, X } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { statusColor } from "@/lib/ui/status";
 import type { ServicoCard } from "@/lib/data/vendedor/types";
-import { SERVICO_STYLE, formatIndicadorValue } from "./vendedor-format";
+import { SERVICO_STYLE, formatIndicadorValue, fullIndicadorValue } from "./vendedor-format";
 
 /**
  * Raio-X por serviço (SCREENS §4.3 "Ver raio-X" + §5 drill shell). Opens from a
@@ -206,7 +206,10 @@ function DrillBody({
                 <h4 style={{ fontSize: 13, fontWeight: 700, color: "var(--s-t1)", textWrap: "pretty" }}>
                   {ind.label}
                 </h4>
-                <span style={{ fontSize: 11, color: "var(--s-t3)" }}>
+                <span
+                  title={fullIndicadorValue(ind.meta, ind.formato) || undefined}
+                  style={{ fontSize: 11, color: "var(--s-t3)" }}
+                >
                   Meta {formatIndicadorValue(ind.meta, ind.formato)}
                 </span>
               </div>
@@ -214,11 +217,13 @@ function DrillBody({
                 <Box
                   label="Realizado"
                   value={ind.disponivel ? formatIndicadorValue(ind.realizado, ind.formato) : "—"}
+                  full={ind.disponivel ? fullIndicadorValue(ind.realizado, ind.formato) : ""}
                   color={ind.disponivel ? "var(--s-t1)" : "var(--s-t3)"}
                 />
                 <Box
                   label="Projeção"
                   value={ind.disponivel ? formatIndicadorValue(projReal, ind.formato) : "—"}
+                  full={ind.disponivel ? fullIndicadorValue(projReal, ind.formato) : ""}
                   color={ind.disponivel ? "var(--s-t1)" : "var(--s-t3)"}
                 />
                 <Box label="Atingimento" value={ating} color={atingColor} />
@@ -249,7 +254,7 @@ function DrillBody({
   );
 }
 
-function Box({ label, value, color }: { label: string; value: string; color?: string }) {
+function Box({ label, value, full, color }: { label: string; value: string; full?: string; color?: string }) {
   return (
     <div
       style={{
@@ -262,6 +267,7 @@ function Box({ label, value, color }: { label: string; value: string; color?: st
     >
       <div style={eyebrowStyle}>{label}</div>
       <div
+        title={full || undefined}
         style={{
           fontFamily: "var(--font-display)",
           fontWeight: 800,

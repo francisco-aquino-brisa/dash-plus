@@ -83,6 +83,7 @@ export function PermissoesMatrix({
         setGranted((prev) => {
           const n = new Set(prev);
 
+          // eslint-disable-next-line @typescript-eslint/no-unused-expressions
           next ? n.add(key) : n.delete(key);
 
           return n;

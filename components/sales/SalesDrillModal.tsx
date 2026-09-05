@@ -7,7 +7,7 @@ import { TimeSeriesChart } from "@/components/ui/time-series-chart";
 import { statusColor } from "@/lib/ui/status";
 import { formatMonth } from "@/lib/format";
 import type { SalesIndicatorVM } from "@/lib/data/sales/indicators";
-import { formatSalesValue } from "./sales-format";
+import { formatSalesValue, fullSalesValue } from "./sales-format";
 
 /**
  * Raio-X do indicador for Vendas · Canais (SCREENS §5 pattern). Opens from any
@@ -73,13 +73,14 @@ function DrillBody({ vm, competencia }: { vm: SalesIndicatorVM; competencia: str
   const values = vm.series.map((s) => s.valor);
   const media = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
   const fmt = (n: number) => formatSalesValue(vm.unit, n, vm.decimals);
+  const full = (n: number) => fullSalesValue(vm.unit, n, vm.decimals) || undefined;
 
-  const stats: { label: string; value: string; color?: string; hint?: string }[] = [
-    { label: "Atual", value: fmt(vm.value), hint: formatMonth(competencia) },
+  const stats: { label: string; value: string; full?: string; color?: string; hint?: string }[] = [
+    { label: "Atual", value: fmt(vm.value), full: full(vm.value), hint: formatMonth(competencia) },
   ];
 
   if (vm.meta !== null) {
-    stats.push({ label: "Meta", value: fmt(vm.meta) });
+    stats.push({ label: "Meta", value: fmt(vm.meta), full: full(vm.meta) });
     stats.push({
       label: "Atingimento",
       value: vm.attainment === null ? "—" : `${Math.round(vm.attainment)}%`,
@@ -87,7 +88,7 @@ function DrillBody({ vm, competencia }: { vm: SalesIndicatorVM; competencia: str
     });
   }
 
-  stats.push({ label: "Média 12m", value: fmt(media) });
+  stats.push({ label: "Média 12m", value: fmt(media), full: full(media) });
 
   const data = vm.series.map((p) => ({ label: formatMonth(p.mes), value: p.valor, meta: p.target ?? null }));
 
@@ -143,6 +144,7 @@ function DrillBody({ vm, competencia }: { vm: SalesIndicatorVM; competencia: str
           >
             <span style={eyebrowStyle}>{s.label}</span>
             <span
+              title={s.full || undefined}
               style={{
                 fontFamily: "var(--font-display)",
                 fontWeight: 800,

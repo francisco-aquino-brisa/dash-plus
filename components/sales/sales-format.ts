@@ -17,7 +17,7 @@ import {
   Smartphone,
   type LucideIcon,
 } from "lucide-react";
-import { formatNumber, formatPct } from "@/lib/format";
+import { formatBRL, formatNumber, formatPct } from "@/lib/format";
 import type { SalesUnit } from "@/lib/data/sales/indicators";
 
 /** Icon per indicator id (shared meaning across blocks); falls back by unit. */
@@ -36,6 +36,9 @@ const ICON_BY_ID: Record<string, LucideIcon> = {
   VE33: ArrowLeftRight,
   VE34: Percent,
   VE35: Percent,
+  VE47: ShoppingCart,
+  VE48: CheckCircle2,
+  VE49: Rocket,
   RE01: DollarSign,
   RE02: DollarSign,
   RE03: DollarSign,
@@ -54,9 +57,18 @@ export function iconForSales(id: string, unit: SalesUnit): LucideIcon {
 /** Format a raw sales value for display (pt-BR), honouring its unit. Mirrors the
  *  cities `formatIndicatorValue` so the two screens read identically. */
 export function formatSalesValue(unit: SalesUnit, v: number, decimals = 1): string {
-  if (unit === "currency") return `R$ ${v.toFixed(decimals).replace(".", ",")}`;
+  if (unit === "currency") return formatBRL(v, Math.max(decimals, 2));
 
   if (unit === "percent") return formatPct(v, decimals);
 
   return formatNumber(v);
+}
+
+/**
+ * The exact (un-abbreviated) string for a value's hover tooltip. Only currency
+ * differs from its display form (compact → full R$); returns "" otherwise, so
+ * callers set a `title` only when it adds information.
+ */
+export function fullSalesValue(unit: SalesUnit, v: number, decimals = 1): string {
+  return unit === "currency" ? formatBRL(v, Math.max(decimals, 2)) : "";
 }

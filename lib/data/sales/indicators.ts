@@ -227,37 +227,49 @@ export const BANDA_LARGA: SalesIndicatorDef[] = [
     valueExpr: "SUM(cancelamentos) * 100.0 / NULLIF(SUM(instalacoes), 0)",
     description: "Cancelamentos ÷ instalações da safra (waves_churnsafra_consultor). Menor é melhor.",
   },
-  // ── Sem fonte no grão de canal (validado) → "sem acesso" ──
+  // Avulso = venda fora de combo (combo_5g = 'NAO'). Ids e fórmula do catálogo
+  // oficial indicadores_servicos (VE47/48/49): contagem distinta de orçamentos
+  // por estágio do funil, filtrando combo_5g = 'NAO'. Fonte waves (mesmo escopo
+  // corporativo=NAO + INTERNET/FWA do bloco).
   {
-    id: "VE07",
+    id: "VE47",
     block: "banda-larga",
     label: "Vendas criadas avulso",
     categoria: "venda",
     unit: "qtd",
     polarity: "up",
-    available: false,
-    description: "Vendas criadas avulsas (não-combo). Aguardando definição da flag de avulso.",
+    available: true,
+    source: "waves",
+    valueExpr: "COUNT(DISTINCT CASE WHEN status_venda = 'CRIADO' AND combo_5g = 'NAO' THEN orcamento_id END)",
+    description: "Orçamentos criados fora de combo (combo_5g = NÃO), contagem distinta no mês.",
   },
   {
-    id: "VE08",
+    id: "VE48",
     block: "banda-larga",
     label: "Vendas efetivadas avulso",
     categoria: "venda",
     unit: "qtd",
     polarity: "up",
-    available: false,
-    description: "Vendas efetivadas avulsas. Aguardando definição da flag de avulso.",
+    available: true,
+    source: "waves",
+    valueExpr:
+      "COUNT(DISTINCT CASE WHEN status_venda = 'EFETIVADO' AND combo_5g = 'NAO' THEN orcamento_id END)",
+    description: "Orçamentos efetivados fora de combo (combo_5g = NÃO), contagem distinta no mês.",
   },
   {
-    id: "VE09",
+    id: "VE49",
     block: "banda-larga",
     label: "Vendas instaladas avulso",
     categoria: "venda",
     unit: "qtd",
     polarity: "up",
-    available: false,
-    description: "Vendas instaladas avulsas. Aguardando definição da flag de avulso.",
+    available: true,
+    source: "waves",
+    valueExpr:
+      "COUNT(DISTINCT CASE WHEN status_venda = 'INSTALADO' AND combo_5g = 'NAO' THEN orcamento_id END)",
+    description: "Orçamentos instalados fora de combo (combo_5g = NÃO), contagem distinta no mês.",
   },
+  // ── Sem fonte no grão de canal (validado) → "sem acesso" ──
   {
     id: "VE05c",
     block: "banda-larga",
@@ -266,7 +278,8 @@ export const BANDA_LARGA: SalesIndicatorDef[] = [
     unit: "percent",
     polarity: "up",
     available: false,
-    description: "Conversão na competência de criação. Aguardando definição de competência por canal.",
+    description:
+      "Conversão na competência de criação (âncora data_criado). Bloqueado: a view vw_vendas_waves estoura em to_date(data_criado) — aguardando fix tolerante no time de dados.",
   },
   {
     id: "VE06c",
@@ -276,7 +289,8 @@ export const BANDA_LARGA: SalesIndicatorDef[] = [
     unit: "percent",
     polarity: "up",
     available: false,
-    description: "Conclusão na competência. Aguardando definição de competência por canal.",
+    description:
+      "Conclusão na competência de criação (âncora data_criado). Bloqueado: a view vw_vendas_waves estoura em to_date(data_criado) — aguardando fix tolerante no time de dados.",
   },
   {
     id: "CA03",

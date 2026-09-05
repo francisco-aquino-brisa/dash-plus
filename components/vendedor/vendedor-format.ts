@@ -4,7 +4,7 @@
 // prototype (SCREENS §4): FTTH brand · FWA ok · 5G blue · Banda warn.
 
 import { Globe, Radio, Wifi, Zap, type LucideIcon } from "lucide-react";
-import { formatNumber, formatPct } from "@/lib/format";
+import { formatBRL, formatNumber, formatPct } from "@/lib/format";
 import type { IndicadorFormato, ServicoKey } from "@/lib/data/vendedor/types";
 
 export interface ServicoStyle {
@@ -28,12 +28,19 @@ export const SERVICO_STYLE: Record<ServicoKey, ServicoStyle> = {
  * screen — so a percent value is scaled by 100 before formatting.
  */
 export function formatIndicadorValue(v: number, formato: IndicadorFormato): string {
-  if (formato === "R$")
-    return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+  if (formato === "R$") return formatBRL(v);
 
   if (formato === "%") return formatPct(v * 100, 0);
 
   return formatNumber(v);
+}
+
+/**
+ * The exact (un-abbreviated) string for a value's hover tooltip. Only currency
+ * differs from its display form (compact → full R$); returns "" otherwise.
+ */
+export function fullIndicadorValue(v: number, formato: IndicadorFormato): string {
+  return formato === "R$" ? formatBRL(v) : "";
 }
 
 /** Two uppercase initials for the identity-card avatar. */

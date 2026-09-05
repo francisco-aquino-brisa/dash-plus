@@ -18,6 +18,8 @@ import { isTrendGood, statusColor } from "@/lib/ui/status";
 export interface KpiStat {
   label: string;
   value: string;
+  /** Exact value for the hover tooltip when `value` is abbreviated (e.g. R$). */
+  full?: string;
   /** Colour this cell by attainment (the "Ating." column). */
   status?: boolean;
 }
@@ -25,8 +27,10 @@ export interface KpiStat {
 export interface KpiCardProps {
   icon: LucideIcon;
   label: string;
-  /** Pre-formatted display value, e.g. "1.508.872" or "R$ 26,29". */
+  /** Pre-formatted display value, e.g. "1.508.872" or "R$ 4,29 mi". */
   value: string;
+  /** Exact value for the hover tooltip when `value` is abbreviated (e.g. R$). */
+  valueFull?: string;
   /** Period-over-period change in %, e.g. -1.2. Omit to hide the pill. */
   trend?: number | null;
   /** Attainment %, e.g. 40. `null`/undefined → neutral, no meta. */
@@ -46,6 +50,7 @@ export function KpiCard({
   icon: Icon,
   label,
   value,
+  valueFull,
   trend,
   atingimento,
   inverse = false,
@@ -137,6 +142,7 @@ export function KpiCard({
       {/* Value + sparkline */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
         <span
+          title={valueFull || undefined}
           style={{
             fontFamily: "var(--font-display)",
             fontWeight: 800,
@@ -179,6 +185,7 @@ export function KpiCard({
               {s.label}
             </span>
             <span
+              title={s.full || undefined}
               style={{
                 fontSize: 12,
                 fontWeight: 700,

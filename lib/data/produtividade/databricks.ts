@@ -22,16 +22,31 @@ function whereDH(f: ProdFilters, params: unknown[]): string {
   const cl: string[] = [];
 
   if (f.mode === "externas") {
-    if (f.gerencia) (cl.push("GERENCIA = ?"), params.push(f.gerencia));
+    if (f.gerencia) {
+      cl.push("GERENCIA = ?");
+      params.push(f.gerencia);
+    }
 
-    if (f.coordenacao) (cl.push("COORDENACAO = ?"), params.push(f.coordenacao));
+    if (f.coordenacao) {
+      cl.push("COORDENACAO = ?");
+      params.push(f.coordenacao);
+    }
   } else {
-    if (f.gerente) (cl.push("GERENTE_CANAL = ?"), params.push(f.gerente));
+    if (f.gerente) {
+      cl.push("GERENTE_CANAL = ?");
+      params.push(f.gerente);
+    }
 
-    if (f.nicho) (cl.push("nicho = ?"), params.push(f.nicho));
+    if (f.nicho) {
+      cl.push("nicho = ?");
+      params.push(f.nicho);
+    }
   }
 
-  if (f.cidade) (cl.push("cidade_atuacao_jwas = ?"), params.push(f.cidade));
+  if (f.cidade) {
+    cl.push("cidade_atuacao_jwas = ?");
+    params.push(f.cidade);
+  }
 
   return cl.length ? ` AND ${cl.join(" AND ")}` : "";
 }

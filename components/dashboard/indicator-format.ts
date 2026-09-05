@@ -22,7 +22,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { formatNumber, formatPct } from "@/lib/format";
+import { formatBRL, formatNumber, formatPct } from "@/lib/format";
 import type { IndicatorUnit } from "@/lib/data/cities/indicators";
 
 /** Icon per id_indicador (shared meaning across blocks); falls back by unit. */
@@ -62,9 +62,17 @@ export function iconForIndicator(id: string, unit: IndicatorUnit): LucideIcon {
 
 /** Format a raw indicator value for display (pt-BR), honouring its unit. */
 export function formatIndicatorValue(unit: IndicatorUnit, v: number, decimals = 1): string {
-  if (unit === "currency") return `R$ ${v.toFixed(decimals).replace(".", ",")}`;
+  if (unit === "currency") return formatBRL(v, Math.max(decimals, 2));
 
   if (unit === "percent") return formatPct(v, decimals);
 
   return formatNumber(v);
+}
+
+/**
+ * The exact (un-abbreviated) string for a value's hover tooltip. Only currency
+ * differs from its display form (compact → full R$); returns "" otherwise.
+ */
+export function fullIndicatorValue(unit: IndicatorUnit, v: number, decimals = 1): string {
+  return unit === "currency" ? formatBRL(v, Math.max(decimals, 2)) : "";
 }

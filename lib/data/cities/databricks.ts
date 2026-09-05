@@ -348,7 +348,7 @@ async function fetch5gPedidos(): Promise<Map<string, PedidoAgg>> {
       FROM ${FQ("vw_vendas_5g")}
       WHERE to_date(data_assinatura, 'dd/MM/yyyy') >= ${WINDOW}
         AND revan_cidade_id IS NOT NULL
-        AND coalesce(n_do_pedido, '') <> ''
+        AND n_do_pedido IS NOT NULL
       GROUP BY 1, 2, 3
     )
     SELECT
@@ -440,7 +440,7 @@ async function fetchPortabilidade(): Promise<Map<string, PortabAgg>> {
         date_format(MAX(to_date(data)), 'yyyy-MM-01') AS competencia,
         MAX(CASE WHEN upper(trim(STATUS)) = 'PORTADO' THEN 1 ELSE 0 END) AS portado
       FROM ${FQ("vw_portabilidade_5g")}
-      WHERE coalesce(N_do_pedido, '') <> ''
+      WHERE N_do_pedido IS NOT NULL
         AND revan_cidade_id IS NOT NULL
         AND to_date(data) >= ${WINDOW}
       GROUP BY N_do_pedido

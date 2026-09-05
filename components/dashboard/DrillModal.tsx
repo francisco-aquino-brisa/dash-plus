@@ -8,7 +8,7 @@ import { statusColor } from "@/lib/ui/status";
 import { formatMonth } from "@/lib/format";
 import type { IndicatorCardVM, RelatedIndicatorVM, SeriesPoint } from "@/lib/data/cities/indicator-blocks";
 import type { IndicatorUnit } from "@/lib/data/cities/indicators";
-import { formatIndicatorValue } from "./indicator-format";
+import { formatIndicatorValue, fullIndicatorValue } from "./indicator-format";
 
 /**
  * Raio-X do indicador (SCREENS §5). Opens from any KPI card: header + four stat
@@ -106,16 +106,21 @@ function DrillBody({
     : toSeries(ind.series, ind.unit, ind.decimals);
   const chartLabel = activeRel ? activeRel.label : ind.label;
 
-  const stats: { label: string; value: string; color?: string; hint?: string }[] = [
+  const stats: { label: string; value: string; full?: string; color?: string; hint?: string }[] = [
     {
       label: "Atual",
       value: formatIndicatorValue(ind.unit, ind.value, ind.decimals),
+      full: fullIndicatorValue(ind.unit, ind.value, ind.decimals) || undefined,
       hint: formatMonth(competencia),
     },
   ];
 
   if (ind.target !== null) {
-    stats.push({ label: "Meta", value: formatIndicatorValue(ind.targetUnit, ind.target, ind.decimals) });
+    stats.push({
+      label: "Meta",
+      value: formatIndicatorValue(ind.targetUnit, ind.target, ind.decimals),
+      full: fullIndicatorValue(ind.targetUnit, ind.target, ind.decimals) || undefined,
+    });
     stats.push({
       label: "Atingimento",
       value: ind.attainment === null ? "—" : `${Math.round(ind.attainment)}%`,
@@ -123,7 +128,11 @@ function DrillBody({
     });
   }
 
-  stats.push({ label: "Média 12m", value: formatIndicatorValue(ind.unit, ind.average, ind.decimals) });
+  stats.push({
+    label: "Média 12m",
+    value: formatIndicatorValue(ind.unit, ind.average, ind.decimals),
+    full: fullIndicatorValue(ind.unit, ind.average, ind.decimals) || undefined,
+  });
 
   return (
     <>
@@ -177,6 +186,7 @@ function DrillBody({
           >
             <span style={eyebrowStyle}>{s.label}</span>
             <span
+              title={s.full || undefined}
               style={{
                 fontFamily: "var(--font-display)",
                 fontWeight: 800,
@@ -291,6 +301,7 @@ function RelatedTile({
         </span>
       </div>
       <span
+        title={fullIndicatorValue(rel.unit, rel.value, rel.decimals) || undefined}
         style={{
           fontFamily: "var(--font-display)",
           fontWeight: 800,

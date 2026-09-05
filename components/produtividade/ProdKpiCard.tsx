@@ -14,7 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { isTrendGood } from "@/lib/ui/status";
-import { formatNumber, formatPct } from "@/lib/format";
+import { formatBRL, formatNumber, formatPct } from "@/lib/format";
 import type { KpiBlock } from "@/lib/data/produtividade/types";
 
 /**
@@ -38,11 +38,16 @@ function iconFor(label: string): LucideIcon {
 }
 
 function formatValue(k: KpiBlock): string {
-  if (k.unit === "currency") return `R$ ${k.value.toFixed(2).replace(".", ",")}`;
+  if (k.unit === "currency") return formatBRL(k.value);
 
   if (k.unit === "percent") return formatPct(k.value, 1);
 
   return formatNumber(k.value);
+}
+
+/** Exact (un-abbreviated) currency string for the hover tooltip; "" otherwise. */
+function fullValue(k: KpiBlock): string {
+  return k.unit === "currency" ? formatBRL(k.value) : "";
 }
 
 export function ProdKpiCard({ kpi }: { kpi: KpiBlock }) {
@@ -152,6 +157,7 @@ export function ProdKpiCard({ kpi }: { kpi: KpiBlock }) {
       </div>
 
       <span
+        title={fullValue(kpi) || undefined}
         style={{
           fontFamily: "var(--font-display)",
           fontWeight: 800,
