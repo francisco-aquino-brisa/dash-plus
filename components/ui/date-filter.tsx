@@ -47,6 +47,9 @@ export interface DateFilterProps {
   align?: "start" | "end";
   /** Popover stacking — raise above a modal (default 50). */
   zIndex?: number;
+  /** Month the calendar opens on. Defaults to today's — pass the month being
+   *  filtered so the user does not land somewhere else and have to navigate. */
+  initialMonth?: Date;
 }
 
 export function DateFilter({
@@ -58,11 +61,12 @@ export function DateFilter({
   modes = ["mes", "dia", "intervalo"],
   align = "start",
   zIndex = 50,
+  initialMonth,
 }: DateFilterProps) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DateMode>(modes.includes(initialMode) ? initialMode : modes[0]);
   const modeOptions = MODES.filter((m) => modes.includes(m.value));
-  const [displayMonth, setDisplayMonth] = useState<Date>(() => new Date());
+  const [displayMonth, setDisplayMonth] = useState<Date>(() => initialMonth ?? new Date());
   const [range, setRange] = useState<DateRange | undefined>();
 
   const dirty = defaultValue != null && value !== defaultValue;
@@ -190,10 +194,25 @@ export function DateFilter({
               month={displayMonth}
               onMonthChange={setDisplayMonth}
               selected={range}
-              onSelect={(r) => {
-                setRange(r);
+              onSelect={(_r, dia) => {
+                // react-day-picker v9 answers the FIRST click with a complete
+                // `{from: d, to: d}`, so trusting its range would close the
+                // popover on one click and select a single day. Drive the two
+                // clicks here instead: the first opens a range, the second
+                // closes it (in either direction).
+                const abrindo = !range?.from || Boolean(range.to);
 
-                if (r?.from && r.to) apply(rangeLabel(r.from, r.to));
+                if (abrindo) {
+                  setRange({ from: dia, to: undefined });
+
+                  return;
+                }
+
+                const inicio = range.from as Date;
+                const [a, b] = dia < inicio ? [dia, inicio] : [inicio, dia];
+
+                setRange({ from: a, to: b });
+                apply(rangeLabel(a, b));
               }}
             />
           )}

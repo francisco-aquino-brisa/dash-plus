@@ -25,6 +25,8 @@ export interface DataTableProps<T> {
   rows: T[];
   rowKey: (row: T, index: number) => string;
   onRowClick?: (row: T) => void;
+  /** Rows that read as selected — e.g. the row a cross-filter came from. */
+  isRowSelected?: (row: T) => boolean;
   /** Interior min width so columns don't crush on narrow viewports. */
   minWidth?: number;
   /** Cap the body height and scroll vertically, keeping the header pinned. */
@@ -39,6 +41,7 @@ export function DataTable<T>({
   rows,
   rowKey,
   onRowClick,
+  isRowSelected,
   minWidth = 640,
   maxHeight,
   pageSize,
@@ -98,23 +101,29 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {visibleRows.map((row, i) => (
-              <tr
-                key={rowKey(row, i)}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={onRowClick ? "bd-menuitem" : undefined}
-                style={{
-                  borderTop: "1px solid var(--s-border)",
-                  cursor: onRowClick ? "pointer" : "default",
-                }}
-              >
-                {columns.map((col) => (
-                  <td key={col.key} style={bodyCellStyle(col)}>
-                    {col.render(row)}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {visibleRows.map((row, i) => {
+              const selected = isRowSelected?.(row) ?? false;
+
+              return (
+                <tr
+                  key={rowKey(row, i)}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  className={onRowClick ? "bd-menuitem" : undefined}
+                  style={{
+                    borderTop: "1px solid var(--s-border)",
+                    cursor: onRowClick ? "pointer" : "default",
+                    background: selected ? "var(--s-brand-weak)" : undefined,
+                    boxShadow: selected ? "inset 3px 0 0 var(--s-brand)" : undefined,
+                  }}
+                >
+                  {columns.map((col) => (
+                    <td key={col.key} style={bodyCellStyle(col)}>
+                      {col.render(row)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

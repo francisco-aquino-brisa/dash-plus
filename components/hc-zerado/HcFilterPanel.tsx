@@ -1,0 +1,323 @@
+"use client";
+
+import { useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { X } from "lucide-react";
+import { ChipFilter, FilterClearButton } from "@/components/ui/chip-filter";
+import { DateFilter } from "@/components/ui/date-filter";
+import { MultiChipFilter } from "./MultiChipFilter";
+import { useReportNavPending } from "@/lib/ui/nav-pending";
+import {
+  clampRange,
+  defaultHcRange,
+  labelPeriodo,
+  parseIso,
+  parseLabelPeriodo,
+} from "@/lib/data/hc-zerado/dates";
+import { hcFiltersToQuery, statusLockIgnored } from "@/lib/data/hc-zerado/filters";
+import type {
+  Agilidade,
+  Experiencia,
+  HcFilterOptions,
+  HcFilters,
+  PerfilCidade,
+  StatusVenda,
+} from "@/lib/data/hc-zerado/types";
+
+const TODOS = "Todos";
+
+const AGILIDADE: Record<string, Agilidade> = {
+  Todos: "",
+  "Efetivado m. dia": "efetivado",
+  "Instalado m. dia": "instalado",
+};
+
+const PERFIS: Record<string, PerfilCidade> = {
+  Todos: "",
+  FTTH: "FTTH",
+  HÍBRIDA: "HIBRIDA",
+  "5G ONLY": "5G ONLY",
+};
+const EXPERIENCIAS: Record<string, Experiencia> = { Todos: "", "Em Exp.": "Em Exp.", Efetivo: "Efetivo" };
+
+function chaveDe<T extends string>(mapa: Record<string, T>, valor: T): string {
+  return Object.keys(mapa).find((k) => mapa[k] === valor) ?? TODOS;
+}
+
+/**
+ * The filter bar shared by every HC Zerado screen — a port of the original
+ * "Parâmetros de Filtros e Seleção", rebuilt on the app's own chip filters
+ * (DESIGN_SYSTEM §4.1/§4.2). The multi-selects keep the original's behaviour of
+ * picking several values at once.
+ *
+ * The URL is the source of truth: every chip rewrites the querystring, which the
+ * server reads to build the aggregation. That keeps a filtered screen shareable,
+ * the back button meaningful, and the context alive when moving between the
+ * module's five screens.
+ */
+export function HcFilterPanel({
+  filters,
+  options,
+  mostrarExperiencia = false,
+  travas,
+}: {
+  filters: HcFilters;
+  options: HcFilterOptions;
+  /** The experience cut only exists on Análise de Produtividade. */
+  mostrarExperiencia?: boolean;
+  /** Fields the global rules (Regras Globais) lock for everyone. */
+  travas?: { servico?: boolean; status?: boolean; agilidade?: boolean };
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [pending, startTransition] = useTransition();
+
+  useReportNavPending(pending);
+
+  const aplica = (patch: Partial<HcFilters>) => {
+    const next = { ...filters, ...patch };
+    const range = clampRange(next.from, next.to);
+
+    startTransition(() => {
+      router.push(`${pathname}?${hcFiltersToQuery({ ...next, from: range.from, to: range.to })}`);
+    });
+  };
+
+  const padrao = defaultHcRange();
+  const statusTravado =
+    statusLockIgnored(filters.cross.servico ? [filters.cross.servico] : filters.servico) || travas?.status;
+  const multis: Array<{
+    label: string;
+    values: string[];
+    options: string[];
+    onChange: (v: string[]) => void;
+    align?: "start" | "end";
+  }> = [
+    {
+      label: "Gerência",
+      values: filters.gerente,
+      options: options.gerentes,
+      onChange: (v) => aplica({ gerente: v }),
+    },
+    {
+      label: "Coordenação",
+      values: filters.coordenacao,
+      options: options.coordenacoes,
+      onChange: (v) => aplica({ coordenacao: v }),
+    },
+    {
+      label: "Supervisão",
+      values: filters.supervisao,
+      options: options.supervisoes,
+      onChange: (v) => aplica({ supervisao: v }),
+    },
+    {
+      label: "Líder",
+      values: filters.lider,
+      options: options.lideres,
+      onChange: (v) => aplica({ lider: v }),
+    },
+    {
+      label: "Cidade",
+      values: filters.cidade,
+      options: options.cidades,
+      onChange: (v) => aplica({ cidade: v }),
+      align: "end",
+    },
+    { label: "Canal", values: filters.canal, options: options.canais, onChange: (v) => aplica({ canal: v }) },
+    { label: "Nicho", values: filters.nicho, options: options.nichos, onChange: (v) => aplica({ nicho: v }) },
+    {
+      label: "Serviço",
+      values: filters.servico,
+      options: options.servicos,
+      onChange: (v) => aplica({ servico: v }),
+    },
+    {
+      label: "Indicador",
+      values: filters.indicador,
+      options: options.indicadores,
+      onChange: (v) => aplica({ indicador: v }),
+      align: "end",
+    },
+  ];
+
+  const sujos =
+    (filters.from !== padrao.from || filters.to !== padrao.to ? 1 : 0) +
+    multis.filter((m) => m.values.length > 0).length +
+    (filters.statusVenda !== "CRIADO" ? 1 : 0) +
+    (filters.agilidade ? 1 : 0) +
+    (filters.perfilCidade ? 1 : 0) +
+    (filters.experiencia ? 1 : 0);
+
+  return (
+    <div style={{ position: "sticky", top: 0, zIndex: 30, paddingTop: 4 }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 12px",
+          background: "var(--s-card)",
+          border: "1px solid var(--s-border)",
+          borderRadius: "var(--r-panel)",
+          boxShadow: "var(--s-sh)",
+        }}
+      >
+        <DateFilter
+          label="Período"
+          value={labelPeriodo(filters.from, filters.to)}
+          defaultValue={labelPeriodo(padrao.from, padrao.to)}
+          onChange={(v) => {
+            const range = parseLabelPeriodo(v);
+
+            if (range) aplica(range);
+          }}
+          initialMode="intervalo"
+          modes={["intervalo", "mes", "dia"]}
+          initialMonth={parseIso(filters.to)}
+        />
+        {multis.map((m) => (
+          <MultiChipFilter
+            key={m.label}
+            label={m.label}
+            values={m.values}
+            options={m.options}
+            onChange={m.onChange}
+            align={m.align}
+            maxVisible={m.label === "Cidade" ? 100 : undefined}
+          />
+        ))}
+        {!statusTravado && (
+          <ChipFilter
+            label="Status da venda"
+            value={filters.statusVenda}
+            options={["CRIADO", "EFETIVADO", "INSTALADO"]}
+            defaultValue="CRIADO"
+            onChange={(v) => aplica({ statusVenda: v as StatusVenda })}
+          />
+        )}
+        <ChipFilter
+          label="Agilidade"
+          value={chaveDe(AGILIDADE, filters.agilidade)}
+          options={Object.keys(AGILIDADE)}
+          defaultValue={TODOS}
+          onChange={(v) => aplica({ agilidade: AGILIDADE[v] })}
+        />
+        <ChipFilter
+          label="Tipo de cidade"
+          value={chaveDe(PERFIS, filters.perfilCidade)}
+          options={Object.keys(PERFIS)}
+          defaultValue={TODOS}
+          onChange={(v) => aplica({ perfilCidade: PERFIS[v] })}
+          align="end"
+        />
+        {mostrarExperiencia && (
+          <ChipFilter
+            label="Experiência"
+            value={chaveDe(EXPERIENCIAS, filters.experiencia)}
+            options={Object.keys(EXPERIENCIAS)}
+            defaultValue={TODOS}
+            onChange={(v) => aplica({ experiencia: EXPERIENCIAS[v] })}
+            align="end"
+          />
+        )}
+        <FilterClearButton count={sujos} onClear={() => startTransition(() => router.push(pathname))} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Click-to-filter context: the chips a user created by clicking a card, a row or
+ * a group. Only rendered when at least one is active — the filter bar above
+ * already says what the panel itself is filtering.
+ */
+export function HcContextoAtivo({
+  filters,
+  rotulos,
+}: {
+  filters: HcFilters;
+  /** Friendly text for a cross-filter whose value is an id (e.g. a matrícula). */
+  rotulos?: Partial<Record<keyof HcFilters["cross"], string>>;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const chips = (
+    [
+      ["cf_vendedor", "Vendedor", rotulos?.vendedor ?? filters.cross.vendedor],
+      ["cf_gerencia", "Gerência", filters.cross.gerencia],
+      ["cf_coordenacao", "Coordenação", filters.cross.coordenacao],
+      ["cf_canal", "Canal", filters.cross.canal],
+      ["cf_cidade", "Cidade", filters.cross.cidade],
+      ["cf_servico", "Serviço", filters.cross.servico],
+    ] as const
+  ).filter(([, , valor]) => Boolean(valor));
+
+  if (chips.length === 0) return null;
+
+  const semChave = (chaves: string[]) => {
+    const q = new URLSearchParams(hcFiltersToQuery(filters));
+
+    for (const chave of chaves) q.delete(chave);
+
+    router.push(`${pathname}?${q.toString()}`);
+  };
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: ".11em",
+          textTransform: "uppercase",
+          color: "var(--s-brand)",
+        }}
+      >
+        Contexto ativo
+      </span>
+      {chips.map(([chave, rotulo, valor]) => (
+        <button
+          key={chave}
+          type="button"
+          onClick={() => semChave([chave])}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            height: 28,
+            padding: "0 10px",
+            border: "1px solid var(--s-brand-line)",
+            borderRadius: 999,
+            background: "var(--s-brand-weak)",
+            color: "var(--s-brand)",
+            font: "inherit",
+            fontSize: 11.5,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          {rotulo}: {valor}
+          <X size={12} />
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => semChave(chips.map(([chave]) => chave))}
+        style={{
+          border: 0,
+          background: "none",
+          color: "var(--s-t3)",
+          font: "inherit",
+          fontSize: 11.5,
+          fontWeight: 700,
+          textDecoration: "underline",
+          cursor: "pointer",
+        }}
+      >
+        Limpar todos
+      </button>
+    </div>
+  );
+}

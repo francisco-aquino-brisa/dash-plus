@@ -122,6 +122,37 @@ tolerantes) em [`fix-vw_vendas_waves.sql`](fix-vw_vendas_waves.sql).
 > **Quintil/histórico** ainda não implementados (exigem ranking contra pares — decisão de coorte pendente).
 > Indicadores não computáveis aparecem com a meta e realizado "—" (`disponivel: false`).
 
+## HC Zerado (módulo, 2026-09) — fonte e ressalvas verificadas
+
+O módulo lê **`projeto_brisa_performance.tb_producao_hc_zero_venda`** (MANAGED),
+**não** a view `vw_producao_hc_zero_venda`. As duas têm **as mesmas 44 colunas** e
+os mesmos totais por mês (jul/2026: 237.840 vendas, 3.949 documentos em ambas),
+mas a view **recalcula** uma cadeia longa de CTEs a cada leitura (waves +
+`consolidado_5g_pedido` + `adm_comercial_view.vw_renovacao`, `FULL OUTER JOIN`
+com a folha `adm_comercial.hc_folha_dia` filtrada em `cargo = 'PROMOTOR DE VENDAS'`).
+Medido: o mesmo agregado de um mês leva **~8s pela view e ~0s pela tabela**; a tela
+inteira caiu de **45,3s para 5,9s** ao trocar. A tabela **atrasa um ciclo de carga**
+(2026-09-03 contra 2026-09-05 da view) e tem mais linhas (3,19M contra 2,96M) por
+carregar combinações serviço×status antigas — os totais de venda não mudam.
+
+Override por env: `DATABRICKS_HC_TABLE`.
+
+**Ressalvas da fonte (verificadas, todas afetam número em tela):**
+
+| Achado                                      | Medição                                                                                                                                                                | Efeito                                                                                                                                                                                                                                                     |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Duas populações na mesma tabela**         | `situacao='ATIVO'`: 1.025 pessoas / 77.066 vendas · `situacao` NULA: 3.452 documentos / **182.878 vendas (70%)**                                                       | HC próprio (quase todo canal PAP) vs canais indiretos (ONLINE, AGENTE PARCEIROS, DONO CIDADE, EMBAIXADORES, VAREJO REDES, INDICA BRISA, B2B, AGILITY), que não são folha e por isso não têm situação. Só 94 dos 3.452 documentos aparecem nos dois grupos. |
+| **PDU inflada ~3,4×**                       | consequência da linha acima                                                                                                                                            | Os Totalizadores somam a produção de todos os canais; o HC ativo conta só a folha. Numerador e denominador vêm de populações diferentes. **Replicado como está** (paridade com o app original) — correção pendente do dono do indicador.                   |
+| **`RENOVAÇÃO` não existe**                  | `servico` ∈ {`INTERNET`, `5G`, `FWA`}                                                                                                                                  | O card "Renovações" é estruturalmente zero. Renderizado como "sem dado na fonte", nunca como 0. `regras_justificativa_hc.servicos_obrigatorios` ainda lista `RENOVACAO`.                                                                                   |
+| **`status_venda` tem 4 valores**            | `CRIADO`, `EFETIVADO`, `INSTALADO`, **`5G ATIVO`**                                                                                                                     | O filtro de status só se aplica a INTERNET/FWA; 5G tem vocabulário próprio (a view atribui `'5G ATIVO'` fixo).                                                                                                                                             |
+| **`situacao` com duplicatas por acento**    | `FERIAS`/`FÉRIAS`, `AF.PREVIDENCIA`/`AF.PREVIDÊNCIA`, `LICENCA MATER.`/`LICENÇA MATER.`                                                                                | Renderizava dois tiles com metade da contagem cada. **Normalizado no adapter.** Desde ago/2026 a fonte só grava as acentuadas.                                                                                                                             |
+| **Domingo é feriado; sábado vale meio dia** | `flag_feriado='SIM'` quando a data está em `inteligencia_comercial_e_mercado.feriados` **ou** `DAYOFWEEK=1`; `dias_trabalhado` = 0,0 feriado · 0,5 sábado · 1,0 demais | A lista de feriados hardcoded do app original (2 datas de jun/2026) é redundante — a fonte já traz o flag.                                                                                                                                                 |
+| **`matricula` nula em ~35% das linhas**     | 100% nula em jan e fev/2026                                                                                                                                            | Nunca nula entre `situacao='ATIVO'`, onde `COUNT(DISTINCT documento_hc)` = `COUNT(DISTINCT matricula)` = 1.051 (1:1). Jan/fev não têm HC ativo → PDU mensal 0 nesses meses.                                                                                |
+| **Chave de HC**                             | 47.575 linhas (desde jul) sem `documento_hc` **e** sem `matricula`, **nenhuma** delas ATIVO                                                                            | Chave = `documento_hc`, com fallback `MAT-{matricula}`, e NULL quando não há nenhum dos dois (sai do DISTINCT em vez de virar uma pessoa fantasma). O original usava dois prefixos diferentes (`CPF-`/`MAT-`) em blocos diferentes.                        |
+
+Escrita: `justificativas_hc_zerado` e `regras_justificativa_hc` (mesmo schema) —
+os dois únicos caminhos de escrita do módulo.
+
 ## Data sources per screen
 
 **Not every screen reads from `projeto_brisa_performance`.** Only Cities does.

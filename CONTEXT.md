@@ -89,6 +89,47 @@ The target value for an indicator at a given grain (city × indicator × compet�
 **Gestão**:
 The operating company / partner dimension on `indicadores_cidades` (`gestao`), e.g. BRISANET or AGILITY. (This is the prototype's "Empresa".)
 
+## HC Zerado
+
+**HC**:
+A consultant with an active employment link on a given day (headcount). The grain
+is person × day; the person is identified by **matrícula**. Only an active
+**Situação** counts as HC.
+_Avoid_: vendedor (that is the sales role, not the headcount unit), colaborador.
+
+**Situação**:
+The state of the employment link on that day — active, vacation, leave
+(maternity, social security, accident), admitted, inactive. Only the active
+state feeds Ociosidade; the others are reported as headcount composition.
+
+**HC Zerado**:
+An HC that recorded no sale on a given day, counted only over the services and
+sale status that the **Regras Globais** charge for. A person is zerado per day,
+never per period — a period is a count of zeroed days.
+
+**Ociosidade**:
+Share of HC Zerado over active HC, for a day and a cut (management, coordination,
+city, channel). Lower is better.
+
+**PDU**:
+Produção diária útil — production per business day per active HC. Read daily
+(cumulative through the month) or monthly (one point per closed month).
+
+**Regras Globais**:
+The configuration that decides what counts as a sale for the purpose of being
+zerado: which services are charged, which sale status, and which **Agilidade**.
+It overrides the user's own filters — a rule locked here cannot be relaxed on
+screen.
+
+**Agilidade**:
+Whether a sale moved through its stages on the same day — created and confirmed
+on the same day, or confirmed and installed on the same day.
+
+**Justificativa**:
+The record explaining one zeroed day for one HC. Carries a categoria, a written
+motivo, and a status — em análise, aprovado, or rejeitado — plus the leader's
+parecer. One justificativa per HC per day.
+
 ## Data & caching
 
 **Watermark**:
