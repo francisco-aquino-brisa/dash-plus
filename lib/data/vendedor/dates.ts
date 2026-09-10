@@ -1,6 +1,8 @@
 // Monthly competência resolution for the Dashboard Vendedor screen. PDU and Dias
 // Zerados are inherently monthly, so the screen filters by a single month.
 
+import { todayUtc } from "../_shared";
+
 const MESES = [
   "Janeiro",
   "Fevereiro",
@@ -31,18 +33,18 @@ function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-/** Newest competência we assume data exists for = current month. */
-export function defaultCompetencia(today = new Date()): string {
-  return `${today.getFullYear()}-${pad(today.getMonth() + 1)}`;
+/** Newest competência we assume data exists for = current month (in Brazil). */
+export function defaultCompetencia(today = todayUtc()): string {
+  return `${today.getUTCFullYear()}-${pad(today.getUTCMonth() + 1)}`;
 }
 
-export function resolveCompetencia(ym: string, today = new Date()): ResolvedCompetencia {
+export function resolveCompetencia(ym: string, today = todayUtc()): ResolvedCompetencia {
   const safe = /^\d{4}-\d{2}$/.test(ym) ? ym : defaultCompetencia(today);
   const [y, m] = safe.split("-").map((s) => parseInt(s, 10));
   const from = `${y}-${pad(m)}-01`;
-  const lastDay = new Date(y, m, 0).getDate();
-  const isCurrentMonth = y === today.getFullYear() && m === today.getMonth() + 1;
-  const toDay = isCurrentMonth ? today.getDate() : lastDay;
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const isCurrentMonth = y === today.getUTCFullYear() && m === today.getUTCMonth() + 1;
+  const toDay = isCurrentMonth ? today.getUTCDate() : lastDay;
 
   return {
     ym: safe,
@@ -52,18 +54,18 @@ export function resolveCompetencia(ym: string, today = new Date()): ResolvedComp
     to: `${y}-${pad(m)}-${pad(toDay)}`,
     label: `${MESES[m - 1]} ${y}`,
     isCurrentMonth,
-    hojeDia: isCurrentMonth ? today.getDate() : null,
+    hojeDia: isCurrentMonth ? today.getUTCDate() : null,
   };
 }
 
 /** Last N competências (yyyy-MM), newest first — for the period picker fallback. */
-export function lastCompetencias(n: number, today = new Date()): string[] {
+export function lastCompetencias(n: number, today = todayUtc()): string[] {
   const out: string[] = [];
 
   for (let i = 0; i < n; i++) {
-    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - i, 1));
 
-    out.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`);
+    out.push(`${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`);
   }
 
   return out;

@@ -50,6 +50,11 @@ export interface DateFilterProps {
   /** Month the calendar opens on. Defaults to today's — pass the month being
    *  filtered so the user does not land somewhere else and have to navigate. */
   initialMonth?: Date;
+  /** Longest interval accepted, in days, both ends included. Days outside the
+   *  window grey out once the first one is picked. */
+  maxRangeDays?: number;
+  /** Latest day accepted. Later days and months grey out. */
+  maxDate?: Date;
 }
 
 export function DateFilter({
@@ -62,6 +67,8 @@ export function DateFilter({
   align = "start",
   zIndex = 50,
   initialMonth,
+  maxRangeDays,
+  maxDate,
 }: DateFilterProps) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DateMode>(modes.includes(initialMode) ? initialMode : modes[0]);
@@ -79,14 +86,32 @@ export function DateFilter({
   const shiftYear = (delta: number) =>
     setDisplayMonth((d) => new Date(d.getFullYear() + delta, d.getMonth(), 1));
 
+  // While the range is half-open the window closes around the first day in both
+  // directions, so an over-long range cannot be drawn in the first place.
+  const isDayDisabled = (d: Date): boolean => {
+    if (maxDate && d > maxDate) return true;
+
+    const start = range?.from;
+
+    if (!maxRangeDays || !start || range?.to) return false;
+
+    const span = Math.abs(d.getTime() - start.getTime()) / 86_400_000;
+
+    return span > maxRangeDays - 1;
+  };
+
   const hint =
     mode === "mes"
       ? "Selecione a competência"
       : mode === "dia"
         ? "Selecione o dia"
         : range?.from && !range.to
-          ? "Agora escolha o fim do intervalo"
-          : "Selecione início e fim";
+          ? maxRangeDays
+            ? `Agora escolha o fim — no máximo ${maxRangeDays} dias`
+            : "Agora escolha o fim do intervalo"
+          : maxRangeDays
+            ? `Selecione início e fim — no máximo ${maxRangeDays} dias`
+            : "Selecione início e fim";
 
   const year = displayMonth.getFullYear();
 
@@ -154,14 +179,16 @@ export function DateFilter({
                 </NavButton>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6 }}>
-                {MN.map((m) => {
+                {MN.map((m, i) => {
                   const cellVal = `${m}/${String(year).slice(-2)}`;
                   const active = value === cellVal;
+                  const blocked = maxDate != null && new Date(year, i, 1) > maxDate;
 
                   return (
                     <button
                       key={m}
                       type="button"
+                      disabled={blocked}
                       onClick={() => apply(cellVal)}
                       style={{
                         minHeight: 38,
@@ -172,7 +199,8 @@ export function DateFilter({
                         font: "inherit",
                         fontSize: 12.5,
                         fontWeight: 700,
-                        cursor: "pointer",
+                        cursor: blocked ? "not-allowed" : "pointer",
+                        opacity: blocked ? 0.35 : 1,
                       }}
                     >
                       {m}
@@ -186,6 +214,7 @@ export function DateFilter({
               mode="single"
               month={displayMonth}
               onMonthChange={setDisplayMonth}
+              disabled={isDayDisabled}
               onSelect={(d) => d && apply(dayLabel(d))}
             />
           ) : (
@@ -194,22 +223,23 @@ export function DateFilter({
               month={displayMonth}
               onMonthChange={setDisplayMonth}
               selected={range}
-              onSelect={(_r, dia) => {
+              disabled={isDayDisabled}
+              onSelect={(_r, day) => {
                 // react-day-picker v9 answers the FIRST click with a complete
                 // `{from: d, to: d}`, so trusting its range would close the
                 // popover on one click and select a single day. Drive the two
                 // clicks here instead: the first opens a range, the second
                 // closes it (in either direction).
-                const abrindo = !range?.from || Boolean(range.to);
+                const opening = !range?.from || Boolean(range.to);
 
-                if (abrindo) {
-                  setRange({ from: dia, to: undefined });
+                if (opening) {
+                  setRange({ from: day, to: undefined });
 
                   return;
                 }
 
-                const inicio = range.from as Date;
-                const [a, b] = dia < inicio ? [dia, inicio] : [inicio, dia];
+                const start = range.from as Date;
+                const [a, b] = day < start ? [day, start] : [start, day];
 
                 setRange({ from: a, to: b });
                 apply(rangeLabel(a, b));

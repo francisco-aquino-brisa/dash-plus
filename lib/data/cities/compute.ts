@@ -5,6 +5,7 @@
 //
 // Business rule: "Banda Larga" = FTTH + FWA. 5G is an independent base.
 
+import { todayUtc } from "../_shared";
 import type { CityIndicatorRecord, CityMetaRecord, Filters, Tecnologia } from "./types";
 import { computeIndicatorBlock, type IndicatorCardVM } from "./indicator-blocks";
 
@@ -53,13 +54,13 @@ export function previousMonth(months: string[], competencia: string): string | n
 /** Day-of-month projection: result * (daysInMonth / daysElapsed). */
 export function projection(result: number, competencia: string): number {
   const [y, m] = competencia.split("-").map(Number);
-  const now = new Date();
-  const isCurrent = now.getFullYear() === y && now.getMonth() + 1 === m;
+  const today = todayUtc();
+  const isCurrent = today.getUTCFullYear() === y && today.getUTCMonth() + 1 === m;
 
   if (!isCurrent) return result;
 
-  const daysInMonth = new Date(y, m, 0).getDate();
-  const dayOfMonth = Math.max(1, now.getDate());
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const dayOfMonth = Math.max(1, today.getUTCDate());
 
   return Math.round(result * (daysInMonth / dayOfMonth));
 }

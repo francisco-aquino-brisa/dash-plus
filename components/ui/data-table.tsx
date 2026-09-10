@@ -33,6 +33,9 @@ export interface DataTableProps<T> {
   maxHeight?: number;
   /** When set, paginate client-side at this page size (a pager shows past 1 page). */
   pageSize?: number;
+  /** Grow the rows as the body scrolls instead of paging. Needs `pageSize`
+   *  (the chunk) and `maxHeight` (something has to scroll). */
+  infiniteScroll?: boolean;
   empty?: { title: string; hint: string };
 }
 
@@ -45,16 +48,30 @@ export function DataTable<T>({
   minWidth = 640,
   maxHeight,
   pageSize,
+  infiniteScroll = false,
   empty = { title: "Nada por aqui", hint: "Ajuste os filtros para ver resultados." },
 }: DataTableProps<T>) {
   const [page, setPage] = useState(1);
+  const infinite = infiniteScroll && Boolean(pageSize);
 
   // Reset to the first page whenever the row set changes (e.g. a new search).
   useEffect(() => setPage(1), [rows]);
 
   const pageCount = pageSize ? Math.max(1, Math.ceil(rows.length / pageSize)) : 1;
   const safePage = Math.min(page, pageCount);
-  const visibleRows = pageSize ? rows.slice((safePage - 1) * pageSize, safePage * pageSize) : rows;
+  const visibleRows = !pageSize
+    ? rows
+    : infinite
+      ? rows.slice(0, safePage * pageSize)
+      : rows.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (!infinite || safePage >= pageCount) return;
+
+    const el = e.currentTarget;
+
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 240) setPage((p) => p + 1);
+  };
 
   if (rows.length === 0) {
     return (
@@ -89,7 +106,10 @@ export function DataTable<T>({
 
   return (
     <>
-      <div style={{ overflowX: "auto", overflowY: maxHeight ? "auto" : undefined, maxHeight }}>
+      <div
+        onScroll={infinite ? onScroll : undefined}
+        style={{ overflowX: "auto", overflowY: maxHeight ? "auto" : undefined, maxHeight }}
+      >
         <table style={{ width: "100%", minWidth, borderCollapse: "collapse" }}>
           <thead style={maxHeight ? { position: "sticky", top: 0, zIndex: 1 } : undefined}>
             <tr style={{ background: "var(--s-sunken)" }}>
@@ -127,7 +147,22 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
-      {pageSize && rows.length > pageSize && (
+      {infinite && rows.length > pageSize! && (
+        <div
+          style={{
+            padding: "8px 12px",
+            borderTop: "1px solid var(--s-border)",
+            fontSize: 11.5,
+            fontWeight: 700,
+            color: "var(--s-t3)",
+            textAlign: "center",
+          }}
+        >
+          {visibleRows.length} de {rows.length}
+          {safePage < pageCount ? " · role para ver mais" : ""}
+        </div>
+      )}
+      {!infinite && pageSize && rows.length > pageSize && (
         <Pager
           page={safePage}
           pageCount={pageCount}

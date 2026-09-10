@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Area,
@@ -129,7 +129,7 @@ export function DesempenhoScreen({
     else q.set(param, valor);
 
     setOtimista({ ...filters.cross, [chave]: desmarcando ? "" : valor });
-    startTransition(() => router.push(`${pathname}?${q.toString()}`));
+    startTransition(() => router.push(`${pathname}?${q.toString()}`, { scroll: false }));
   };
 
   // The cross-filter has to carry the matrícula (it is the query key), but the
@@ -756,6 +756,7 @@ function RegionalBloco({
         minWidth={880}
         maxHeight={420}
         pageSize={visao === "cidade" ? 25 : undefined}
+        infiniteScroll
         onRowClick={(r) => onCruzar(chaveCross, r.nome)}
         isRowSelected={(r) => r.nome === selecionado}
         empty={{ title: "Sem dados no período", hint: "Ajuste o período ou os filtros de hierarquia." }}
@@ -1036,6 +1037,7 @@ function IndividualBloco({
         minWidth={900}
         maxHeight={460}
         pageSize={25}
+        infiniteScroll
         onRowClick={(r) => onCruzar(r.matricula)}
         isRowSelected={(r) => r.matricula === cross.vendedor}
         empty={{
@@ -1056,7 +1058,20 @@ const MATRIZ_OPTS = [
   { value: "cidade" as const, label: "Cidade" },
 ];
 
-const NOME_SERVICO: Record<string, string> = { INTERNET: "FTTH", FWA: "FWA", "5G": "5G" };
+// Every subject gets these four rows, empty ones included, so the grid keeps a
+// constant height per person.
+const SERVICO_ROWS = ["INTERNET", "FWA", "5G", "RENOVACAO"];
+const SERVICO_LABEL: Record<string, string> = {
+  INTERNET: "FTTH",
+  FWA: "FWA",
+  "5G": "5G",
+  RENOVACAO: "Renovação",
+  RENOVAÇÃO: "Renovação",
+};
+
+const COL_NAME = 190;
+const COL_CANAL = 96;
+const COL_SERVICO = 104;
 
 function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFilters }) {
   const router = useRouter();
@@ -1083,13 +1098,81 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
     const q = new URLSearchParams(hcFiltersToQuery(filters));
 
     q.set("matriz", v);
-    startTransition(() => router.push(`${pathname}?${q.toString()}`));
+    startTransition(() => router.push(`${pathname}?${q.toString()}`, { scroll: false }));
+  };
+
+  // Sunday red, Saturday amber, holiday brand. Read by the header and the body,
+  // so a weekend column reads as one all the way down a table that scrolls.
+  const dayColors = useMemo(
+    () =>
+      view.dias.map((d) => {
+        const sunday = new Date(`${d.data}T00:00:00Z`).getUTCDay() === 0;
+
+        if (d.feriado) return { fg: "var(--s-brand)", bg: "var(--s-brand-weak)", title: "Feriado" };
+
+        if (sunday) return { fg: "var(--s-bad)", bg: "var(--s-bad-bg)", title: "Domingo" };
+
+        if (d.fimDeSemana) return { fg: "var(--s-warn)", bg: "var(--s-warn-bg)", title: "Sábado" };
+
+        return { fg: "var(--s-t3)", bg: "var(--s-card)", title: undefined };
+      }),
+    [view.dias],
+  );
+
+  // Canal only makes sense per person; grouped views hide the column.
+  const showCanal = visao === "consultor";
+  const servicoOffset = showCanal ? COL_NAME + COL_CANAL : COL_NAME;
+  const frozenWidth = servicoOffset + COL_SERVICO;
+
+  // One tooltip driven by mouse events, not a Radix root per cell — the grid is
+  // ~15k cells on a full month and at most one shows a card at a time.
+  const areaRef = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState<{
+    dia: string;
+    servico: string;
+    value: number;
+    breakdown: Array<{ indicador: string; value: number }>;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const onCellEnter = (
+    e: React.MouseEvent<HTMLTableCellElement>,
+    servico: string,
+    i: number,
+    value: number,
+    breakdown: Array<{ indicador: string; value: number }> | undefined,
+  ) => {
+    const area = areaRef.current?.getBoundingClientRect();
+
+    if (value <= 0 || !area) {
+      setHovered(null);
+
+      return;
+    }
+
+    const cell = e.currentTarget.getBoundingClientRect();
+    // Clamped so a cell near either edge keeps the card inside the block.
+    const center = cell.left - area.left + cell.width / 2;
+
+    setHovered({
+      dia: ptBr(view.dias[i]?.data ?? ""),
+      servico,
+      value,
+      breakdown: breakdown ?? [],
+      x: Math.min(Math.max(center, 120), Math.max(120, area.width - 120)),
+      y: cell.top - area.top,
+    });
   };
 
   return (
     <Bloco
       titulo="Produtividade Diária Detalhada (Matriz de Vendas)"
-      nota={porNome.length >= 120 ? "mostrando os 120 primeiros — refine a busca" : undefined}
+      nota={
+        porNome.length >= 120
+          ? "mostrando os 120 primeiros — refine a busca · passe o mouse num número para ver a quebra por indicador"
+          : "passe o mouse num número para ver a quebra por indicador"
+      }
       acoes={
         <>
           <label
@@ -1131,107 +1214,230 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
         </>
       }
     >
-      <div style={{ overflow: "auto", maxHeight: 460 }}>
-        <table
-          style={{
-            borderCollapse: "separate",
-            borderSpacing: 0,
-            fontSize: 11.5,
-            minWidth: 190 + view.dias.length * 62 + 60,
-          }}
-        >
-          <thead>
-            <tr>
-              <th style={{ ...thMatriz, position: "sticky", left: 0, zIndex: 3, minWidth: 190 }}>
-                Consultor / Serviço
-              </th>
-              {view.dias.map((d) => {
-                // Sunday red, Saturday amber, holiday brand — the original's own
-                // colour code for the day columns.
-                const domingo = new Date(`${d.data}T00:00:00Z`).getUTCDay() === 0;
-                const cor = d.feriado
-                  ? { fg: "var(--s-brand)", bg: "var(--s-brand-weak)", titulo: "Feriado" }
-                  : domingo
-                    ? { fg: "var(--s-bad)", bg: "var(--s-bad-bg)", titulo: "Domingo" }
-                    : d.fimDeSemana
-                      ? { fg: "var(--s-warn)", bg: "var(--s-warn-bg)", titulo: "Sábado" }
-                      : { fg: "var(--s-t3)", bg: "var(--s-card)", titulo: undefined };
-
-                return (
+      <div ref={areaRef} style={{ position: "relative" }}>
+        <div style={{ overflow: "auto", maxHeight: 460 }}>
+          <table
+            style={{
+              borderCollapse: "separate",
+              borderSpacing: 0,
+              fontSize: 11.5,
+              minWidth: frozenWidth + view.dias.length * 62 + 60,
+            }}
+          >
+            <thead>
+              <tr>
+                <th style={{ ...thMatriz, ...stickyCol(0, COL_NAME), zIndex: 4, textAlign: "left" }}>
+                  {MATRIZ_OPTS.find((o) => o.value === visao)?.label ?? "Consultor"}
+                </th>
+                {showCanal && (
+                  <th
+                    style={{ ...thMatriz, ...stickyCol(COL_NAME, COL_CANAL), zIndex: 4, textAlign: "left" }}
+                  >
+                    Canal
+                  </th>
+                )}
+                <th
+                  style={{
+                    ...thMatriz,
+                    ...stickyCol(servicoOffset, COL_SERVICO),
+                    zIndex: 4,
+                    textAlign: "left",
+                    borderRight: "2px solid var(--s-border)",
+                  }}
+                >
+                  Serviço
+                </th>
+                {view.dias.map((d, i) => (
                   <th
                     key={d.data}
-                    title={cor.titulo}
-                    style={{ ...thMatriz, minWidth: 62, color: cor.fg, background: cor.bg }}
+                    title={dayColors[i].title}
+                    style={{
+                      ...thMatriz,
+                      minWidth: 62,
+                      color: dayColors[i].fg,
+                      background: dayColors[i].bg,
+                    }}
                   >
                     {d.label}
                   </th>
-                );
-              })}
-              <th style={{ ...thMatriz, minWidth: 60 }}>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {porNome.map(([nome, linhas]) => (
-              <>
-                <tr key={nome}>
-                  <td
-                    colSpan={view.dias.length + 2}
-                    style={{
-                      position: "sticky",
-                      left: 0,
-                      padding: "7px 10px",
-                      background: "var(--s-sunken)",
-                      borderTop: "1px solid var(--s-border)",
-                      fontWeight: 800,
-                      color: "var(--s-t1)",
-                    }}
-                  >
-                    {nome}
-                    <span style={{ fontWeight: 600, color: "var(--s-t3)", marginLeft: 8 }}>
-                      {linhas[0]?.detalhe}
-                    </span>
-                  </td>
-                </tr>
-                {linhas.map((linha) => (
-                  <tr key={linha.id}>
-                    <td
-                      style={{
-                        ...tdMatriz,
-                        position: "sticky",
-                        left: 0,
-                        background: "var(--s-card)",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {NOME_SERVICO[linha.servico] ?? linha.servico}
-                    </td>
-                    {linha.valores.map((v, i) => (
+                ))}
+                <th style={{ ...thMatriz, minWidth: 60 }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {porNome.map(([nome, subjectRows], group) => {
+                const byServico = new Map(subjectRows.map((r) => [r.servico, r]));
+                const border = group === 0 ? undefined : "2px solid var(--s-border-2)";
+
+                return SERVICO_ROWS.map((servico, idx) => {
+                  const row = byServico.get(servico);
+                  const first = idx === 0;
+
+                  return (
+                    <tr key={`${nome}||${servico}`}>
+                      {first && (
+                        <>
+                          <td
+                            rowSpan={SERVICO_ROWS.length}
+                            style={{
+                              ...tdMatriz,
+                              ...stickyCol(0, COL_NAME),
+                              background: "var(--s-card)",
+                              borderTop: border,
+                              verticalAlign: "middle",
+                              whiteSpace: "normal",
+                            }}
+                          >
+                            <div style={{ fontWeight: 800, color: "var(--s-t1)" }} title={nome}>
+                              {nome}
+                            </div>
+                            <div style={{ fontSize: 10.5, color: "var(--s-t3)", marginTop: 1 }}>
+                              Total período:{" "}
+                              <strong className="font-mono">
+                                {nf.format(subjectRows[0]?.subjectTotal ?? 0)}
+                              </strong>
+                            </div>
+                          </td>
+                          {showCanal && (
+                            <td
+                              rowSpan={SERVICO_ROWS.length}
+                              style={{
+                                ...tdMatriz,
+                                ...stickyCol(COL_NAME, COL_CANAL),
+                                background: "var(--s-card)",
+                                borderTop: border,
+                                verticalAlign: "middle",
+                                color: "var(--s-t2)",
+                              }}
+                            >
+                              {subjectRows[0]?.detalhe}
+                            </td>
+                          )}
+                        </>
+                      )}
                       <td
-                        key={view.dias[i].data}
                         style={{
                           ...tdMatriz,
-                          minWidth: 62,
-                          textAlign: "center",
-                          color: v > 0 ? "var(--s-t1)" : "var(--s-t3)",
-                          fontWeight: v > 0 ? 800 : 400,
-                          background: v > 0 ? "var(--s-brand-weak)" : undefined,
+                          ...stickyCol(servicoOffset, COL_SERVICO),
+                          background: "var(--s-sunken)",
+                          borderRight: "2px solid var(--s-border)",
+                          borderTop: first ? border : undefined,
+                          fontWeight: 700,
+                          color: "var(--s-t2)",
                         }}
                       >
-                        {v > 0 ? nf.format(v) : "·"}
+                        {SERVICO_LABEL[servico] ?? servico}
                       </td>
-                    ))}
-                    <td style={{ ...tdMatriz, textAlign: "right", fontWeight: 800 }}>
-                      {nf.format(linha.total)}
-                    </td>
-                  </tr>
-                ))}
-              </>
-            ))}
-          </tbody>
-        </table>
+                      {view.dias.map((dia, i) => {
+                        const v = row?.valores[i] ?? 0;
+                        const color = dayColors[i];
+                        const marked = color.title !== undefined;
+
+                        return (
+                          <td
+                            key={dia.data}
+                            onMouseEnter={(e) => onCellEnter(e, servico, i, v, row?.breakdown?.[String(i)])}
+                            onMouseLeave={() => setHovered(null)}
+                            style={{
+                              ...tdMatriz,
+                              minWidth: 62,
+                              textAlign: "center",
+                              borderTop: first ? border : undefined,
+                              // A cell with production keeps the production colour;
+                              // the column's tint shows through the empty ones.
+                              color: v > 0 ? "var(--s-t1)" : marked ? color.fg : "var(--s-t3)",
+                              fontWeight: v > 0 ? 800 : 400,
+                              background: v > 0 ? "var(--s-brand-weak)" : marked ? color.bg : undefined,
+                              opacity: v > 0 || !marked ? 1 : 0.75,
+                              cursor: v > 0 ? "help" : undefined,
+                            }}
+                          >
+                            {v > 0 ? nf.format(v) : "·"}
+                          </td>
+                        );
+                      })}
+                      <td
+                        style={{
+                          ...tdMatriz,
+                          textAlign: "center",
+                          fontWeight: 800,
+                          background: "var(--s-sunken)",
+                          borderTop: first ? border : undefined,
+                        }}
+                      >
+                        {nf.format(row?.total ?? 0)}
+                      </td>
+                    </tr>
+                  );
+                });
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {hovered && (
+          <div
+            style={{
+              ...tooltipPainel,
+              position: "absolute",
+              zIndex: 20,
+              width: 224,
+              left: hovered.x,
+              top: hovered.y - 8,
+              transform: "translate(-50%, -100%)",
+              pointerEvents: "none",
+              gap: 4,
+              padding: "9px 11px",
+            }}
+          >
+            <span style={{ ...tooltipTitulo, display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <span>Detalhamento do dia</span>
+              <span className="font-mono">{hovered.dia}</span>
+            </span>
+            <span style={{ ...tooltipLinha, color: "var(--s-brand-2)" }}>
+              <span>Serviço</span>
+              <span>{SERVICO_LABEL[hovered.servico] ?? hovered.servico}</span>
+            </span>
+            {hovered.breakdown.length === 0 ? (
+              <span style={{ ...tooltipLinha, fontWeight: 500, opacity: 0.6, justifyContent: "center" }}>
+                Nenhum indicador correspondente
+              </span>
+            ) : (
+              hovered.breakdown.map((q) => (
+                <span key={q.indicador} style={{ ...tooltipLinha, fontSize: 11.5 }}>
+                  <span style={{ opacity: 0.7, fontWeight: 600 }}>{q.indicador}</span>
+                  <span className="font-mono">{nf.format(q.value)}</span>
+                </span>
+              ))
+            )}
+            <span
+              style={{
+                ...tooltipLinha,
+                borderTop: "1px solid rgba(255,255,255,.16)",
+                paddingTop: 4,
+                marginTop: 2,
+              }}
+            >
+              <span style={{ opacity: 0.7 }}>Total consolidado</span>
+              <span className="font-mono">{nf.format(hovered.value)}</span>
+            </span>
+          </div>
+        )}
       </div>
     </Bloco>
   );
+}
+
+/** Sticky left column: same offset on the header and the body cell. */
+function stickyCol(left: number, width: number): React.CSSProperties {
+  return {
+    position: "sticky",
+    left,
+    zIndex: 1,
+    width,
+    minWidth: width,
+    maxWidth: width,
+  };
 }
 
 const thMatriz: React.CSSProperties = {
@@ -1334,7 +1540,15 @@ function PduBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFilter
               <CartesianGrid strokeDasharray="3 3" stroke="var(--s-border)" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 10.5, fill: "var(--s-t3)" }} />
               <YAxis tick={{ fontSize: 10, fill: "var(--s-t3)" }} width={44} />
-              <ChartTooltip content={<TooltipPduMes />} />
+              <ChartTooltip
+                content={({ active, payload }) => (
+                  <TooltipPduMes
+                    active={active}
+                    payload={payload as React.ComponentProps<typeof TooltipPduMes>["payload"]}
+                    servicos={filters.servico}
+                  />
+                )}
+              />
               <Legend
                 verticalAlign="top"
                 align="right"
@@ -1411,19 +1625,26 @@ function TooltipPduDia({
 function TooltipPduMes({
   active,
   payload,
+  servicos = [],
 }: {
   active?: boolean;
   payload?: Array<{ payload: HcDesempenhoView["pduMes"][number] }>;
+  /** Serviço filter in force; empty means all. Filtered-out services are hidden. */
+  servicos?: string[];
 }) {
   if (!active || !payload?.length) return null;
 
   const m = payload[0].payload;
-  const linhas: Array<[string, string]> = [
-    ["PDU", m.pdu.toLocaleString("pt-BR")],
-    ["FTTH (Internet)", nf.format(m.ftth)],
-    ["FWA", nf.format(m.fwa)],
-    ["5G (Chips)", nf.format(m.chips5g)],
-  ];
+  const shows = (s: string) => servicos.length === 0 || servicos.includes(s);
+  const linhas: Array<[string, string]> = [["PDU", m.pdu.toLocaleString("pt-BR")]];
+
+  if (shows("INTERNET")) linhas.push(["FTTH (Internet)", nf.format(m.ftth)]);
+
+  if (shows("FWA")) linhas.push(["FWA", nf.format(m.fwa)]);
+
+  if (shows("5G")) linhas.push(["5G (Chips)", nf.format(m.chips5g)]);
+
+  if (shows("RENOVAÇÃO")) linhas.push(["Renovação", nf.format(m.renovacoes)]);
 
   return (
     <div style={{ ...tooltipPainel, minWidth: 210 }}>
@@ -1448,7 +1669,9 @@ function TooltipPduMes({
       <span style={{ ...tooltipLinha, fontSize: 11, opacity: 0.7 }}>
         <span>HC ativo</span>
         <span className="font-mono">
-          {nf.format(m.hcAtivo)} · {m.diasUteis} dias úteis
+          {/* `situacao` is only filled from March 2026 on — before that the
+              count is absent, not zero. */}
+          {m.hcAtivo > 0 ? nf.format(m.hcAtivo) : "—"} · {m.diasUteis} dias úteis
         </span>
       </span>
     </div>

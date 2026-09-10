@@ -11,6 +11,7 @@ import {
   clampRange,
   defaultHcRange,
   labelPeriodo,
+  MAX_RANGE_DAYS,
   parseIso,
   parseLabelPeriodo,
 } from "@/lib/data/hc-zerado/dates";
@@ -79,7 +80,9 @@ export function HcFilterPanel({
     const range = clampRange(next.from, next.to);
 
     startTransition(() => {
-      router.push(`${pathname}?${hcFiltersToQuery({ ...next, from: range.from, to: range.to })}`);
+      router.push(`${pathname}?${hcFiltersToQuery({ ...next, from: range.from, to: range.to })}`, {
+        scroll: false,
+      });
     });
   };
 
@@ -122,6 +125,13 @@ export function HcFilterPanel({
       values: filters.cidade,
       options: options.cidades,
       onChange: (v) => aplica({ cidade: v }),
+      align: "end",
+    },
+    {
+      label: "Consultor",
+      values: filters.consultor,
+      options: options.consultores,
+      onChange: (v) => aplica({ consultor: v }),
       align: "end",
     },
     { label: "Canal", values: filters.canal, options: options.canais, onChange: (v) => aplica({ canal: v }) },
@@ -176,6 +186,8 @@ export function HcFilterPanel({
           initialMode="intervalo"
           modes={["intervalo", "mes", "dia"]}
           initialMonth={parseIso(filters.to)}
+          maxRangeDays={MAX_RANGE_DAYS}
+          maxDate={new Date()}
         />
         {multis.map((m) => (
           <MultiChipFilter
@@ -222,7 +234,10 @@ export function HcFilterPanel({
             align="end"
           />
         )}
-        <FilterClearButton count={sujos} onClear={() => startTransition(() => router.push(pathname))} />
+        <FilterClearButton
+          count={sujos}
+          onClear={() => startTransition(() => router.push(pathname, { scroll: false }))}
+        />
       </div>
     </div>
   );
@@ -261,7 +276,7 @@ export function HcContextoAtivo({
 
     for (const chave of chaves) q.delete(chave);
 
-    router.push(`${pathname}?${q.toString()}`);
+    router.push(`${pathname}?${q.toString()}`, { scroll: false });
   };
 
   return (

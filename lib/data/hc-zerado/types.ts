@@ -51,6 +51,23 @@ export interface HcFilters {
   cross: HcCrossFilters;
 }
 
+/** One distinct attribute combination in the period — what the dropdowns cascade over. */
+export interface HcFilterTuple {
+  gerente: string;
+  coordenacao: string;
+  supervisao: string;
+  lider: string;
+  cidade: string;
+  matricula: string;
+  consultor: string;
+  canal: string;
+  nicho: string;
+  servico: string;
+  indicador: string;
+  perfil: string;
+  experiencia: string;
+}
+
 export interface HcFilterOptions {
   gerentes: string[];
   coordenacoes: string[];
@@ -137,6 +154,8 @@ export interface VendedorRow {
   vendasPorDia: number[];
   /** True when the seller sold nothing on the reference day. */
   zerouHoje: boolean;
+  /** First day the person appears in the period — the list's ordering key. */
+  firstDay: string;
 }
 
 /** Bloco 6 — daily production matrix (group × service × day). */
@@ -148,6 +167,11 @@ export interface MatrizRow {
   /** Sales per day, aligned with `HcDesempenhoView.dias`. */
   valores: number[];
   total: number;
+  /** "Total período": the subject's production across all services. */
+  subjectTotal: number;
+  /** Indicator breakdown per cell, keyed by the day's index in `dias`. Sparse —
+   *  only days with production appear. */
+  breakdown: Record<string, Array<{ indicador: string; value: number }>>;
 }
 
 /** Bloco 7 — daily cumulative PDU. */
@@ -165,6 +189,7 @@ export interface PduMes {
   ftth: number;
   fwa: number;
   chips5g: number;
+  renovacoes: number;
   total: number;
   hcAtivo: number;
   diasUteis: number;

@@ -1,6 +1,6 @@
 // Databricks adapter for the HC Zerado module. Read-only, aggregated in SQL.
 //
-// Source (verified): projeto_brisa_performance.vw_producao_hc_zero_venda —
+// Source (verified): projeto_brisa_performance.tb_producao_hc_zero_venda —
 // one row per sale-ish event with the seller's HR attributes attached.
 //
 // Period dates are laundered through `safeIsoDate` before being inlined as
@@ -11,14 +11,14 @@
 
 import { getDataClient } from "../client";
 import { num } from "../_shared";
-import { hcWhere, vendasExpr } from "./filters";
+import { hcWhere, vendasExpr, vendasWhere } from "./filters";
 import { dateRangeList, isWeekend, labelDia, previousDay } from "./dates";
 import type {
   DiaEixo,
   DiaZerado,
   HcDesempenhoView,
   HcFilters,
-  HcFilterOptions,
+  HcFilterTuple,
   MatrizRow,
   PduDia,
   PduMes,
@@ -27,6 +27,13 @@ import type {
   Totalizadores,
   VendedorRow,
 } from "./types";
+
+/**
+ * Part of the cache key. Constant in production (ADR 0002 unchanged); in dev it
+ * is re-evaluated on every recompile, so editing an aggregation invalidates what
+ * the previous version of it cached without needing a manual version bump.
+ */
+export const HC_ADAPTER_BUILD = process.env.NODE_ENV === "production" ? "prod" : String(Date.now());
 
 const CAT = process.env.DATABRICKS_CITIES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const SCHEMA = process.env.DATABRICKS_HC_SCHEMA ?? "projeto_brisa_performance";
@@ -69,11 +76,23 @@ function baseCte(f: HcFilters, params: unknown[], skipCross: Parameters<typeof h
   )`;
 }
 
+// Asked for twice per render (the view and the filter options) for a source
+// that only advances hourly.
+const WM_TTL_MS = 60_000;
+const gWm = globalThis as unknown as { __hcWatermark?: { value: string; at: number } };
+
 export async function databricksHcWatermark(): Promise<string> {
+  const memo = gWm.__hcWatermark;
+
+  if (memo && Date.now() - memo.at < WM_TTL_MS) return memo.value;
+
   try {
     const r = await q<{ wm: string }>(`SELECT CAST(MAX(data) AS STRING) wm FROM ${FONTE}`, []);
+    const value = r[0]?.wm ?? "unknown";
 
-    return r[0]?.wm ?? "unknown";
+    gWm.__hcWatermark = { value, at: Date.now() };
+
+    return value;
   } catch {
     return "unknown";
   }
@@ -143,6 +162,7 @@ interface ServicoDia {
   nome: string;
   detalhe: string;
   servico: string;
+  indicador: string;
   v: number;
 }
 
@@ -164,8 +184,10 @@ async function fetchServicoDia(f: HcFilters, visao: MatrizVisao): Promise<Servic
   const sql = `
     WITH ${base}
     SELECT * FROM (
-      SELECT CAST(data AS STRING) d, ${dim} nome, servico, ${detalhe} detalhe, SUM(${vendas}) v
-      FROM base GROUP BY data, ${dim}, servico
+      SELECT CAST(data AS STRING) d, ${dim} nome, servico,
+             COALESCE(NULLIF(TRIM(indicador), ''), 'Sem indicador') indicador,
+             ${detalhe} detalhe, SUM(${vendas}) v
+      FROM base GROUP BY data, ${dim}, servico, COALESCE(NULLIF(TRIM(indicador), ''), 'Sem indicador')
     ) WHERE v <> 0`;
 
   const rows = await q<ServicoDia>(sql, params);
@@ -378,26 +400,26 @@ function vendedores(
   refDate: string,
   diasUteisMes: number,
 ): VendedorRow[] {
-  const pessoas = new Map<string, { ultima: PessoaDia; dias: Map<string, number> }>();
+  const people = new Map<string, { first: PessoaDia; dias: Map<string, number> }>();
 
   for (const r of rows) {
     if (!r.matricula) continue;
 
-    const cur = pessoas.get(r.matricula) ?? { ultima: r, dias: new Map<string, number>() };
+    const cur = people.get(r.matricula) ?? { first: r, dias: new Map<string, number>() };
 
     cur.dias.set(r.d, (cur.dias.get(r.d) ?? 0) + r.v);
 
-    // Identity and status describe the person on their most recent day in the
-    // range, so the row reads as the state the reference day would show.
-    if (r.d >= cur.ultima.d) cur.ultima = r;
+    // Identity and status come from the person's FIRST day in the range, so
+    // someone active on day 1 who went on leave later still shows as active.
+    if (r.d < cur.first.d) cur.first = r;
 
-    pessoas.set(r.matricula, cur);
+    people.set(r.matricula, cur);
   }
 
   const out: VendedorRow[] = [];
 
-  for (const [matricula, p] of pessoas) {
-    if (p.ultima.ativo !== 1) continue;
+  for (const [matricula, p] of people) {
+    if (p.first.ativo !== 1) continue;
 
     let diasComVenda = 0;
     let diasSemVenda = 0;
@@ -416,12 +438,12 @@ function vendedores(
 
     out.push({
       matricula,
-      consultor: p.ultima.consultor ?? "",
-      canal: p.ultima.canal ?? "",
-      cidade: p.ultima.cidade ?? "",
-      gerente: p.ultima.gerente ?? "",
-      coordenacao: p.ultima.coordenacao ?? "",
-      situacao: p.ultima.situacao ?? "",
+      consultor: p.first.consultor ?? "",
+      canal: p.first.canal ?? "",
+      cidade: p.first.cidade ?? "",
+      gerente: p.first.gerente ?? "",
+      coordenacao: p.first.coordenacao ?? "",
+      situacao: p.first.situacao ?? "",
       ativo: true,
       totalVendas,
       diasComVenda,
@@ -433,16 +455,22 @@ function vendedores(
       projecao: avaliados > 0 ? Math.round((totalVendas / avaliados) * diasUteisMes) : 0,
       vendasPorDia: diasUteis.map((d) => p.dias.get(d) ?? 0),
       zerouHoje: (p.dias.get(refDate) ?? 0) === 0,
+      firstDay: p.first.d,
     });
   }
 
-  return out.sort((a, b) => b.diasSemVenda - a.diasSemVenda || a.consultor.localeCompare(b.consultor));
+  // First appearance, then matrícula — ordering by idle days ties everyone on
+  // a short period and buries whoever actually sold.
+  return out.sort((a, b) => a.firstDay.localeCompare(b.firstDay) || a.matricula.localeCompare(b.matricula));
 }
 
 /** Bloco 6 — daily production matrix for the selected grouping. */
-function matriz(rows: ServicoDia[], dias: DiaEixo[]): MatrizRow[] {
+function matriz(rows: ServicoDia[], dias: DiaEixo[], order: Map<string, string>): MatrizRow[] {
   const indice = new Map(dias.map((d, i) => [d.data, i]));
   const acc = new Map<string, MatrizRow>();
+  // The name column prints the subject's whole production, not the row's.
+  const totalByName = new Map<string, number>();
+  const breakdowns = new Map<string, Map<number, Map<string, number>>>();
 
   for (const r of rows) {
     const servico = String(r.servico ?? "").toUpperCase();
@@ -456,16 +484,71 @@ function matriz(rows: ServicoDia[], dias: DiaEixo[]): MatrizRow[] {
         servico,
         valores: dias.map(() => 0),
         total: 0,
+        subjectTotal: 0,
+        breakdown: {},
       } satisfies MatrizRow);
     const i = indice.get(r.d);
 
-    if (i !== undefined) row.valores[i] += r.v;
+    if (i !== undefined) {
+      row.valores[i] += r.v;
+
+      const byDay = breakdowns.get(key) ?? new Map<number, Map<string, number>>();
+      const byIndicador = byDay.get(i) ?? new Map<string, number>();
+
+      byIndicador.set(r.indicador, (byIndicador.get(r.indicador) ?? 0) + r.v);
+      byDay.set(i, byIndicador);
+      breakdowns.set(key, byDay);
+    }
 
     row.total += r.v;
+    totalByName.set(r.nome, (totalByName.get(r.nome) ?? 0) + r.v);
     acc.set(key, row);
   }
 
-  return [...acc.values()].sort((a, b) => a.nome.localeCompare(b.nome) || a.servico.localeCompare(b.servico));
+  for (const [key, row] of acc) {
+    row.subjectTotal = totalByName.get(row.nome) ?? 0;
+
+    for (const [i, byIndicador] of breakdowns.get(key) ?? []) {
+      row.breakdown[String(i)] = [...byIndicador.entries()]
+        .map(([indicador, value]) => ({ indicador, value }))
+        .sort((a, b) => b.value - a.value);
+    }
+  }
+
+  // Same key as Bloco 5, so both blocks list people in the same sequence.
+  return [...acc.values()].sort(
+    (a, b) =>
+      (order.get(a.nome) ?? "9999").localeCompare(order.get(b.nome) ?? "9999") ||
+      a.nome.localeCompare(b.nome) ||
+      SERVICO_ORDER.indexOf(a.servico) - SERVICO_ORDER.indexOf(b.servico),
+  );
+}
+
+const SERVICO_ORDER = ["INTERNET", "FWA", "5G", "RENOVACAO"];
+
+/** First day each matrix subject appears — the ordering key. */
+function subjectOrder(rows: PessoaDia[], visao: MatrizVisao): Map<string, string> {
+  const key = (r: PessoaDia) =>
+    visao === "gerencia"
+      ? r.gerente
+      : visao === "coordenacao"
+        ? r.coordenacao
+        : visao === "cidade"
+          ? r.cidade
+          : r.consultor;
+  const out = new Map<string, string>();
+
+  for (const r of rows) {
+    const k = key(r);
+
+    if (!k) continue;
+
+    const current = out.get(k);
+
+    if (current === undefined || r.d < current) out.set(k, r.d);
+  }
+
+  return out;
 }
 
 /** Bloco 7 — cumulative daily PDU: (Σ sales ÷ Σ business days) ÷ active HC. */
@@ -501,74 +584,65 @@ function pduDia(servicoRows: ServicoDia[], dias: DiaEixo[], totalHc: number): Pd
  */
 async function pduMes(f: HcFilters): Promise<PduMes[]> {
   const params: unknown[] = [];
-  const where = hcWhere(f, params);
-  const vendas = vendasExpr(f, params);
+  const where = hcWhere(f, params) + vendasWhere(f, params);
   const sql = `
     WITH base AS (
-      SELECT * FROM ${FONTE} WHERE data <= DATE'${f.to}'${where}
+      SELECT date_format(data, 'yyyy-MM') m, data, hash_user, situacao,
+             UPPER(TRIM(servico)) servico, total_vendas, dias_trabalhado
+      FROM ${FONTE}
+      WHERE data >= add_months(DATE'${f.to}', -11) AND data <= DATE'${f.to}'
+        AND UPPER(TRIM(flag_feriado)) = 'NAO'${where}
     ),
-    mes AS (SELECT date_format(data, 'yyyy-MM') m, MAX(data) maxd FROM base GROUP BY 1),
-    -- The headcount of a month is the snapshot of its last day with data.
-    hc AS (
-      SELECT mes.m m, ${HC_KEY} k
-      FROM base JOIN mes ON date_format(base.data, 'yyyy-MM') = mes.m AND base.data = mes.maxd
-      WHERE ${ATIVO} = 1
-    ),
-    hcn AS (SELECT m, COUNT(DISTINCT k) n FROM hc GROUP BY m),
-    prod AS (
-      SELECT mes.m m, base.servico servico, SUM(${vendas}) v
-      FROM base
-      JOIN mes ON date_format(base.data, 'yyyy-MM') = mes.m
-      JOIN (SELECT DISTINCT m, k FROM hc) h ON h.m = mes.m AND h.k = ${HC_KEY}
-      GROUP BY mes.m, base.servico
-    ),
-    -- Working days: the source flags Sundays and holidays via flag_feriado but
-    -- not Saturdays, and the original excluded both weekend days.
-    uteis AS (
-      SELECT date_format(data, 'yyyy-MM') m,
-             COUNT(DISTINCT CASE WHEN ${FERIADO} = 0 AND dayofweek(data) NOT IN (1, 7) THEN data END) d
-      FROM base GROUP BY 1
+    -- One row per person per day; peso is the day's weight (0, 0.5 or 1).
+    dia AS (
+      SELECT m, data, hash_user,
+             MAX(dias_trabalhado) peso,
+             SUM(total_vendas) v,
+             SUM(CASE WHEN servico = 'INTERNET' THEN total_vendas ELSE 0 END) ftth,
+             SUM(CASE WHEN servico = 'FWA' THEN total_vendas ELSE 0 END) fwa,
+             SUM(CASE WHEN servico = '5G' THEN total_vendas ELSE 0 END) g5,
+             SUM(CASE WHEN servico IN ('RENOVACAO', 'RENOVAÇÃO') THEN total_vendas ELSE 0 END) renov,
+             MAX(${ATIVO}) ativo
+      FROM base GROUP BY m, data, hash_user
     )
-    SELECT mes.m,
-           COALESCE(hcn.n, 0) hc,
-           COALESCE(uteis.d, 0) dias,
-           COALESCE(SUM(CASE WHEN UPPER(prod.servico) = 'INTERNET' THEN prod.v END), 0) ftth,
-           COALESCE(SUM(CASE WHEN UPPER(prod.servico) = 'FWA' THEN prod.v END), 0) fwa,
-           COALESCE(SUM(CASE WHEN UPPER(prod.servico) = '5G' THEN prod.v END), 0) g5,
-           COALESCE(SUM(prod.v), 0) total
-    FROM mes
-    LEFT JOIN prod ON prod.m = mes.m
-    LEFT JOIN uteis ON uteis.m = mes.m
-    LEFT JOIN hcn ON hcn.m = mes.m
-    GROUP BY mes.m, uteis.d, hcn.n
-    ORDER BY mes.m`;
+    SELECT m,
+           COUNT(DISTINCT data) dias,
+           COUNT(DISTINCT CASE WHEN ativo = 1 THEN hash_user END) hc,
+           SUM(peso) worked,
+           SUM(v) total,
+           SUM(ftth) ftth, SUM(fwa) fwa, SUM(g5) g5, SUM(renov) renov
+    FROM dia GROUP BY m ORDER BY m`;
 
   const rows = await q<{
     m: string;
-    hc: number;
     dias: number;
+    hc: number;
+    worked: number;
+    total: number;
     ftth: number;
     fwa: number;
     g5: number;
-    total: number;
+    renov: number;
   }>(sql, params);
 
   return rows.map((r) => {
-    const hcAtivo = num(r.hc);
-    const diasUteis = num(r.dias);
     const total = num(r.total);
+    const worked = num(r.worked);
     const [ano, mes] = r.m.split("-");
 
     return {
       mes: r.m,
       label: `${MESES[Number(mes) - 1]} - ${ano}`,
-      pdu: diasUteis > 0 && hcAtivo > 0 ? +(total / diasUteis / hcAtivo).toFixed(2) : 0,
+      // Production per WORKED person-day: `dias_trabalhado` already weighs a
+      // half day as 0.5 and an absence as 0. Matches the app being replaced.
+      pdu: worked > 0 ? +(total / worked).toFixed(2) : 0,
       ftth: num(r.ftth),
       fwa: num(r.fwa),
       chips5g: num(r.g5),
+      renovacoes: num(r.renov),
       total,
-      hcAtivo,
-      diasUteis,
+      hcAtivo: num(r.hc),
+      diasUteis: num(r.dias),
     };
   });
 }
@@ -577,10 +651,12 @@ export type MatrizVisao = "consultor" | "gerencia" | "coordenacao" | "cidade";
 
 export async function databricksHcDesempenho(f: HcFilters, visao: MatrizVisao): Promise<HcDesempenhoView> {
   const d1 = previousDay(f.to);
-  const [todasPessoaDia, servicoRows, pdum] = await Promise.all([
+  // Every leg is independent — one round trip's latency for all of them.
+  const [todasPessoaDia, servicoRows, pdum, diasUteisMes] = await Promise.all([
     fetchPessoaDia(f),
     fetchServicoDia(f, visao),
     pduMes(f),
+    diasUteisDoMes(f.to),
   ]);
 
   // The regional block keeps every group visible even when one is cross-filtered;
@@ -617,8 +693,10 @@ export async function databricksHcDesempenho(f: HcFilters, visao: MatrizVisao): 
       coordenacao: regional(doPeriodo, (r) => r.coordenacao, dias, f.to, d1),
       cidade: regional(doPeriodo, (r) => r.cidade, dias, f.to, d1),
     },
-    vendedores: vendedores(pessoaDia, diasUteis, refDate, await diasUteisDoMes(f.to)),
-    matriz: { [visao]: matriz(servicoRows, dias) } as HcDesempenhoView["matriz"],
+    vendedores: vendedores(pessoaDia, diasUteis, refDate, diasUteisMes),
+    matriz: {
+      [visao]: matriz(servicoRows, dias, subjectOrder(pessoaDia, visao)),
+    } as HcDesempenhoView["matriz"],
     pduDia: pduDia(servicoRows, dias, hcAtivo.size),
     pduMes: pdum,
     diasUteisDecorridos: diasUteis.length,
@@ -642,35 +720,29 @@ async function diasUteisDoMes(to: string): Promise<number> {
   return num(rows[0]?.d);
 }
 
-/** Distinct values for the filter panel's dropdowns. */
-export async function databricksHcFilterOptions(): Promise<HcFilterOptions> {
+/**
+ * Raw material for the cascading dropdowns: one row per attribute combination in
+ * the range (~16k for a month). Cascaded in Node and cached per period, so a
+ * filter click costs no query. Never reaches the browser.
+ */
+export function databricksHcFilterTuples(from: string, to: string): Promise<HcFilterTuple[]> {
   const sql = `
-    SELECT
-      array_sort(array_distinct(collect_list(NULLIF(TRIM(gerente), '')))) gerentes,
-      array_sort(array_distinct(collect_list(NULLIF(TRIM(coordenacao), '')))) coordenacoes,
-      array_sort(array_distinct(collect_list(NULLIF(TRIM(supervisao), '')))) supervisoes,
-      array_sort(array_distinct(collect_list(NULLIF(TRIM(lider), '')))) lideres,
-      array_sort(array_distinct(collect_list(NULLIF(TRIM(cidade_vendedor), '')))) cidades,
-      array_sort(array_distinct(collect_list(NULLIF(TRIM(canal), '')))) canais,
-      array_sort(array_distinct(collect_list(NULLIF(TRIM(nicho), '')))) nichos,
-      array_sort(array_distinct(collect_list(NULLIF(TRIM(servico), '')))) servicos,
-      array_sort(array_distinct(collect_list(NULLIF(TRIM(indicador), '')))) indicadores
+    SELECT DISTINCT
+      TRIM(gerente) gerente,
+      TRIM(coordenacao) coordenacao,
+      TRIM(supervisao) supervisao,
+      TRIM(lider) lider,
+      TRIM(cidade_vendedor) cidade,
+      CAST(matricula AS STRING) matricula,
+      TRIM(consultor) consultor,
+      TRIM(canal) canal,
+      TRIM(nicho) nicho,
+      TRIM(servico) servico,
+      TRIM(indicador) indicador,
+      TRIM(tipo_cidade) perfil,
+      TRIM(status_experiencia) experiencia
     FROM ${FONTE}
-    WHERE data >= add_months(current_date(), -2)`;
+    WHERE data BETWEEN DATE'${from}' AND DATE'${to}'`;
 
-  const [r] = await q<Record<string, string[]>>(sql, []);
-  const list = (k: string) => (Array.isArray(r?.[k]) ? r[k].filter(Boolean) : []);
-
-  return {
-    gerentes: list("gerentes"),
-    coordenacoes: list("coordenacoes"),
-    supervisoes: list("supervisoes"),
-    lideres: list("lideres"),
-    cidades: list("cidades"),
-    consultores: [],
-    canais: list("canais"),
-    nichos: list("nichos"),
-    servicos: list("servicos"),
-    indicadores: list("indicadores"),
-  };
+  return q<HcFilterTuple>(sql, []);
 }

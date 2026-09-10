@@ -181,14 +181,41 @@ export function hcWhere(
 }
 
 /**
+ * The sale-side filters as a WHERE, dropping the row instead of zeroing it —
+ * NOT the screen's rule (see the note at the top). `pduMes` only, because the
+ * backend it has to agree with applies them as plain `AND col IN (...)`.
+ */
+export function vendasWhere(f: HcFilters, params: unknown[]): string {
+  const cl: string[] = [];
+
+  if (f.servico.length) cl.push(inList("servico", f.servico, params));
+
+  if (f.indicador.length) cl.push(inList("indicador", f.indicador, params));
+
+  // No 5G/Renovação escape here: that backend drops those sales too, which is
+  // why the monthly PDU reads far lower than the daily one.
+  cl.push("UPPER(status_venda) = ?");
+  params.push(f.statusVenda);
+
+  if (f.agilidade === "efetivado") cl.push("UPPER(TRIM(efetivado_mesmo_dia)) = 'SIM'");
+
+  if (f.agilidade === "instalado") cl.push("UPPER(TRIM(instalado_mesmo_dia)) = 'SIM'");
+
+  return ` AND ${cl.join(" AND ")}`;
+}
+
+/**
  * The sale-side filters, as a CASE that zeroes `total_vendas` instead of
  * dropping the row — see the note at the top of this file.
  */
 export function vendasExpr(f: HcFilters, params: unknown[]): string {
+  // Clicking a Totalizadores card does NOT narrow production: the original
+  // zeroes against `filters.servico` alone, so the cross-filter only decides
+  // whether the status lock applies (below) and which card is highlighted.
   const servicos = f.cross.servico ? [f.cross.servico] : f.servico;
   const cl: string[] = [];
 
-  if (servicos.length) cl.push(inList("servico", servicos, params));
+  if (f.servico.length) cl.push(inList("servico", f.servico, params));
 
   if (f.indicador.length) cl.push(inList("indicador", f.indicador, params));
 

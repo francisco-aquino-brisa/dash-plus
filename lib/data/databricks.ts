@@ -1,14 +1,59 @@
 import { DBSQLClient } from "@databricks/sql";
 import type { ConnectionOptions } from "@databricks/sql/dist/contracts/IDBSQLClient";
 import type { DBSQLParameterValue } from "@databricks/sql/dist/DBSQLParameter";
+import type IDBSQLSession from "@databricks/sql/dist/contracts/IDBSQLSession";
 import { FilePersistence } from "./databricks-oauth-cache.mjs";
 import type { DataClient } from "./types";
 
+type Connection = { client: DBSQLClient; session: IDBSQLSession };
+
+/**
+ * One connection and one session per process, shared by every query: `connect()`
+ * costs ~550ms and `openSession()` ~500ms, so a screen firing six queries used
+ * to pay a second of handshake before any of them started. The driver runs
+ * concurrent operations on one session, so `Promise.all` still fans out.
+ * Stashed on globalThis so a hot-reload does not leak a new connection.
+ */
+const g = globalThis as unknown as { __brisaDbx?: Promise<Connection> };
+
+async function open(): Promise<Connection> {
+  const client = new DBSQLClient();
+
+  await client.connect(buildConnectionOptions());
+
+  const session = await client.openSession();
+
+  return { client, session };
+}
+
+function connection(): Promise<Connection> {
+  return (g.__brisaDbx ??= open().catch((err) => {
+    // A failed handshake must not be memoised.
+    g.__brisaDbx = undefined;
+
+    throw err;
+  }));
+}
+
+async function discard(): Promise<void> {
+  const current = g.__brisaDbx;
+
+  g.__brisaDbx = undefined;
+
+  try {
+    const { client, session } = await current!;
+
+    await session.close();
+    await client.close();
+  } catch {
+    // Already dead — dropping the handle is the point.
+  }
+}
+
 /**
  * Production implementation of DataClient using the official `@databricks/sql`
- * driver. It connects to a SQL Warehouse under the app's single service
- * principal (OAuth M2M), runs the query and tears everything down. Stays
- * inactive while `DATA_SOURCE !== 'databricks'`.
+ * driver, over the shared connection above. Stays inactive while
+ * `DATA_SOURCE !== 'databricks'`.
  *
  * Authentication (see ADR 0003):
  *   - Service principal:  DATABRICKS_SP_CLIENT_ID + DATABRICKS_SP_CLIENT_SECRET (preferred)
@@ -19,33 +64,52 @@ import type { DataClient } from "./types";
  */
 export class DatabricksDataClient implements DataClient {
   async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
-    const client = new DBSQLClient();
-
-    await client.connect(buildConnectionOptions());
-
-    const session = await client.openSession();
-
     try {
-      const op = await session.executeStatement(sql, {
-        runAsync: true,
-        ordinalParameters: params as DBSQLParameterValue[],
-        // Disable CloudFetch: on Databricks Apps the presigned result-download
-        // links come back as `http://`, which the driver rejects
-        // (ERR_INVALID_PROTOCOL). Inline arrow results avoid that download path.
-        useCloudFetch: false,
-      });
+      return await run<T>(sql, params);
+    } catch (err) {
+      // The session can expire or the socket drop under a statement that would
+      // have worked, so retry once on a fresh handle. A bad statement is not the
+      // connection's fault: it neither retries nor costs everyone the handle.
+      if (unrecoverable(err)) throw err;
 
-      try {
-        const rows = await op.fetchAll();
+      await discard();
 
-        return rows as T[];
-      } finally {
-        await op.close();
-      }
-    } finally {
-      await session.close();
-      await client.close();
+      return run<T>(sql, params);
     }
+  }
+}
+
+/** Errors that a reconnect cannot fix — bad SQL, bad params, no permission. */
+function unrecoverable(err: unknown): boolean {
+  const msg = String((err as Error)?.message ?? err).toUpperCase();
+
+  return (
+    msg.includes("PARSE_SYNTAX_ERROR") ||
+    msg.includes("UNBOUND_SQL_PARAMETER") ||
+    msg.includes("TABLE_OR_VIEW_NOT_FOUND") ||
+    msg.includes("UNRESOLVED_COLUMN") ||
+    msg.includes("PERMISSION_DENIED") ||
+    msg.includes("INSUFFICIENT_PERMISSIONS")
+  );
+}
+
+async function run<T>(sql: string, params: unknown[]): Promise<T[]> {
+  const { session } = await connection();
+  const op = await session.executeStatement(sql, {
+    runAsync: true,
+    ordinalParameters: params as DBSQLParameterValue[],
+    // Disable CloudFetch: on Databricks Apps the presigned result-download
+    // links come back as `http://`, which the driver rejects
+    // (ERR_INVALID_PROTOCOL). Inline arrow results avoid that download path.
+    useCloudFetch: false,
+  });
+
+  try {
+    const rows = await op.fetchAll();
+
+    return rows as T[];
+  } finally {
+    await op.close();
   }
 }
 

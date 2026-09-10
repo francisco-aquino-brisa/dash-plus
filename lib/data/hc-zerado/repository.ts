@@ -7,10 +7,12 @@
 import { cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";
 import { hcFiltersToQuery } from "./filters";
-import type { HcDesempenhoView, HcFilters, HcFilterOptions } from "./types";
+import type { HcDesempenhoView, HcFilters, HcFilterOptions, HcFilterTuple } from "./types";
 import type { MatrizVisao } from "./databricks";
 
-export const HC_CACHE_VERSION = "v1";
+// Bump on any change to the shape OR the maths of a cached value: the
+// in-process cache survives a hot-reload and would keep serving the old one.
+export const HC_CACHE_VERSION = "v3";
 
 export class HcMockUnsupportedError extends Error {
   constructor() {
@@ -19,17 +21,17 @@ export class HcMockUnsupportedError extends Error {
   }
 }
 
-function cacheKey(f: HcFilters, visao: MatrizVisao): string {
-  return `hc:${HC_CACHE_VERSION}:desempenho:${visao}:${hcFiltersToQuery(f)}`;
+function cacheKey(build: string, f: HcFilters, visao: MatrizVisao): string {
+  return `hc:${HC_CACHE_VERSION}:${build}:desempenho:${visao}:${hcFiltersToQuery(f)}`;
 }
 
 export async function getHcDesempenho(f: HcFilters, visao: MatrizVisao): Promise<HcDesempenhoView> {
   if (!isDatabricks()) throw new HcMockUnsupportedError();
 
-  const { databricksHcWatermark, databricksHcDesempenho } = await import("./databricks");
+  const { databricksHcWatermark, databricksHcDesempenho, HC_ADAPTER_BUILD } = await import("./databricks");
   const watermark = await databricksHcWatermark();
 
-  return cachedByWatermark<HcDesempenhoView>(cacheKey(f, visao), watermark, () =>
+  return cachedByWatermark<HcDesempenhoView>(cacheKey(HC_ADAPTER_BUILD, f, visao), watermark, () =>
     databricksHcDesempenho(f, visao),
   );
 }
@@ -47,19 +49,68 @@ const EMPTY_OPTIONS: HcFilterOptions = {
   indicadores: [],
 };
 
-export async function getHcFilterOptions(): Promise<HcFilterOptions> {
+/**
+ * Each dropdown offers what survives every *other* filter, so the cascade runs
+ * in both directions. Only the filters that DROP rows take part: serviço,
+ * indicador, status and agilidade zero a sale without removing the person (see
+ * `filters.ts`), so they never shrink a list — not even their own.
+ */
+function cascade(tuples: HcFilterTuple[], f: HcFilters): HcFilterOptions {
+  const has = (sel: string[], v: string) => sel.length === 0 || sel.includes(v);
+
+  const survives = (t: HcFilterTuple, except: keyof HcFilters): boolean =>
+    (except === "gerente" || has(f.gerente, t.gerente)) &&
+    (except === "coordenacao" || has(f.coordenacao, t.coordenacao)) &&
+    (except === "supervisao" || has(f.supervisao, t.supervisao)) &&
+    (except === "lider" || has(f.lider, t.lider)) &&
+    (except === "cidade" || has(f.cidade, t.cidade)) &&
+    (except === "consultor" || has(f.consultor, t.consultor)) &&
+    (except === "canal" || has(f.canal, t.canal)) &&
+    (except === "nicho" || has(f.nicho, t.nicho)) &&
+    (!f.perfilCidade || t.perfil === f.perfilCidade) &&
+    (!f.experiencia || t.experiencia === f.experiencia);
+
+  const list = (field: keyof HcFilterTuple, except: keyof HcFilters): string[] => {
+    const seen = new Set<string>();
+
+    for (const t of tuples) {
+      const v = t[field];
+
+      if (v && survives(t, except)) seen.add(v);
+    }
+
+    return [...seen].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  };
+
+  return {
+    gerentes: list("gerente", "gerente"),
+    coordenacoes: list("coordenacao", "coordenacao"),
+    supervisoes: list("supervisao", "supervisao"),
+    lideres: list("lider", "lider"),
+    cidades: list("cidade", "cidade"),
+    consultores: list("consultor", "consultor"),
+    canais: list("canal", "canal"),
+    nichos: list("nicho", "nicho"),
+    servicos: list("servico", "servico"),
+    indicadores: list("indicador", "indicador"),
+  };
+}
+
+export async function getHcFilterOptions(f: HcFilters): Promise<HcFilterOptions> {
   if (!isDatabricks()) return EMPTY_OPTIONS;
 
-  const { databricksHcWatermark, databricksHcFilterOptions } = await import("./databricks");
+  const { databricksHcWatermark, databricksHcFilterTuples, HC_ADAPTER_BUILD } = await import("./databricks");
 
   try {
     const watermark = await databricksHcWatermark();
-
-    return await cachedByWatermark<HcFilterOptions>(
-      `hc:${HC_CACHE_VERSION}:filtros`,
+    // Keyed by period only — the cascade is pure, so a filter click reuses these.
+    const tuples = await cachedByWatermark<HcFilterTuple[]>(
+      `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:tuplas:${f.from}:${f.to}`,
       watermark,
-      databricksHcFilterOptions,
+      () => databricksHcFilterTuples(f.from, f.to),
     );
+
+    return cascade(tuples, f);
   } catch {
     // A failed option list degrades the dropdowns, never the screen.
     return EMPTY_OPTIONS;

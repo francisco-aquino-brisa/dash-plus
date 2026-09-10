@@ -3,6 +3,8 @@
 // The original app let the user pick any De/Até and then pulled the whole view;
 // here the range is capped so one aggregation stays bounded (ADR 0006).
 
+import { todayIso } from "../_shared";
+
 /** Longest range the screens accept, in days (inclusive of both ends). */
 export const MAX_RANGE_DAYS = 31;
 
@@ -16,10 +18,9 @@ export function parseIso(value: string): Date {
   return new Date(`${value}T00:00:00Z`);
 }
 
-/** Default range: the first of the current month through today. */
+/** Default range: the first of the current month through today (in Brazil). */
 export function defaultHcRange(): { from: string; to: string } {
-  const now = new Date();
-  const to = toIso(now);
+  const to = todayIso();
   const from = `${to.slice(0, 7)}-01`;
 
   return { from, to };

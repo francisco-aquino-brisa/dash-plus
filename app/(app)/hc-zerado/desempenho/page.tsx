@@ -22,7 +22,7 @@ export default async function DesempenhoHcPage({ searchParams }: { searchParams:
   const visao = VISOES.includes(pedida) ? pedida : "consultor";
 
   try {
-    const [view, options] = await Promise.all([getHcDesempenho(filters, visao), getHcFilterOptions()]);
+    const [view, options] = await Promise.all([getHcDesempenho(filters, visao), getHcFilterOptions(filters)]);
 
     return <DesempenhoScreen view={view} filters={filters} options={options} />;
   } catch (error) {
