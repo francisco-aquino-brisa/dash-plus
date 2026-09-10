@@ -109,7 +109,7 @@ export interface Totalizadores {
 }
 
 /** Bloco 3 — one bar per day: active HC, zeroed HC and the idleness rate. */
-export interface DiaZerado {
+export interface ZeradoDay {
   data: string;
   label: string;
   ativos: number;
@@ -124,7 +124,7 @@ export interface RegionalRow {
   id: string;
   nome: string;
   totalAtivo: number;
-  totalVenderam: number;
+  totalWithSales: number;
   pctVendeu: number;
   totalZerado: number;
   pctZerado: number;
@@ -151,9 +151,9 @@ export interface VendedorRow {
   aproveitamento: number;
   projecao: number;
   /** Sales per day, aligned with `HcDesempenhoView.dias`. */
-  vendasPorDia: number[];
+  vendasByDay: number[];
   /** True when the seller sold nothing on the reference day. */
-  zerouHoje: boolean;
+  zeradoToday: boolean;
   /** First day the person appears in the period — the list's ordering key. */
   firstDay: string;
 }
@@ -165,7 +165,7 @@ export interface MatrizRow {
   detalhe: string;
   servico: string;
   /** Sales per day, aligned with `HcDesempenhoView.dias`. */
-  valores: number[];
+  values: number[];
   total: number;
   /** "Total período": the subject's production across all services. */
   subjectTotal: number;
@@ -175,15 +175,15 @@ export interface MatrizRow {
 }
 
 /** Bloco 7 — daily cumulative PDU. */
-export interface PduDia {
+export interface PduDay {
   label: string;
   pdu: number;
   producao: number;
 }
 
 /** Bloco 7 — closed-month PDU. */
-export interface PduMes {
-  mes: string;
+export interface PduMonth {
+  month: string;
   label: string;
   pdu: number;
   ftth: number;
@@ -196,7 +196,7 @@ export interface PduMes {
 }
 
 /** One day of the selected range. */
-export interface DiaEixo {
+export interface DayAxis {
   data: string;
   label: string;
   feriado: boolean;
@@ -204,15 +204,15 @@ export interface DiaEixo {
 }
 
 export interface HcDesempenhoView {
-  dias: DiaEixo[];
+  days: DayAxis[];
   quadroGeral: QuadroGeral;
   totalizadores: Totalizadores;
-  zeradoPorDia: DiaZerado[];
+  zeradoByDay: ZeradoDay[];
   regional: { gerencia: RegionalRow[]; coordenacao: RegionalRow[]; cidade: RegionalRow[] };
   vendedores: VendedorRow[];
   matriz: { consultor: MatrizRow[]; gerencia: MatrizRow[]; coordenacao: MatrizRow[]; cidade: MatrizRow[] };
-  pduDia: PduDia[];
-  pduMes: PduMes[];
-  diasUteisDecorridos: number;
+  pduDay: PduDay[];
+  pduMonth: PduMonth[];
+  diasUteisElapsed: number;
   refDate: string;
 }

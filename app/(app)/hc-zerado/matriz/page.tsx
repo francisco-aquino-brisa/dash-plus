@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
-import { EmConstrucao } from "@/components/hc-zerado/EmConstrucao";
+import { UnderConstruction } from "@/components/hc-zerado/UnderConstruction";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +10,9 @@ export default async function Page() {
   if (!session) redirect("/bootstrap?next=/hc-zerado/matriz");
 
   return (
-    <EmConstrucao
-      titulo="Matriz Gerencial"
-      descricao="Ociosidade comercial por regional, com a lista de zerados na data de referência."
+    <UnderConstruction
+      title="Matriz Gerencial"
+      description="Ociosidade comercial por regional, com a lista de zerados na data de referência."
     />
   );
 }

@@ -5,7 +5,7 @@ import { Hammer } from "lucide-react";
  * migration lands one screen at a time, and an explicit "not here yet" beats a
  * dead link in the sidebar.
  */
-export function EmConstrucao({ titulo, descricao }: { titulo: string; descricao: string }) {
+export function UnderConstruction({ title, description }: { title: string; description: string }) {
   return (
     <div
       style={{
@@ -21,9 +21,9 @@ export function EmConstrucao({ titulo, descricao }: { titulo: string; descricao:
     >
       <Hammer size={22} style={{ color: "var(--s-brand)" }} />
       <h2 className="font-display" style={{ fontSize: 15, fontWeight: 800, color: "var(--s-t1)" }}>
-        {titulo}
+        {title}
       </h2>
-      <p style={{ fontSize: 12.5, color: "var(--s-t3)", maxWidth: 460 }}>{descricao}</p>
+      <p style={{ fontSize: 12.5, color: "var(--s-t3)", maxWidth: 460 }}>{description}</p>
       <span
         style={{
           border: "1px solid var(--s-border)",

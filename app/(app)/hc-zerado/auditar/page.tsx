@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
-import { EmConstrucao } from "@/components/hc-zerado/EmConstrucao";
+import { UnderConstruction } from "@/components/hc-zerado/UnderConstruction";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +10,9 @@ export default async function Page() {
   if (!session) redirect("/bootstrap?next=/hc-zerado/auditar");
 
   return (
-    <EmConstrucao
-      titulo="Auditar Justificativas"
-      descricao="Relatório de leitura das justificativas recebidas, com filtro por status e categoria."
+    <UnderConstruction
+      title="Auditar Justificativas"
+      description="Relatório de leitura das justificativas recebidas, com filtro por status e categoria."
     />
   );
 }

@@ -55,11 +55,11 @@ function TilesSkeleton({ quantos }: { quantos: number }) {
   );
 }
 
-function TabelaSkeleton({ linhas }: { linhas: number }) {
+function TabelaSkeleton({ lines }: { lines: number }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={bloco({ height: 11, width: "100%", background: "var(--s-border-2)" })} />
-      {Array.from({ length: linhas }).map((_, i) => (
+      {Array.from({ length: lines }).map((_, i) => (
         <div key={i} style={{ display: "flex", gap: 10 }}>
           <div style={bloco({ height: 14, flex: 2 })} />
           <div style={bloco({ height: 14, flex: 1 })} />
@@ -110,7 +110,7 @@ export default function DesempenhoHcLoading() {
       </BlocoSkeleton>
       <BlocoSkeleton altura={320} />
       <BlocoSkeleton>
-        <TabelaSkeleton linhas={6} />
+        <TabelaSkeleton lines={6} />
       </BlocoSkeleton>
     </div>
   );

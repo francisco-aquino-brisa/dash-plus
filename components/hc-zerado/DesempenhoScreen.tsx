@@ -21,7 +21,7 @@ import { Eye, Info, MinusCircle, RefreshCw, Search, TrendingDown, TrendingUp, Us
 import { Segmented } from "@/components/ui/segmented";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { HcContextoAtivo, HcFilterPanel } from "./HcFilterPanel";
+import { HcActiveContext, HcFilterPanel } from "./HcFilterPanel";
 import { useReportNavPending } from "@/lib/ui/nav-pending";
 import { hcFiltersToQuery } from "@/lib/data/hc-zerado/filters";
 import type {
@@ -41,7 +41,7 @@ const card: React.CSSProperties = {
   boxShadow: "var(--s-sh)",
 };
 
-const tituloBloco: React.CSSProperties = {
+const blockTitle: React.CSSProperties = {
   fontSize: 13.5,
   fontWeight: 800,
   color: "var(--s-t1)",
@@ -55,15 +55,15 @@ function ptBr(iso: string): string {
 }
 
 /** Section wrapper: a dot, a title, an optional note and the block's controls. */
-function Bloco({
-  titulo,
-  nota,
-  acoes,
+function Block({
+  title,
+  note,
+  actions,
   children,
 }: {
-  titulo: string;
-  nota?: React.ReactNode;
-  acoes?: React.ReactNode;
+  title: string;
+  note?: React.ReactNode;
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -81,12 +81,12 @@ function Bloco({
         <span
           style={{ flex: "none", width: 7, height: 7, borderRadius: 999, background: "var(--s-brand)" }}
         />
-        <h2 className="font-display" style={tituloBloco}>
-          {titulo}
+        <h2 className="font-display" style={blockTitle}>
+          {title}
         </h2>
-        {nota && <span style={{ fontSize: 11, color: "var(--s-t3)" }}>{nota}</span>}
+        {note && <span style={{ fontSize: 11, color: "var(--s-t3)" }}>{note}</span>}
         <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          {acoes}
+          {actions}
         </div>
       </header>
       <div style={{ padding: 14 }}>{children}</div>
@@ -111,34 +111,34 @@ export function DesempenhoScreen({
   // the screen dims until it lands. Without it a click reads as a dead control.
   const [otimista, setOtimista] = useState<HcCrossFilters | null>(null);
   const cross = otimista ?? filters.cross;
-  const crossAplicado = Object.values(filters.cross).join("|");
+  const appliedCross = Object.values(filters.cross).join("|");
 
   useReportNavPending(pending);
 
   useEffect(() => {
     setOtimista(null);
-  }, [crossAplicado]);
+  }, [appliedCross]);
 
   /** Click-to-filter: toggling writes the cross-filter into the URL. */
-  const cruza = (chave: keyof HcCrossFilters, valor: string) => {
+  const applyCross = (key: keyof HcCrossFilters, value: string) => {
     const q = new URLSearchParams(hcFiltersToQuery(filters));
-    const param = `cf_${chave}`;
-    const desmarcando = q.get(param) === valor;
+    const param = `cf_${key}`;
+    const clearing = q.get(param) === value;
 
-    if (desmarcando) q.delete(param);
-    else q.set(param, valor);
+    if (clearing) q.delete(param);
+    else q.set(param, value);
 
-    setOtimista({ ...filters.cross, [chave]: desmarcando ? "" : valor });
+    setOtimista({ ...filters.cross, [key]: clearing ? "" : value });
     startTransition(() => router.push(`${pathname}?${q.toString()}`, { scroll: false }));
   };
 
   // The cross-filter has to carry the matrícula (it is the query key), but the
   // chip should say who that is.
-  const nomeVendedor = cross.vendedor
+  const vendedorName = cross.vendedor
     ? (view.vendedores.find((v) => v.matricula === cross.vendedor)?.consultor ??
       `Matrícula ${cross.vendedor}`)
     : undefined;
-  const periodo =
+  const period =
     filters.from === filters.to ? ptBr(filters.from) : `${ptBr(filters.from)} a ${ptBr(filters.to)}`;
 
   return (
@@ -189,7 +189,7 @@ export function DesempenhoScreen({
             Desempenho HC
           </h1>
           <p style={{ fontSize: 13, color: "var(--s-t3)", marginTop: 4 }}>
-            Ativos e zerados · {periodo} · referência {ptBr(view.refDate)}
+            Ativos e zerados · {period} · referência {ptBr(view.refDate)}
           </p>
         </div>
         <button
@@ -219,23 +219,28 @@ export function DesempenhoScreen({
       </header>
 
       <HcFilterPanel filters={filters} options={options} />
-      <HcContextoAtivo filters={filters} rotulos={{ vendedor: nomeVendedor }} />
-      <QuadroGeralBloco view={view} />
-      <TotalizadoresBloco view={view} filters={filters} cross={cross} onCruzar={(s) => cruza("servico", s)} />
-      <ZeradoDiaBloco view={view} />
-      <RegionalBloco view={view} filters={filters} cross={cross} onCruzar={cruza} />
-      <IndividualBloco view={view} cross={cross} onCruzar={(m) => cruza("vendedor", m)} />
-      <MatrizBloco view={view} filters={filters} />
-      <PduBloco view={view} filters={filters} />
+      <HcActiveContext filters={filters} rotulos={{ vendedor: vendedorName }} />
+      <QuadroGeralBlock view={view} />
+      <TotalizadoresBlock
+        view={view}
+        filters={filters}
+        cross={cross}
+        onCruzar={(s) => applyCross("servico", s)}
+      />
+      <ZeradoDayBlock view={view} />
+      <RegionalBlock view={view} filters={filters} cross={cross} onCross={applyCross} />
+      <IndividualBlock view={view} cross={cross} onCross={(m) => applyCross("vendedor", m)} />
+      <MatrizBlock view={view} filters={filters} />
+      <PduBlock view={view} filters={filters} />
     </div>
   );
 }
 
 /* ---------------------------------------------------------------- Bloco 1 */
 
-function QuadroGeralBloco({ view }: { view: HcDesempenhoView }) {
+function QuadroGeralBlock({ view }: { view: HcDesempenhoView }) {
   const { quadroGeral } = view;
-  const cores: Record<string, string> = {
+  const colors: Record<string, string> = {
     Ativos: "var(--s-ok)",
     Férias: "var(--s-blue)",
     Maternidade: "var(--s-brand)",
@@ -243,10 +248,10 @@ function QuadroGeralBloco({ view }: { view: HcDesempenhoView }) {
   };
 
   return (
-    <Bloco
-      titulo="Total Quadro de HC"
-      nota="Reflete a data máxima do filtro final"
-      acoes={
+    <Block
+      title="Total Quadro de HC"
+      note="Reflete a data máxima do filtro final"
+      actions={
         <span
           style={{
             border: "1px solid var(--s-warn)",
@@ -304,7 +309,7 @@ function QuadroGeralBloco({ view }: { view: HcDesempenhoView }) {
                 style={{
                   fontSize: 26,
                   fontWeight: 800,
-                  color: cores[item.label] ?? "var(--s-t1)",
+                  color: colors[item.label] ?? "var(--s-t1)",
                   lineHeight: 1.1,
                 }}
               >
@@ -315,13 +320,13 @@ function QuadroGeralBloco({ view }: { view: HcDesempenhoView }) {
           </div>
         ))}
       </div>
-    </Bloco>
+    </Block>
   );
 }
 
 /* ---------------------------------------------------------------- Bloco 2 */
 
-function TotalizadoresBloco({
+function TotalizadoresBlock({
   view,
   filters,
   cross,
@@ -337,63 +342,63 @@ function TotalizadoresBloco({
     {
       servico: "INTERNET",
       label: "FTTH",
-      valor: t.ftth,
-      cor: "var(--s-brand)",
+      value: t.ftth,
+      color: "var(--s-brand)",
       sub: `Status: ${filters.statusVenda}`,
     },
     {
       servico: "FWA",
       label: "FWA",
-      valor: t.fwa,
-      cor: "var(--s-blue)",
+      value: t.fwa,
+      color: "var(--s-blue)",
       sub: `Status: ${filters.statusVenda}`,
     },
     {
       servico: "5G",
       label: "Chips 5G",
-      valor: t.chips5g,
-      cor: "var(--s-ok)",
+      value: t.chips5g,
+      color: "var(--s-ok)",
       sub: "Status: Ativado/Efetivado",
     },
     {
       servico: "RENOVAÇÃO",
       label: "Renovações",
-      valor: t.renovacoes,
-      cor: "var(--s-warn)",
+      value: t.renovacoes,
+      color: "var(--s-warn)",
       sub: "Status: Efetivada",
     },
   ];
 
   return (
-    <Bloco
-      titulo="Totalizadores de Produção (Entregas do Período)"
-      nota={`Status sob análise: ${filters.statusVenda}`}
+    <Block
+      title="Totalizadores de Produção (Entregas do Período)"
+      note={`Status sob análise: ${filters.statusVenda}`}
     >
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
         {cards.map((c) => {
           const ativo = cross.servico === c.servico;
-          const valor = c.valor;
+          const value = c.value;
 
           return (
             <button
               key={c.servico}
               type="button"
-              disabled={valor === null}
+              disabled={value === null}
               onClick={() => onCruzar(c.servico)}
               style={{
                 ...card,
                 boxShadow: "none",
                 textAlign: "left",
                 padding: "12px 14px",
-                cursor: valor === null ? "default" : "pointer",
+                cursor: value === null ? "default" : "pointer",
                 borderColor: ativo
                   ? "var(--s-brand)"
-                  : valor === null
+                  : value === null
                     ? "var(--s-border-2)"
                     : "var(--s-border)",
                 background: ativo ? "var(--s-brand-weak)" : "var(--s-sunken)",
-                borderStyle: valor === null ? "dashed" : "solid",
-                opacity: valor === null ? 0.75 : 1,
+                borderStyle: value === null ? "dashed" : "solid",
+                opacity: value === null ? 0.75 : 1,
               }}
             >
               <div
@@ -407,7 +412,7 @@ function TotalizadoresBloco({
               >
                 {c.label}
               </div>
-              {valor === null ? (
+              {value === null ? (
                 <>
                   <div style={{ fontSize: 13, fontWeight: 800, color: "var(--s-t3)", marginTop: 6 }}>
                     Sem dado na fonte
@@ -420,9 +425,9 @@ function TotalizadoresBloco({
                 <>
                   <div
                     className="font-mono"
-                    style={{ fontSize: 26, fontWeight: 800, color: c.cor, lineHeight: 1.1, marginTop: 4 }}
+                    style={{ fontSize: 26, fontWeight: 800, color: c.color, lineHeight: 1.1, marginTop: 4 }}
                   >
-                    {nf.format(valor)}
+                    {nf.format(value)}
                   </div>
                   <div style={{ fontSize: 10.5, color: "var(--s-t3)", marginTop: 2 }}>{c.sub}</div>
                 </>
@@ -444,32 +449,30 @@ function TotalizadoresBloco({
         <Info size={12} style={{ flex: "none" }} />
         Clique em qualquer cartão acima para filtrar os gráficos e tabelas de forma bidirecional.
       </p>
-    </Bloco>
+    </Block>
   );
 }
 
 /* ---------------------------------------------------------------- Bloco 3 */
 
 const FERIADO_OPTS = [
-  { value: "todos" as const, label: "Todos" },
-  { value: "sim" as const, label: "Sim" },
-  { value: "nao" as const, label: "Não" },
+  { value: "all" as const, label: "Todos" },
+  { value: "yes" as const, label: "Sim" },
+  { value: "no" as const, label: "Não" },
 ];
 
-function ZeradoDiaBloco({ view }: { view: HcDesempenhoView }) {
-  const [feriado, setFeriado] = useState<"todos" | "sim" | "nao">("nao");
-  const dados = useMemo(
+function ZeradoDayBlock({ view }: { view: HcDesempenhoView }) {
+  const [feriado, setFeriado] = useState<"all" | "yes" | "no">("no");
+  const chartData = useMemo(
     () =>
-      view.zeradoPorDia.filter((d) =>
-        feriado === "todos" ? true : feriado === "sim" ? d.feriado : !d.feriado,
-      ),
-    [view.zeradoPorDia, feriado],
+      view.zeradoByDay.filter((d) => (feriado === "all" ? true : feriado === "yes" ? d.feriado : !d.feriado)),
+    [view.zeradoByDay, feriado],
   );
 
   return (
-    <Bloco
-      titulo="Quantidade de HC Zerado por Dia (Ativos vs. Sem Vendas)"
-      acoes={
+    <Block
+      title="Quantidade de HC Zerado por Dia (Ativos vs. Sem Vendas)"
+      actions={
         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--s-t3)" }}>Considerar Feriado?</span>
           <Segmented
@@ -483,9 +486,9 @@ function ZeradoDiaBloco({ view }: { view: HcDesempenhoView }) {
       }
     >
       <div style={{ overflowX: "auto" }}>
-        <div style={{ minWidth: Math.max(560, dados.length * 46), height: 340 }}>
+        <div style={{ minWidth: Math.max(560, chartData.length * 46), height: 340 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={dados} margin={{ top: 28, right: 8, left: 0, bottom: 4 }}>
+            <ComposedChart data={chartData} margin={{ top: 28, right: 8, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--s-border)" vertical={false} />
               <XAxis
                 dataKey="label"
@@ -566,7 +569,7 @@ function ZeradoDiaBloco({ view }: { view: HcDesempenhoView }) {
           </ResponsiveContainer>
         </div>
       </div>
-    </Bloco>
+    </Block>
   );
 }
 
@@ -575,7 +578,7 @@ function ZeradoDiaBloco({ view }: { view: HcDesempenhoView }) {
  * with `--s-page` text. (`--s-ink-a` is a 6% veil, not an ink — using it as a
  * background left the card see-through.)
  */
-const tooltipPainel: React.CSSProperties = {
+const tooltipPanel: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 2,
@@ -585,14 +588,14 @@ const tooltipPainel: React.CSSProperties = {
   boxShadow: "var(--s-sh-2)",
 };
 
-const tooltipTitulo: React.CSSProperties = {
+const tooltipTitle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
   color: "var(--s-page)",
   opacity: 0.75,
 };
 
-const tooltipLinha: React.CSSProperties = {
+const tooltipLine: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 700,
   color: "var(--s-page)",
@@ -606,29 +609,29 @@ function TooltipZerado({
   payload,
 }: {
   active?: boolean;
-  payload?: Array<{ payload: HcDesempenhoView["zeradoPorDia"][number] }>;
+  payload?: Array<{ payload: HcDesempenhoView["zeradoByDay"][number] }>;
 }) {
   if (!active || !payload?.length) return null;
 
   const d = payload[0].payload;
 
   return (
-    <div style={{ ...tooltipPainel, minWidth: 180 }}>
-      <span style={tooltipTitulo}>
+    <div style={{ ...tooltipPanel, minWidth: 180 }}>
+      <span style={tooltipTitle}>
         {ptBr(d.data)}
         {d.feriado && " · feriado"}
       </span>
-      <span style={tooltipLinha}>
+      <span style={tooltipLine}>
         <span style={{ opacity: 0.7 }}>HC ativo</span>
         <span className="font-mono">{nf.format(d.ativos)}</span>
       </span>
-      <span style={tooltipLinha}>
-        <span style={{ opacity: 0.7 }}>Zerados no dia</span>
+      <span style={tooltipLine}>
+        <span style={{ opacity: 0.7 }}>Zerados no day</span>
         <span className="font-mono">{nf.format(d.zerados)}</span>
       </span>
       <span
         style={{
-          ...tooltipLinha,
+          ...tooltipLine,
           color: "var(--s-brand-2)",
           borderTop: "1px solid rgba(255,255,255,.16)",
           paddingTop: 4,
@@ -644,38 +647,39 @@ function TooltipZerado({
 
 /* ---------------------------------------------------------------- Bloco 4 */
 
-const HIERARQUIA_OPTS = [
+const HIERARCHY_OPTS = [
   { value: "gerencia" as const, label: "Gerência" },
   { value: "coordenacao" as const, label: "Coordenação" },
   { value: "cidade" as const, label: "Cidade" },
 ];
 
-function RegionalBloco({
+function RegionalBlock({
   view,
   filters,
   cross,
-  onCruzar,
+  onCross,
 }: {
   view: HcDesempenhoView;
   filters: HcFilters;
   cross: HcCrossFilters;
-  onCruzar: (chave: keyof HcCrossFilters, valor: string) => void;
+  onCross: (key: keyof HcCrossFilters, value: string) => void;
 }) {
-  const [visao, setVisao] = useState<"gerencia" | "coordenacao" | "cidade">("gerencia");
-  const rows = view.regional[visao];
-  const rotulo = visao === "gerencia" ? "Gerência" : visao === "coordenacao" ? "Coordenação" : "Cidade";
-  const chaveCross: keyof HcCrossFilters =
-    visao === "gerencia" ? "gerencia" : visao === "coordenacao" ? "coordenacao" : "cidade";
-  const selecionado = cross[chaveCross];
-  const colunas: Column<RegionalRow>[] = [
+  const [hierarchy, setHierarchy] = useState<"gerencia" | "coordenacao" | "cidade">("gerencia");
+  const rows = view.regional[hierarchy];
+  const label =
+    hierarchy === "gerencia" ? "Gerência" : hierarchy === "coordenacao" ? "Coordenação" : "Cidade";
+  const crossKey: keyof HcCrossFilters =
+    hierarchy === "gerencia" ? "gerencia" : hierarchy === "coordenacao" ? "coordenacao" : "cidade";
+  const selectedName = cross[crossKey];
+  const columns: Column<RegionalRow>[] = [
     {
       key: "nome",
-      header: rotulo,
+      header: label,
       render: (r) => (
         <span
           style={{
-            fontWeight: r.nome === selecionado ? 800 : 700,
-            color: r.nome === selecionado ? "var(--s-brand)" : "var(--s-t1)",
+            fontWeight: r.nome === selectedName ? 800 : 700,
+            color: r.nome === selectedName ? "var(--s-brand)" : "var(--s-t1)",
           }}
         >
           {r.nome}
@@ -694,7 +698,7 @@ function RegionalBloco({
       header: "QTD. HC Vendeu",
       numeric: true,
       align: "right",
-      render: (r) => nf.format(r.totalVenderam),
+      render: (r) => nf.format(r.totalWithSales),
     },
     {
       key: "pctv",
@@ -719,53 +723,53 @@ function RegionalBloco({
       align: "right",
       render: (r) => <span style={{ color: "var(--s-bad)", fontWeight: 800 }}>{r.pctZerado}%</span>,
     },
-    { key: "d1", header: "Comparativo D-1", align: "center", render: (r) => <ComparativoD1 row={r} /> },
+    { key: "d1", header: "Comparativo D-1", align: "center", render: (r) => <D1Comparison row={r} /> },
     {
       key: "obs",
       header: "Obs.",
       align: "center",
       render: (r) => (
-        <TendenciaHover
-          titulo={`Ociosidade (HC Zerado): ${r.nome}`}
-          valores={r.serieZerados}
-          dias={view.dias}
-          cor="var(--s-bad)"
+        <TrendHover
+          title={`Ociosidade (HC Zerado): ${r.nome}`}
+          values={r.serieZerados}
+          days={view.days}
+          color="var(--s-bad)"
         />
       ),
     },
   ];
 
   return (
-    <Bloco
-      titulo="Desempenho Regional por Hierarquia"
-      nota={`Dados referentes a: ${ptBr(filters.to)}`}
-      acoes={
+    <Block
+      title="Desempenho Regional por Hierarquia"
+      note={`Dados referentes a: ${ptBr(filters.to)}`}
+      actions={
         <Segmented
-          options={HIERARQUIA_OPTS}
-          value={visao}
-          onChange={setVisao}
+          options={HIERARCHY_OPTS}
+          value={hierarchy}
+          onChange={setHierarchy}
           size="sm"
           ariaLabel="Hierarquia"
         />
       }
     >
       <DataTable
-        columns={colunas}
+        columns={columns}
         rows={rows}
         rowKey={(r) => r.id}
         minWidth={880}
         maxHeight={420}
-        pageSize={visao === "cidade" ? 25 : undefined}
+        pageSize={hierarchy === "cidade" ? 25 : undefined}
         infiniteScroll
-        onRowClick={(r) => onCruzar(chaveCross, r.nome)}
-        isRowSelected={(r) => r.nome === selecionado}
+        onRowClick={(r) => onCross(crossKey, r.nome)}
+        isRowSelected={(r) => r.nome === selectedName}
         empty={{ title: "Sem dados no período", hint: "Ajuste o período ou os filtros de hierarquia." }}
       />
-    </Bloco>
+    </Block>
   );
 }
 
-function ComparativoD1({ row }: { row: RegionalRow }) {
+function D1Comparison({ row }: { row: RegionalRow }) {
   const delta = row.countZeradoD0 - row.countZeradoD1;
   const base: React.CSSProperties = {
     display: "inline-flex",
@@ -788,20 +792,20 @@ function ComparativoD1({ row }: { row: RegionalRow }) {
     );
   }
 
-  const melhorou = delta < 0;
-  const Icone = melhorou ? TrendingDown : TrendingUp;
+  const improved = delta < 0;
+  const Icon = improved ? TrendingDown : TrendingUp;
 
   return (
     <span
       style={{
         ...base,
-        background: melhorou ? "var(--s-ok-bg)" : "var(--s-bad-bg)",
-        color: melhorou ? "var(--s-ok)" : "var(--s-bad)",
+        background: improved ? "var(--s-ok-bg)" : "var(--s-bad-bg)",
+        color: improved ? "var(--s-ok)" : "var(--s-bad)",
       }}
-      title={`${melhorou ? "Melhorou" : "Piorou"} em ${Math.abs(delta)} HC — zerados de ${row.countZeradoD1} para ${row.countZeradoD0}`}
+      title={`${improved ? "Melhorou" : "Piorou"} em ${Math.abs(delta)} HC — zerados de ${row.countZeradoD1} para ${row.countZeradoD0}`}
     >
-      <Icone size={13} />
-      {melhorou ? `-${Math.abs(delta)}` : `+${delta}`}
+      <Icon size={13} />
+      {improved ? `-${Math.abs(delta)}` : `+${delta}`}
     </span>
   );
 }
@@ -813,18 +817,18 @@ function ComparativoD1({ row }: { row: RegionalRow }) {
  * absolutely positioned card gets clipped by the scroll container, which is why
  * an inline sparkline read as "nothing happens".
  */
-function TendenciaHover({
-  titulo,
-  valores,
-  dias,
-  cor,
+function TrendHover({
+  title,
+  values,
+  days,
+  color,
 }: {
-  titulo: string;
-  valores: number[];
-  dias: HcDesempenhoView["dias"];
-  cor: string;
+  title: string;
+  values: number[];
+  days: HcDesempenhoView["days"];
+  color: string;
 }) {
-  const dados = valores.map((valor, i) => ({ label: dias[i]?.label.replace(" - ", "-") ?? "", valor }));
+  const points = values.map((value, i) => ({ label: days[i]?.label.replace(" - ", "-") ?? "", value }));
 
   return (
     <Tooltip delayDuration={80}>
@@ -832,7 +836,7 @@ function TendenciaHover({
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
-          aria-label={titulo}
+          aria-label={title}
           style={{
             display: "inline-grid",
             placeItems: "center",
@@ -871,11 +875,11 @@ function TendenciaHover({
             marginBottom: 6,
           }}
         >
-          {titulo}
+          {title}
         </div>
         <div style={{ height: 150 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={dados} margin={{ top: 16, right: 14, left: -12, bottom: 8 }}>
+            <LineChart data={points} margin={{ top: 16, right: 14, left: -12, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--s-border)" />
               <XAxis
                 dataKey="label"
@@ -895,7 +899,7 @@ function TendenciaHover({
               <Line
                 type="monotone"
                 dataKey="valor"
-                stroke={cor}
+                stroke={color}
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}
@@ -903,7 +907,7 @@ function TendenciaHover({
                 <LabelList
                   dataKey="valor"
                   position="top"
-                  style={{ fill: cor, fontSize: 9, fontWeight: 700 }}
+                  style={{ fill: color, fontSize: 9, fontWeight: 700 }}
                 />
               </Line>
             </LineChart>
@@ -921,21 +925,21 @@ const INDIVIDUAL_OPTS = [
   { value: "mes" as const, label: "Recorrência Mês" },
 ];
 
-function IndividualBloco({
+function IndividualBlock({
   view,
   cross,
-  onCruzar,
+  onCross,
 }: {
   view: HcDesempenhoView;
   cross: HcCrossFilters;
-  onCruzar: (matricula: string) => void;
+  onCross: (matricula: string) => void;
 }) {
-  const [visao, setVisao] = useState<"hoje" | "mes">("hoje");
+  const [tab, setTab] = useState<"hoje" | "mes">("hoje");
   const rows = useMemo(
-    () => (visao === "hoje" ? view.vendedores.filter((v) => v.zerouHoje) : view.vendedores),
-    [view.vendedores, visao],
+    () => (tab === "hoje" ? view.vendedores.filter((v) => v.zeradoToday) : view.vendedores),
+    [view.vendedores, tab],
   );
-  const colunas: Column<VendedorRow>[] = [
+  const columns: Column<VendedorRow>[] = [
     {
       key: "nome",
       header: "Nome",
@@ -1006,46 +1010,46 @@ function IndividualBloco({
       header: "Obs.",
       align: "center",
       render: (r) => (
-        <TendenciaHover
-          titulo={`Produção diária: ${r.consultor}`}
-          valores={r.vendasPorDia}
-          dias={view.dias}
-          cor="var(--s-brand)"
+        <TrendHover
+          title={`Produção diária: ${r.consultor}`}
+          values={r.vendasByDay}
+          days={view.days}
+          color="var(--s-brand)"
         />
       ),
     },
   ];
 
   return (
-    <Bloco
-      titulo="Desempenho Individual & Análise de Ociosidade"
-      nota={`${nf.format(rows.length)} consultores · ${view.diasUteisDecorridos} dias úteis`}
-      acoes={
+    <Block
+      title="Desempenho Individual & Análise de Ociosidade"
+      note={`${nf.format(rows.length)} consultores · ${view.diasUteisElapsed} dias úteis`}
+      actions={
         <Segmented
           options={INDIVIDUAL_OPTS}
-          value={visao}
-          onChange={setVisao}
+          value={tab}
+          onChange={setTab}
           size="sm"
           ariaLabel="Visão individual"
         />
       }
     >
       <DataTable
-        columns={colunas}
+        columns={columns}
         rows={rows}
         rowKey={(r) => r.matricula}
         minWidth={900}
         maxHeight={460}
         pageSize={25}
         infiniteScroll
-        onRowClick={(r) => onCruzar(r.matricula)}
+        onRowClick={(r) => onCross(r.matricula)}
         isRowSelected={(r) => r.matricula === cross.vendedor}
         empty={{
-          title: visao === "hoje" ? "Ninguém zerou na data de referência" : "Sem consultores no período",
+          title: tab === "hoje" ? "Ninguém zerou na data de referência" : "Sem consultores no período",
           hint: "Ajuste o período ou os filtros de hierarquia.",
         }}
       />
-    </Bloco>
+    </Block>
   );
 }
 
@@ -1073,28 +1077,29 @@ const COL_NAME = 190;
 const COL_CANAL = 96;
 const COL_SERVICO = 104;
 
-function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFilters }) {
+function MatrizBlock({ view, filters }: { view: HcDesempenhoView; filters: HcFilters }) {
   const router = useRouter();
   const pathname = usePathname();
   const [, startTransition] = useTransition();
-  const [busca, setBusca] = useState("");
-  const visao = (Object.keys(view.matriz).find((k) => view.matriz[k as keyof typeof view.matriz]?.length) ??
-    "consultor") as keyof typeof view.matriz;
-  const filtradas = useMemo(() => {
-    const rows = view.matriz[visao] ?? [];
-    const termo = busca.trim().toLowerCase();
+  const [search, setSearch] = useState("");
+  const grouping = (Object.keys(view.matriz).find(
+    (k) => view.matriz[k as keyof typeof view.matriz]?.length,
+  ) ?? "consultor") as keyof typeof view.matriz;
+  const filtered = useMemo(() => {
+    const rows = view.matriz[grouping] ?? [];
+    const term = search.trim().toLowerCase();
 
-    return termo ? rows.filter((r) => r.nome.toLowerCase().includes(termo)) : rows;
-  }, [view.matriz, visao, busca]);
-  const porNome = useMemo(() => {
-    const mapa = new Map<string, MatrizRow[]>();
+    return term ? rows.filter((r) => r.nome.toLowerCase().includes(term)) : rows;
+  }, [view.matriz, grouping, search]);
+  const byName = useMemo(() => {
+    const map = new Map<string, MatrizRow[]>();
 
-    for (const r of filtradas) mapa.set(r.nome, [...(mapa.get(r.nome) ?? []), r]);
+    for (const r of filtered) map.set(r.nome, [...(map.get(r.nome) ?? []), r]);
 
-    return [...mapa.entries()].slice(0, 120);
-  }, [filtradas]);
+    return [...map.entries()].slice(0, 120);
+  }, [filtered]);
 
-  const trocaVisao = (v: string) => {
+  const changeView = (v: string) => {
     const q = new URLSearchParams(hcFiltersToQuery(filters));
 
     q.set("matriz", v);
@@ -1105,7 +1110,7 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
   // so a weekend column reads as one all the way down a table that scrolls.
   const dayColors = useMemo(
     () =>
-      view.dias.map((d) => {
+      view.days.map((d) => {
         const sunday = new Date(`${d.data}T00:00:00Z`).getUTCDay() === 0;
 
         if (d.feriado) return { fg: "var(--s-brand)", bg: "var(--s-brand-weak)", title: "Feriado" };
@@ -1116,11 +1121,11 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
 
         return { fg: "var(--s-t3)", bg: "var(--s-card)", title: undefined };
       }),
-    [view.dias],
+    [view.days],
   );
 
   // Canal only makes sense per person; grouped views hide the column.
-  const showCanal = visao === "consultor";
+  const showCanal = grouping === "consultor";
   const servicoOffset = showCanal ? COL_NAME + COL_CANAL : COL_NAME;
   const frozenWidth = servicoOffset + COL_SERVICO;
 
@@ -1128,7 +1133,7 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
   // ~15k cells on a full month and at most one shows a card at a time.
   const areaRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<{
-    dia: string;
+    day: string;
     servico: string;
     value: number;
     breakdown: Array<{ indicador: string; value: number }>;
@@ -1156,7 +1161,7 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
     const center = cell.left - area.left + cell.width / 2;
 
     setHovered({
-      dia: ptBr(view.dias[i]?.data ?? ""),
+      day: ptBr(view.days[i]?.data ?? ""),
       servico,
       value,
       breakdown: breakdown ?? [],
@@ -1166,14 +1171,14 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
   };
 
   return (
-    <Bloco
-      titulo="Produtividade Diária Detalhada (Matriz de Vendas)"
-      nota={
-        porNome.length >= 120
+    <Block
+      title="Produtividade Diária Detalhada (Matriz de Vendas)"
+      note={
+        byName.length >= 120
           ? "mostrando os 120 primeiros — refine a busca · passe o mouse num número para ver a quebra por indicador"
           : "passe o mouse num número para ver a quebra por indicador"
       }
-      acoes={
+      actions={
         <>
           <label
             style={{
@@ -1189,8 +1194,8 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
           >
             <Search size={13} strokeWidth={2.2} style={{ color: "var(--s-t3)", flex: "none" }} />
             <input
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar consultor..."
               aria-label="Buscar na matriz"
               style={{
@@ -1206,8 +1211,8 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
           </label>
           <Segmented
             options={MATRIZ_OPTS}
-            value={visao as string}
-            onChange={trocaVisao}
+            value={grouping as string}
+            onChange={changeView}
             size="sm"
             ariaLabel="Agrupamento da matriz"
           />
@@ -1221,24 +1226,24 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
               borderCollapse: "separate",
               borderSpacing: 0,
               fontSize: 11.5,
-              minWidth: frozenWidth + view.dias.length * 62 + 60,
+              minWidth: frozenWidth + view.days.length * 62 + 60,
             }}
           >
             <thead>
               <tr>
-                <th style={{ ...thMatriz, ...stickyCol(0, COL_NAME), zIndex: 4, textAlign: "left" }}>
-                  {MATRIZ_OPTS.find((o) => o.value === visao)?.label ?? "Consultor"}
+                <th style={{ ...matrizTh, ...stickyCol(0, COL_NAME), zIndex: 4, textAlign: "left" }}>
+                  {MATRIZ_OPTS.find((o) => o.value === grouping)?.label ?? "Consultor"}
                 </th>
                 {showCanal && (
                   <th
-                    style={{ ...thMatriz, ...stickyCol(COL_NAME, COL_CANAL), zIndex: 4, textAlign: "left" }}
+                    style={{ ...matrizTh, ...stickyCol(COL_NAME, COL_CANAL), zIndex: 4, textAlign: "left" }}
                   >
                     Canal
                   </th>
                 )}
                 <th
                   style={{
-                    ...thMatriz,
+                    ...matrizTh,
                     ...stickyCol(servicoOffset, COL_SERVICO),
                     zIndex: 4,
                     textAlign: "left",
@@ -1247,12 +1252,12 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
                 >
                   Serviço
                 </th>
-                {view.dias.map((d, i) => (
+                {view.days.map((d, i) => (
                   <th
                     key={d.data}
                     title={dayColors[i].title}
                     style={{
-                      ...thMatriz,
+                      ...matrizTh,
                       minWidth: 62,
                       color: dayColors[i].fg,
                       background: dayColors[i].bg,
@@ -1261,11 +1266,11 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
                     {d.label}
                   </th>
                 ))}
-                <th style={{ ...thMatriz, minWidth: 60 }}>Total</th>
+                <th style={{ ...matrizTh, minWidth: 60 }}>Total</th>
               </tr>
             </thead>
             <tbody>
-              {porNome.map(([nome, subjectRows], group) => {
+              {byName.map(([nome, subjectRows], group) => {
                 const byServico = new Map(subjectRows.map((r) => [r.servico, r]));
                 const border = group === 0 ? undefined : "2px solid var(--s-border-2)";
 
@@ -1280,7 +1285,7 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
                           <td
                             rowSpan={SERVICO_ROWS.length}
                             style={{
-                              ...tdMatriz,
+                              ...matrizTd,
                               ...stickyCol(0, COL_NAME),
                               background: "var(--s-card)",
                               borderTop: border,
@@ -1302,7 +1307,7 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
                             <td
                               rowSpan={SERVICO_ROWS.length}
                               style={{
-                                ...tdMatriz,
+                                ...matrizTd,
                                 ...stickyCol(COL_NAME, COL_CANAL),
                                 background: "var(--s-card)",
                                 borderTop: border,
@@ -1317,7 +1322,7 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
                       )}
                       <td
                         style={{
-                          ...tdMatriz,
+                          ...matrizTd,
                           ...stickyCol(servicoOffset, COL_SERVICO),
                           background: "var(--s-sunken)",
                           borderRight: "2px solid var(--s-border)",
@@ -1328,18 +1333,18 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
                       >
                         {SERVICO_LABEL[servico] ?? servico}
                       </td>
-                      {view.dias.map((dia, i) => {
-                        const v = row?.valores[i] ?? 0;
+                      {view.days.map((day, i) => {
+                        const v = row?.values[i] ?? 0;
                         const color = dayColors[i];
                         const marked = color.title !== undefined;
 
                         return (
                           <td
-                            key={dia.data}
+                            key={day.data}
                             onMouseEnter={(e) => onCellEnter(e, servico, i, v, row?.breakdown?.[String(i)])}
                             onMouseLeave={() => setHovered(null)}
                             style={{
-                              ...tdMatriz,
+                              ...matrizTd,
                               minWidth: 62,
                               textAlign: "center",
                               borderTop: first ? border : undefined,
@@ -1358,7 +1363,7 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
                       })}
                       <td
                         style={{
-                          ...tdMatriz,
+                          ...matrizTd,
                           textAlign: "center",
                           fontWeight: 800,
                           background: "var(--s-sunken)",
@@ -1378,7 +1383,7 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
         {hovered && (
           <div
             style={{
-              ...tooltipPainel,
+              ...tooltipPanel,
               position: "absolute",
               zIndex: 20,
               width: 224,
@@ -1390,21 +1395,21 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
               padding: "9px 11px",
             }}
           >
-            <span style={{ ...tooltipTitulo, display: "flex", justifyContent: "space-between", gap: 10 }}>
-              <span>Detalhamento do dia</span>
-              <span className="font-mono">{hovered.dia}</span>
+            <span style={{ ...tooltipTitle, display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <span>Detalhamento do day</span>
+              <span className="font-mono">{hovered.day}</span>
             </span>
-            <span style={{ ...tooltipLinha, color: "var(--s-brand-2)" }}>
+            <span style={{ ...tooltipLine, color: "var(--s-brand-2)" }}>
               <span>Serviço</span>
               <span>{SERVICO_LABEL[hovered.servico] ?? hovered.servico}</span>
             </span>
             {hovered.breakdown.length === 0 ? (
-              <span style={{ ...tooltipLinha, fontWeight: 500, opacity: 0.6, justifyContent: "center" }}>
+              <span style={{ ...tooltipLine, fontWeight: 500, opacity: 0.6, justifyContent: "center" }}>
                 Nenhum indicador correspondente
               </span>
             ) : (
               hovered.breakdown.map((q) => (
-                <span key={q.indicador} style={{ ...tooltipLinha, fontSize: 11.5 }}>
+                <span key={q.indicador} style={{ ...tooltipLine, fontSize: 11.5 }}>
                   <span style={{ opacity: 0.7, fontWeight: 600 }}>{q.indicador}</span>
                   <span className="font-mono">{nf.format(q.value)}</span>
                 </span>
@@ -1412,7 +1417,7 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
             )}
             <span
               style={{
-                ...tooltipLinha,
+                ...tooltipLine,
                 borderTop: "1px solid rgba(255,255,255,.16)",
                 paddingTop: 4,
                 marginTop: 2,
@@ -1424,7 +1429,7 @@ function MatrizBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFil
           </div>
         )}
       </div>
-    </Bloco>
+    </Block>
   );
 }
 
@@ -1440,7 +1445,7 @@ function stickyCol(left: number, width: number): React.CSSProperties {
   };
 }
 
-const thMatriz: React.CSSProperties = {
+const matrizTh: React.CSSProperties = {
   position: "sticky",
   top: 0,
   zIndex: 2,
@@ -1456,7 +1461,7 @@ const thMatriz: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const tdMatriz: React.CSSProperties = {
+const matrizTd: React.CSSProperties = {
   padding: "5px 6px",
   borderBottom: "1px solid var(--s-border)",
   whiteSpace: "nowrap",
@@ -1469,24 +1474,24 @@ const PDU_OPTS = [
   { value: "mes" as const, label: "PDU Mês" },
 ];
 
-function PduBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFilters }) {
-  const [visao, setVisao] = useState<"dia" | "mes">("dia");
+function PduBlock({ view, filters }: { view: HcDesempenhoView; filters: HcFilters }) {
+  const [mode, setMode] = useState<"dia" | "mes">("dia");
   const servicos = filters.servico.length
     ? filters.servico.map((s) => (s === "INTERNET" ? "FTTH" : s)).join(" + ")
     : "TODOS";
 
   return (
-    <Bloco
-      titulo="PDU (HC Ativo)"
-      nota={`Serviços: ${servicos} · status: ${filters.statusVenda}`}
-      acoes={
-        <Segmented options={PDU_OPTS} value={visao} onChange={setVisao} size="sm" ariaLabel="Visão da PDU" />
+    <Block
+      title="PDU (HC Ativo)"
+      note={`Serviços: ${servicos} · status: ${filters.statusVenda}`}
+      actions={
+        <Segmented options={PDU_OPTS} value={mode} onChange={setMode} size="sm" ariaLabel="Visão da PDU" />
       }
     >
       <div style={{ height: 300 }}>
         <ResponsiveContainer width="100%" height="100%">
-          {visao === "dia" ? (
-            <AreaChart data={view.pduDia} margin={{ top: 28, right: 8, left: 0, bottom: 4 }}>
+          {mode === "dia" ? (
+            <AreaChart data={view.pduDay} margin={{ top: 28, right: 8, left: 0, bottom: 4 }}>
               <defs>
                 <linearGradient id="pduGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--s-brand)" stopOpacity={0.35} />
@@ -1503,7 +1508,7 @@ function PduBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFilter
                 height={56}
               />
               <YAxis tick={{ fontSize: 10, fill: "var(--s-t3)" }} width={44} />
-              <ChartTooltip content={<TooltipPduDia />} />
+              <ChartTooltip content={<TooltipPduDay />} />
               <Legend
                 verticalAlign="top"
                 align="right"
@@ -1530,7 +1535,7 @@ function PduBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFilter
               </Area>
             </AreaChart>
           ) : (
-            <AreaChart data={view.pduMes} margin={{ top: 28, right: 8, left: 0, bottom: 4 }}>
+            <AreaChart data={view.pduMonth} margin={{ top: 28, right: 8, left: 0, bottom: 4 }}>
               <defs>
                 <linearGradient id="pduGradMes" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--s-brand)" stopOpacity={0.35} />
@@ -1542,9 +1547,9 @@ function PduBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFilter
               <YAxis tick={{ fontSize: 10, fill: "var(--s-t3)" }} width={44} />
               <ChartTooltip
                 content={({ active, payload }) => (
-                  <TooltipPduMes
+                  <TooltipPduMonth
                     active={active}
-                    payload={payload as React.ComponentProps<typeof TooltipPduMes>["payload"]}
+                    payload={payload as React.ComponentProps<typeof TooltipPduMonth>["payload"]}
                     servicos={filters.servico}
                   />
                 )}
@@ -1588,47 +1593,47 @@ function PduBloco({ view, filters }: { view: HcDesempenhoView; filters: HcFilter
         }}
       >
         <Users size={12} style={{ flex: "none" }} />
-        {visao === "dia"
+        {mode === "dia"
           ? "Cálculo: (produção acumulada ÷ dias úteis decorridos) ÷ total de HC ativo."
           : "Cálculo: (produção dos HCs ativos no fechamento ÷ dias úteis) ÷ total desses mesmos HCs."}
       </p>
-    </Bloco>
+    </Block>
   );
 }
 
-function TooltipPduDia({
+function TooltipPduDay({
   active,
   payload,
 }: {
   active?: boolean;
-  payload?: Array<{ payload: HcDesempenhoView["pduDia"][number] }>;
+  payload?: Array<{ payload: HcDesempenhoView["pduDay"][number] }>;
 }) {
   if (!active || !payload?.length) return null;
 
   const d = payload[0].payload;
 
   return (
-    <div style={{ ...tooltipPainel, minWidth: 180 }}>
-      <span style={tooltipTitulo}>{d.label}</span>
-      <span style={tooltipLinha}>
+    <div style={{ ...tooltipPanel, minWidth: 180 }}>
+      <span style={tooltipTitle}>{d.label}</span>
+      <span style={tooltipLine}>
         <span style={{ opacity: 0.7 }}>PDU acumulada</span>
         <span className="font-mono">{d.pdu.toLocaleString("pt-BR")}</span>
       </span>
-      <span style={tooltipLinha}>
-        <span style={{ opacity: 0.7 }}>Produção do dia</span>
+      <span style={tooltipLine}>
+        <span style={{ opacity: 0.7 }}>Produção do day</span>
         <span className="font-mono">{nf.format(d.producao)}</span>
       </span>
     </div>
   );
 }
 
-function TooltipPduMes({
+function TooltipPduMonth({
   active,
   payload,
   servicos = [],
 }: {
   active?: boolean;
-  payload?: Array<{ payload: HcDesempenhoView["pduMes"][number] }>;
+  payload?: Array<{ payload: HcDesempenhoView["pduMonth"][number] }>;
   /** Serviço filter in force; empty means all. Filtered-out services are hidden. */
   servicos?: string[];
 }) {
@@ -1636,28 +1641,28 @@ function TooltipPduMes({
 
   const m = payload[0].payload;
   const shows = (s: string) => servicos.length === 0 || servicos.includes(s);
-  const linhas: Array<[string, string]> = [["PDU", m.pdu.toLocaleString("pt-BR")]];
+  const lines: Array<[string, string]> = [["PDU", m.pdu.toLocaleString("pt-BR")]];
 
-  if (shows("INTERNET")) linhas.push(["FTTH (Internet)", nf.format(m.ftth)]);
+  if (shows("INTERNET")) lines.push(["FTTH (Internet)", nf.format(m.ftth)]);
 
-  if (shows("FWA")) linhas.push(["FWA", nf.format(m.fwa)]);
+  if (shows("FWA")) lines.push(["FWA", nf.format(m.fwa)]);
 
-  if (shows("5G")) linhas.push(["5G (Chips)", nf.format(m.chips5g)]);
+  if (shows("5G")) lines.push(["5G (Chips)", nf.format(m.chips5g)]);
 
-  if (shows("RENOVAÇÃO")) linhas.push(["Renovação", nf.format(m.renovacoes)]);
+  if (shows("RENOVAÇÃO")) lines.push(["Renovação", nf.format(m.renovacoes)]);
 
   return (
-    <div style={{ ...tooltipPainel, minWidth: 210 }}>
-      <span style={tooltipTitulo}>{m.label}</span>
-      {linhas.map(([rotulo, valor]) => (
-        <span key={rotulo} style={tooltipLinha}>
-          <span style={{ opacity: 0.7 }}>{rotulo}</span>
-          <span className="font-mono">{valor}</span>
+    <div style={{ ...tooltipPanel, minWidth: 210 }}>
+      <span style={tooltipTitle}>{m.label}</span>
+      {lines.map(([label, value]) => (
+        <span key={label} style={tooltipLine}>
+          <span style={{ opacity: 0.7 }}>{label}</span>
+          <span className="font-mono">{value}</span>
         </span>
       ))}
       <span
         style={{
-          ...tooltipLinha,
+          ...tooltipLine,
           borderTop: "1px solid rgba(255,255,255,.16)",
           paddingTop: 4,
           marginTop: 2,
@@ -1666,12 +1671,12 @@ function TooltipPduMes({
         <span style={{ opacity: 0.7 }}>Volume total</span>
         <span className="font-mono">{nf.format(m.total)}</span>
       </span>
-      <span style={{ ...tooltipLinha, fontSize: 11, opacity: 0.7 }}>
+      <span style={{ ...tooltipLine, fontSize: 11, opacity: 0.7 }}>
         <span>HC ativo</span>
         <span className="font-mono">
           {/* `situacao` is only filled from March 2026 on — before that the
               count is absent, not zero. */}
-          {m.hcAtivo > 0 ? nf.format(m.hcAtivo) : "—"} · {m.diasUteis} dias úteis
+          {m.hcAtivo > 0 ? nf.format(m.hcAtivo) : "—"} · {m.diasUteis} days úteis
         </span>
       </span>
     </div>

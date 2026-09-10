@@ -64,7 +64,7 @@ export function dateRangeList(from: string, to: string): string[] {
 }
 
 /** The original's axis label: `01 - qua`. */
-export function labelDia(iso: string): string {
+export function dayLabel(iso: string): string {
   return `${iso.slice(8, 10)} - ${WEEKDAYS[parseIso(iso).getUTCDay()]}`;
 }
 
@@ -83,63 +83,63 @@ export function previousDay(iso: string): string {
   return toIso(d);
 }
 
-const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const MONTHS_SHORT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 /** The label the shared DateFilter chip shows for the current range. */
-export function labelPeriodo(from: string, to: string): string {
+export function periodLabel(from: string, to: string): string {
   const [ay, am, ad] = from.split("-");
   const [by, bm, bd] = to.split("-");
 
   if (from === to) return `${ad}/${am}/${ay}`;
 
-  if (ad === "01" && am === bm && ay === by && to === ultimoDiaDoMes(to))
-    return `${MESES_CURTOS[Number(am) - 1]}/${ay.slice(2)}`;
+  if (ad === "01" && am === bm && ay === by && to === lastDayOfMonth(to))
+    return `${MONTHS_SHORT[Number(am) - 1]}/${ay.slice(2)}`;
 
   return `${ad}/${am} – ${bd}/${bm}/${by}`;
 }
 
-function ultimoDiaDoMes(iso: string): string {
+function lastDayOfMonth(iso: string): string {
   const d = parseIso(iso);
-  const fim = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+  const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
 
-  return toIso(fim);
+  return toIso(end);
 }
 
 /**
  * Read a range back from the label the shared DateFilter emits — it hands over a
  * formatted string (`Jul/26`, `14/07/2026`, `27/06 – 26/07/2026`), not ISO.
  */
-export function parseLabelPeriodo(value: string): { from: string; to: string } | null {
-  const mes = value.match(/^([A-Za-z]{3})\/(\d{2})$/);
+export function parsePeriodLabel(value: string): { from: string; to: string } | null {
+  const month = value.match(/^([A-Za-z]{3})\/(\d{2})$/);
 
-  if (mes) {
-    const idx = MESES_CURTOS.findIndex((m) => m.toLowerCase() === mes[1].toLowerCase());
+  if (month) {
+    const idx = MONTHS_SHORT.findIndex((m) => m.toLowerCase() === month[1].toLowerCase());
 
     if (idx < 0) return null;
 
-    const ano = 2000 + Number(mes[2]);
-    const inicio = `${ano}-${String(idx + 1).padStart(2, "0")}-01`;
+    const year = 2000 + Number(month[2]);
+    const start = `${year}-${String(idx + 1).padStart(2, "0")}-01`;
 
-    return { from: inicio, to: ultimoDiaDoMes(inicio) };
+    return { from: start, to: lastDayOfMonth(start) };
   }
 
-  const dia = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  const day = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
 
-  if (dia) {
-    const iso = `${dia[3]}-${dia[2]}-${dia[1]}`;
+  if (day) {
+    const iso = `${day[3]}-${day[2]}-${day[1]}`;
 
     return { from: iso, to: iso };
   }
 
-  const intervalo = value.match(/^(\d{2})\/(\d{2})\s*[–-]\s*(\d{2})\/(\d{2})\/(\d{4})$/);
+  const range = value.match(/^(\d{2})\/(\d{2})\s*[–-]\s*(\d{2})\/(\d{2})\/(\d{4})$/);
 
-  if (intervalo) {
-    const [, ad, am, bd, bm, by] = intervalo;
+  if (range) {
+    const [, ad, am, bd, bm, by] = range;
     // The start carries no year: it belongs to the previous one when its month
     // is later than the end's.
-    const anoInicio = Number(am) > Number(bm) ? Number(by) - 1 : Number(by);
+    const startYear = Number(am) > Number(bm) ? Number(by) - 1 : Number(by);
 
-    return { from: `${anoInicio}-${am}-${ad}`, to: `${by}-${bm}-${bd}` };
+    return { from: `${startYear}-${am}-${ad}`, to: `${by}-${bm}-${bd}` };
   }
 
   return null;

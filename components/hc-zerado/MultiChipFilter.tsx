@@ -38,10 +38,10 @@ export function MultiChipFilter({
 }) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
-  const resumo =
+  const summary =
     values.length === 0 ? "Todos" : values.length === 1 ? values[0] : `${values.length} selecionados`;
 
-  const alterna = (option: string) => {
+  const toggle = (option: string) => {
     const next = new Set(values);
 
     if (next.has(option)) next.delete(option);
@@ -50,11 +50,11 @@ export function MultiChipFilter({
     onChange([...next]);
   };
 
-  const lista = (
+  const list = (
     <OptionList
       options={options}
       values={values}
-      onToggle={alterna}
+      onToggle={toggle}
       onAll={() => onChange([])}
       maxVisible={maxVisible}
       padded={isMobile}
@@ -66,7 +66,7 @@ export function MultiChipFilter({
       <>
         <FilterChipTrigger
           label={label}
-          value={resumo}
+          value={summary}
           dirty={values.length > 0}
           open={open}
           onClick={() => setOpen(true)}
@@ -124,7 +124,7 @@ export function MultiChipFilter({
                     className="font-display"
                     style={{ fontWeight: 800, fontSize: 17, letterSpacing: "-.02em", color: "var(--s-t1)" }}
                   >
-                    {resumo}
+                    {summary}
                   </DialogPrimitive.Title>
                 </div>
                 <DialogPrimitive.Close
@@ -143,7 +143,7 @@ export function MultiChipFilter({
                   <X size={15} />
                 </DialogPrimitive.Close>
               </div>
-              {lista}
+              {list}
             </DialogPrimitive.Content>
           </DialogPrimitive.Portal>
         </DialogPrimitive.Root>
@@ -154,7 +154,7 @@ export function MultiChipFilter({
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <FilterChipTrigger label={label} value={resumo} dirty={values.length > 0} open={open} />
+        <FilterChipTrigger label={label} value={summary} dirty={values.length > 0} open={open} />
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
@@ -174,7 +174,7 @@ export function MultiChipFilter({
             animation: "bdIn .14s ease both",
           }}
         >
-          {lista}
+          {list}
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>
@@ -197,13 +197,13 @@ function OptionList({
   padded?: boolean;
 }) {
   const [busca, setBusca] = useState("");
-  const comBusca = options.length >= AUTO_SEARCH_THRESHOLD;
-  const selecionados = useMemo(() => new Set(values), [values]);
-  const visiveis = useMemo(() => {
-    const termo = norm(busca.trim());
-    const filtradas = termo ? options.filter((o) => norm(o).includes(termo)) : options;
+  const withSearch = options.length >= AUTO_SEARCH_THRESHOLD;
+  const selectedValues = useMemo(() => new Set(values), [values]);
+  const visible = useMemo(() => {
+    const term = norm(busca.trim());
+    const filtered = term ? options.filter((o) => norm(o).includes(term)) : options;
 
-    return maxVisible ? filtradas.slice(0, maxVisible) : filtradas;
+    return maxVisible ? filtered.slice(0, maxVisible) : filtered;
   }, [options, busca, maxVisible]);
 
   return (
@@ -215,7 +215,7 @@ function OptionList({
         padding: padded ? "0 10px 14px" : undefined,
       }}
     >
-      {comBusca && (
+      {withSearch && (
         <div
           style={{
             display: "flex",
@@ -247,7 +247,7 @@ function OptionList({
             }}
           />
           <span style={{ flex: "none", fontSize: 10, fontWeight: 700, color: "var(--s-t3)" }}>
-            {visiveis.length}/{options.length}
+            {visible.length}/{options.length}
           </span>
         </div>
       )}
@@ -263,8 +263,8 @@ function OptionList({
         {values.length === 0 && <Check size={13} />}
       </button>
       <div style={{ overflowY: "auto", minHeight: 0 }}>
-        {visiveis.map((option) => {
-          const ativo = selecionados.has(option);
+        {visible.map((option) => {
+          const ativo = selectedValues.has(option);
 
           return (
             <button
@@ -280,7 +280,7 @@ function OptionList({
             </button>
           );
         })}
-        {visiveis.length === 0 && (
+        {visible.length === 0 && (
           <div style={{ padding: "8px 9px", fontSize: 12, color: "var(--s-t3)" }}>Nada encontrado.</div>
         )}
       </div>

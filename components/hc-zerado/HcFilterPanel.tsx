@@ -10,10 +10,10 @@ import { useReportNavPending } from "@/lib/ui/nav-pending";
 import {
   clampRange,
   defaultHcRange,
-  labelPeriodo,
+  periodLabel,
   MAX_RANGE_DAYS,
   parseIso,
-  parseLabelPeriodo,
+  parsePeriodLabel,
 } from "@/lib/data/hc-zerado/dates";
 import { hcFiltersToQuery, statusLockIgnored } from "@/lib/data/hc-zerado/filters";
 import type {
@@ -25,7 +25,7 @@ import type {
   StatusVenda,
 } from "@/lib/data/hc-zerado/types";
 
-const TODOS = "Todos";
+const ALL = "Todos";
 
 const AGILIDADE: Record<string, Agilidade> = {
   Todos: "",
@@ -41,8 +41,8 @@ const PERFIS: Record<string, PerfilCidade> = {
 };
 const EXPERIENCIAS: Record<string, Experiencia> = { Todos: "", "Em Exp.": "Em Exp.", Efetivo: "Efetivo" };
 
-function chaveDe<T extends string>(mapa: Record<string, T>, valor: T): string {
-  return Object.keys(mapa).find((k) => mapa[k] === valor) ?? TODOS;
+function keyOf<T extends string>(map: Record<string, T>, value: T): string {
+  return Object.keys(map).find((k) => map[k] === value) ?? ALL;
 }
 
 /**
@@ -75,7 +75,7 @@ export function HcFilterPanel({
 
   useReportNavPending(pending);
 
-  const aplica = (patch: Partial<HcFilters>) => {
+  const apply = (patch: Partial<HcFilters>) => {
     const next = { ...filters, ...patch };
     const range = clampRange(next.from, next.to);
 
@@ -86,10 +86,10 @@ export function HcFilterPanel({
     });
   };
 
-  const padrao = defaultHcRange();
-  const statusTravado =
+  const defaults = defaultHcRange();
+  const statusLocked =
     statusLockIgnored(filters.cross.servico ? [filters.cross.servico] : filters.servico) || travas?.status;
-  const multis: Array<{
+  const multiFilters: Array<{
     label: string;
     values: string[];
     options: string[];
@@ -100,60 +100,60 @@ export function HcFilterPanel({
       label: "Gerência",
       values: filters.gerente,
       options: options.gerentes,
-      onChange: (v) => aplica({ gerente: v }),
+      onChange: (v) => apply({ gerente: v }),
     },
     {
       label: "Coordenação",
       values: filters.coordenacao,
       options: options.coordenacoes,
-      onChange: (v) => aplica({ coordenacao: v }),
+      onChange: (v) => apply({ coordenacao: v }),
     },
     {
       label: "Supervisão",
       values: filters.supervisao,
       options: options.supervisoes,
-      onChange: (v) => aplica({ supervisao: v }),
+      onChange: (v) => apply({ supervisao: v }),
     },
     {
       label: "Líder",
       values: filters.lider,
       options: options.lideres,
-      onChange: (v) => aplica({ lider: v }),
+      onChange: (v) => apply({ lider: v }),
     },
     {
       label: "Cidade",
       values: filters.cidade,
       options: options.cidades,
-      onChange: (v) => aplica({ cidade: v }),
+      onChange: (v) => apply({ cidade: v }),
       align: "end",
     },
     {
       label: "Consultor",
       values: filters.consultor,
       options: options.consultores,
-      onChange: (v) => aplica({ consultor: v }),
+      onChange: (v) => apply({ consultor: v }),
       align: "end",
     },
-    { label: "Canal", values: filters.canal, options: options.canais, onChange: (v) => aplica({ canal: v }) },
-    { label: "Nicho", values: filters.nicho, options: options.nichos, onChange: (v) => aplica({ nicho: v }) },
+    { label: "Canal", values: filters.canal, options: options.canais, onChange: (v) => apply({ canal: v }) },
+    { label: "Nicho", values: filters.nicho, options: options.nichos, onChange: (v) => apply({ nicho: v }) },
     {
       label: "Serviço",
       values: filters.servico,
       options: options.servicos,
-      onChange: (v) => aplica({ servico: v }),
+      onChange: (v) => apply({ servico: v }),
     },
     {
       label: "Indicador",
       values: filters.indicador,
       options: options.indicadores,
-      onChange: (v) => aplica({ indicador: v }),
+      onChange: (v) => apply({ indicador: v }),
       align: "end",
     },
   ];
 
-  const sujos =
-    (filters.from !== padrao.from || filters.to !== padrao.to ? 1 : 0) +
-    multis.filter((m) => m.values.length > 0).length +
+  const dirtyCount =
+    (filters.from !== defaults.from || filters.to !== defaults.to ? 1 : 0) +
+    multiFilters.filter((m) => m.values.length > 0).length +
     (filters.statusVenda !== "CRIADO" ? 1 : 0) +
     (filters.agilidade ? 1 : 0) +
     (filters.perfilCidade ? 1 : 0) +
@@ -176,12 +176,12 @@ export function HcFilterPanel({
       >
         <DateFilter
           label="Período"
-          value={labelPeriodo(filters.from, filters.to)}
-          defaultValue={labelPeriodo(padrao.from, padrao.to)}
+          value={periodLabel(filters.from, filters.to)}
+          defaultValue={periodLabel(defaults.from, defaults.to)}
           onChange={(v) => {
-            const range = parseLabelPeriodo(v);
+            const range = parsePeriodLabel(v);
 
-            if (range) aplica(range);
+            if (range) apply(range);
           }}
           initialMode="intervalo"
           modes={["intervalo", "mes", "dia"]}
@@ -189,7 +189,7 @@ export function HcFilterPanel({
           maxRangeDays={MAX_RANGE_DAYS}
           maxDate={new Date()}
         />
-        {multis.map((m) => (
+        {multiFilters.map((m) => (
           <MultiChipFilter
             key={m.label}
             label={m.label}
@@ -200,42 +200,42 @@ export function HcFilterPanel({
             maxVisible={m.label === "Cidade" ? 100 : undefined}
           />
         ))}
-        {!statusTravado && (
+        {!statusLocked && (
           <ChipFilter
             label="Status da venda"
             value={filters.statusVenda}
             options={["CRIADO", "EFETIVADO", "INSTALADO"]}
             defaultValue="CRIADO"
-            onChange={(v) => aplica({ statusVenda: v as StatusVenda })}
+            onChange={(v) => apply({ statusVenda: v as StatusVenda })}
           />
         )}
         <ChipFilter
           label="Agilidade"
-          value={chaveDe(AGILIDADE, filters.agilidade)}
+          value={keyOf(AGILIDADE, filters.agilidade)}
           options={Object.keys(AGILIDADE)}
-          defaultValue={TODOS}
-          onChange={(v) => aplica({ agilidade: AGILIDADE[v] })}
+          defaultValue={ALL}
+          onChange={(v) => apply({ agilidade: AGILIDADE[v] })}
         />
         <ChipFilter
           label="Tipo de cidade"
-          value={chaveDe(PERFIS, filters.perfilCidade)}
+          value={keyOf(PERFIS, filters.perfilCidade)}
           options={Object.keys(PERFIS)}
-          defaultValue={TODOS}
-          onChange={(v) => aplica({ perfilCidade: PERFIS[v] })}
+          defaultValue={ALL}
+          onChange={(v) => apply({ perfilCidade: PERFIS[v] })}
           align="end"
         />
         {mostrarExperiencia && (
           <ChipFilter
             label="Experiência"
-            value={chaveDe(EXPERIENCIAS, filters.experiencia)}
+            value={keyOf(EXPERIENCIAS, filters.experiencia)}
             options={Object.keys(EXPERIENCIAS)}
-            defaultValue={TODOS}
-            onChange={(v) => aplica({ experiencia: EXPERIENCIAS[v] })}
+            defaultValue={ALL}
+            onChange={(v) => apply({ experiencia: EXPERIENCIAS[v] })}
             align="end"
           />
         )}
         <FilterClearButton
-          count={sujos}
+          count={dirtyCount}
           onClear={() => startTransition(() => router.push(pathname, { scroll: false }))}
         />
       </div>
@@ -248,7 +248,7 @@ export function HcFilterPanel({
  * a group. Only rendered when at least one is active — the filter bar above
  * already says what the panel itself is filtering.
  */
-export function HcContextoAtivo({
+export function HcActiveContext({
   filters,
   rotulos,
 }: {
@@ -267,14 +267,14 @@ export function HcContextoAtivo({
       ["cf_cidade", "Cidade", filters.cross.cidade],
       ["cf_servico", "Serviço", filters.cross.servico],
     ] as const
-  ).filter(([, , valor]) => Boolean(valor));
+  ).filter(([, , value]) => Boolean(value));
 
   if (chips.length === 0) return null;
 
-  const semChave = (chaves: string[]) => {
+  const withoutKey = (chaves: string[]) => {
     const q = new URLSearchParams(hcFiltersToQuery(filters));
 
-    for (const chave of chaves) q.delete(chave);
+    for (const key of chaves) q.delete(key);
 
     router.push(`${pathname}?${q.toString()}`, { scroll: false });
   };
@@ -292,11 +292,11 @@ export function HcContextoAtivo({
       >
         Contexto ativo
       </span>
-      {chips.map(([chave, rotulo, valor]) => (
+      {chips.map(([key, label, value]) => (
         <button
-          key={chave}
+          key={key}
           type="button"
-          onClick={() => semChave([chave])}
+          onClick={() => withoutKey([key])}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -313,13 +313,13 @@ export function HcContextoAtivo({
             cursor: "pointer",
           }}
         >
-          {rotulo}: {valor}
+          {label}: {value}
           <X size={12} />
         </button>
       ))}
       <button
         type="button"
-        onClick={() => semChave(chips.map(([chave]) => chave))}
+        onClick={() => withoutKey(chips.map(([key]) => key))}
         style={{
           border: 0,
           background: "none",

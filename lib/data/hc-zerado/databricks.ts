@@ -12,16 +12,16 @@
 import { getDataClient } from "../client";
 import { num } from "../_shared";
 import { hcWhere, vendasExpr, vendasWhere } from "./filters";
-import { dateRangeList, isWeekend, labelDia, previousDay } from "./dates";
+import { dateRangeList, isWeekend, dayLabel, previousDay } from "./dates";
 import type {
-  DiaEixo,
-  DiaZerado,
+  DayAxis,
+  ZeradoDay,
   HcDesempenhoView,
   HcFilters,
   HcFilterTuple,
   MatrizRow,
-  PduDia,
-  PduMes,
+  PduDay,
+  PduMonth,
   QuadroGeral,
   RegionalRow,
   Totalizadores,
@@ -42,7 +42,7 @@ const SCHEMA = process.env.DATABRICKS_HC_SCHEMA ?? "projeto_brisa_performance";
 // snapshot) on every read — the same one-month aggregate takes ~8s through the
 // view and ~0s through the table. Same 44 columns, same totals; the table trails
 // the view by a refresh cycle.
-const FONTE = `\`${CAT}\`.\`${SCHEMA}\`.\`${process.env.DATABRICKS_HC_TABLE ?? "tb_producao_hc_zero_venda"}\``;
+const SOURCE = `\`${CAT}\`.\`${SCHEMA}\`.\`${process.env.DATABRICKS_HC_TABLE ?? "tb_producao_hc_zero_venda"}\``;
 
 /**
  * Stable identity of one HC. `documento_hc` is the source's own key; the
@@ -62,7 +62,7 @@ const ATIVO = `CASE WHEN UPPER(TRIM(situacao)) IN ('ATIVO','ATIVOS','ACTIVE') TH
 
 const FERIADO = `CASE WHEN UPPER(TRIM(flag_feriado)) LIKE 'SIM%' THEN 1 ELSE 0 END`;
 
-const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 function q<T>(sql: string, params: unknown[]): Promise<T[]> {
   return getDataClient().query<T>(sql, params);
@@ -71,7 +71,7 @@ function q<T>(sql: string, params: unknown[]): Promise<T[]> {
 /** `base` CTE: every row in the period that survives the row-level filters. */
 function baseCte(f: HcFilters, params: unknown[], skipCross: Parameters<typeof hcWhere>[2] = []): string {
   return `base AS (
-    SELECT * FROM ${FONTE}
+    SELECT * FROM ${SOURCE}
     WHERE data BETWEEN DATE'${f.from}' AND DATE'${f.to}'${hcWhere(f, params, skipCross)}
   )`;
 }
@@ -87,7 +87,7 @@ export async function databricksHcWatermark(): Promise<string> {
   if (memo && Date.now() - memo.at < WM_TTL_MS) return memo.value;
 
   try {
-    const r = await q<{ wm: string }>(`SELECT CAST(MAX(data) AS STRING) wm FROM ${FONTE}`, []);
+    const r = await q<{ wm: string }>(`SELECT CAST(MAX(data) AS STRING) wm FROM ${SOURCE}`, []);
     const value = r[0]?.wm ?? "unknown";
 
     gWm.__hcWatermark = { value, at: Date.now() };
@@ -110,7 +110,7 @@ export async function databricksHcWatermark(): Promise<string> {
  * regional table must keep showing every group when one of its rows is clicked,
  * exactly as the original did. Every other block re-applies them in memory.
  */
-interface PessoaDia {
+interface PersonDay {
   d: string;
   k: string;
   matricula: string | null;
@@ -125,7 +125,7 @@ interface PessoaDia {
   situacao: string;
 }
 
-async function fetchPessoaDia(f: HcFilters): Promise<PessoaDia[]> {
+async function fetchPersonDay(f: HcFilters): Promise<PersonDay[]> {
   const d1 = previousDay(f.to);
   const wide: HcFilters = { ...f, from: d1 < f.from ? d1 : f.from };
   const params: unknown[] = [];
@@ -151,13 +151,13 @@ async function fetchPessoaDia(f: HcFilters): Promise<PessoaDia[]> {
              COALESCE(NULLIF(TRIM(coordenacao), ''), 'Sem Regional'),
              COALESCE(NULLIF(TRIM(cidade_vendedor), ''), 'Sem Regional')`;
 
-  const rows = await q<PessoaDia>(sql, params);
+  const rows = await q<PersonDay>(sql, params);
 
   return rows.map((r) => ({ ...r, ativo: num(r.ativo), feriado: num(r.feriado), v: num(r.v) }));
 }
 
 /** One row per service × day × group — production, for the matrix and totals. */
-interface ServicoDia {
+interface ServicoDay {
   d: string;
   nome: string;
   detalhe: string;
@@ -166,16 +166,16 @@ interface ServicoDia {
   v: number;
 }
 
-async function fetchServicoDia(f: HcFilters, visao: MatrizVisao): Promise<ServicoDia[]> {
+async function fetchServicoDay(f: HcFilters, view: MatrizView): Promise<ServicoDay[]> {
   const dim =
-    visao === "gerencia"
+    view === "gerencia"
       ? "COALESCE(NULLIF(TRIM(gerente), ''), 'Sem Regional')"
-      : visao === "coordenacao"
+      : view === "coordenacao"
         ? "COALESCE(NULLIF(TRIM(coordenacao), ''), 'Sem Regional')"
-        : visao === "cidade"
+        : view === "cidade"
           ? "COALESCE(NULLIF(TRIM(cidade_vendedor), ''), 'Sem Cidade')"
           : "COALESCE(NULLIF(TRIM(consultor), ''), 'Sem Consultor')";
-  const detalhe = visao === "consultor" ? "MAX(canal)" : "MAX(cidade_vendedor)";
+  const detalhe = view === "consultor" ? "MAX(canal)" : "MAX(cidade_vendedor)";
   const params: unknown[] = [];
   const base = baseCte(f, params);
   const vendas = vendasExpr(f, params);
@@ -190,13 +190,13 @@ async function fetchServicoDia(f: HcFilters, visao: MatrizVisao): Promise<Servic
       FROM base GROUP BY data, ${dim}, servico, COALESCE(NULLIF(TRIM(indicador), ''), 'Sem indicador')
     ) WHERE v <> 0`;
 
-  const rows = await q<ServicoDia>(sql, params);
+  const rows = await q<ServicoDay>(sql, params);
 
   return rows.map((r) => ({ ...r, v: num(r.v) }));
 }
 
 /** Drop the rows the regional scan deliberately kept (see `fetchPessoaDia`). */
-function aplicaCrossDeGrupo(rows: PessoaDia[], f: HcFilters): PessoaDia[] {
+function applyGroupCross(rows: PersonDay[], f: HcFilters): PersonDay[] {
   const { gerencia, coordenacao, cidade } = f.cross;
 
   if (!gerencia && !coordenacao && !cidade) return rows;
@@ -215,7 +215,7 @@ function aplicaCrossDeGrupo(rows: PessoaDia[], f: HcFilters): PessoaDia[] {
  * `AF.PREVIDENCIA`/`AF.PREVIDÊNCIA`), which rendered as duplicated tiles each
  * holding half the count — folding them here is the agreed fix.
  */
-function categoriaSituacao(raw: string | null): string {
+function situacaoCategory(raw: string | null): string {
   const s = (raw ?? "").trim().toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
   // The source leaves `situacao` empty for the indirect channels, which are not
@@ -234,33 +234,33 @@ function categoriaSituacao(raw: string | null): string {
 }
 
 /** Bloco 1 — headcount composition on the last day present in the range. */
-function quadroGeral(rows: PessoaDia[], refDate: string | null): QuadroGeral {
+function quadroGeral(rows: PersonDay[], refDate: string | null): QuadroGeral {
   if (!refDate) return { total: 0, refDate: null, items: [] };
 
-  const porCategoria = new Map<string, Set<string>>();
-  const todos = new Set<string>();
+  const byCategory = new Map<string, Set<string>>();
+  const allKeys = new Set<string>();
 
   for (const r of rows) {
     if (r.d !== refDate || !r.k) continue;
 
-    const cat = categoriaSituacao(r.situacao);
-    const set = porCategoria.get(cat) ?? new Set<string>();
+    const cat = situacaoCategory(r.situacao);
+    const set = byCategory.get(cat) ?? new Set<string>();
 
     set.add(r.k);
-    porCategoria.set(cat, set);
-    todos.add(r.k);
+    byCategory.set(cat, set);
+    allKeys.add(r.k);
   }
 
-  const total = todos.size;
-  const preferida = ["Ativos", "Férias", "Maternidade", "INSS"];
-  const outras = [...porCategoria.keys()].filter((c) => !preferida.includes(c)).sort();
+  const total = allKeys.size;
+  const preferred = ["Ativos", "Férias", "Maternidade", "INSS"];
+  const others = [...byCategory.keys()].filter((c) => !preferred.includes(c)).sort();
 
   return {
     total,
     refDate,
-    items: [...preferida, ...outras]
+    items: [...preferred, ...others]
       .map((label) => {
-        const count = porCategoria.get(label)?.size ?? 0;
+        const count = byCategory.get(label)?.size ?? 0;
 
         return {
           id: label.toLowerCase().replace(/\s+/g, "-"),
@@ -274,7 +274,7 @@ function quadroGeral(rows: PessoaDia[], refDate: string | null): QuadroGeral {
 }
 
 /** Bloco 2 — production totals for the period, by service. */
-function totalizadores(rows: ServicoDia[]): Totalizadores {
+function totalizadores(rows: ServicoDay[]): Totalizadores {
   let ftth = 0;
   let fwa = 0;
   let chips5g = 0;
@@ -296,7 +296,7 @@ function totalizadores(rows: ServicoDia[]): Totalizadores {
 }
 
 /** Active HC and zeroed HC for one day, deduplicated by person. */
-function contaDia(rows: PessoaDia[]): { ativos: number; zerados: number } {
+function countDay(rows: PersonDay[]): { ativos: number; zerados: number } {
   const ativo = new Map<string, number>();
 
   for (const r of rows) {
@@ -313,74 +313,74 @@ function contaDia(rows: PessoaDia[]): { ativos: number; zerados: number } {
 }
 
 /** Bloco 3 — active vs zeroed HC per day. */
-function zeradoPorDia(porDia: Map<string, PessoaDia[]>, dias: string[]): DiaZerado[] {
-  return dias.map((data) => {
-    const doDia = porDia.get(data) ?? [];
-    const { ativos, zerados } = contaDia(doDia);
+function zeradoByDay(byDay: Map<string, PersonDay[]>, days: string[]): ZeradoDay[] {
+  return days.map((data) => {
+    const ofDay = byDay.get(data) ?? [];
+    const { ativos, zerados } = countDay(ofDay);
 
     return {
       data,
-      label: labelDia(data),
+      label: dayLabel(data),
       ativos,
       zerados,
       ativosRestantes: Math.max(0, ativos - zerados),
       pctZerado: ativos > 0 ? +((zerados / ativos) * 100).toFixed(1) : 0,
-      feriado: doDia.some((r) => r.feriado === 1),
+      feriado: ofDay.some((r) => r.feriado === 1),
     };
   });
 }
 
 /** Bloco 4 / Matriz Gerencial — one row per management group. */
 function regional(
-  rows: PessoaDia[],
-  chave: (r: PessoaDia) => string,
-  dias: DiaEixo[],
+  rows: PersonDay[],
+  key: (r: PersonDay) => string,
+  days: DayAxis[],
   d0: string,
   d1: string,
 ): RegionalRow[] {
-  const grupos = new Map<string, Map<string, PessoaDia[]>>();
+  const groups = new Map<string, Map<string, PersonDay[]>>();
 
   for (const r of rows) {
-    const nome = chave(r) || "Sem Regional";
-    const porDia = grupos.get(nome) ?? new Map<string, PessoaDia[]>();
+    const nome = key(r) || "Sem Regional";
+    const byDay = groups.get(nome) ?? new Map<string, PersonDay[]>();
 
-    porDia.set(r.d, [...(porDia.get(r.d) ?? []), r]);
-    grupos.set(nome, porDia);
+    byDay.set(r.d, [...(byDay.get(r.d) ?? []), r]);
+    groups.set(nome, byDay);
   }
 
-  return [...grupos.entries()]
-    .map(([nome, porDia]) => {
-      const ativoHoje = new Map<string, number>();
+  return [...groups.entries()]
+    .map(([nome, byDay]) => {
+      const activeToday = new Map<string, number>();
 
-      for (const r of porDia.get(d0) ?? []) {
-        if (r.k && r.ativo === 1) ativoHoje.set(r.k, (ativoHoje.get(r.k) ?? 0) + r.v);
+      for (const r of byDay.get(d0) ?? []) {
+        if (r.k && r.ativo === 1) activeToday.set(r.k, (activeToday.get(r.k) ?? 0) + r.v);
       }
 
-      const totalAtivo = ativoHoje.size;
-      let totalVenderam = 0;
+      const totalAtivo = activeToday.size;
+      let totalWithSales = 0;
 
-      for (const v of ativoHoje.values()) if (v > 0) totalVenderam += 1;
+      for (const v of activeToday.values()) if (v > 0) totalWithSales += 1;
 
-      const totalZerado = totalAtivo - totalVenderam;
-      const ontem = contaDia(porDia.get(d1) ?? []);
+      const totalZerado = totalAtivo - totalWithSales;
+      const yesterday = countDay(byDay.get(d1) ?? []);
 
       return {
         id: nome,
         nome,
         totalAtivo,
-        totalVenderam,
-        pctVendeu: totalAtivo > 0 ? Math.round((totalVenderam / totalAtivo) * 100) : 0,
+        totalWithSales,
+        pctVendeu: totalAtivo > 0 ? Math.round((totalWithSales / totalAtivo) * 100) : 0,
         totalZerado,
         pctZerado: totalAtivo > 0 ? Math.round((totalZerado / totalAtivo) * 100) : 0,
         countZeradoD0: totalZerado,
-        countZeradoD1: ontem.zerados,
+        countZeradoD1: yesterday.zerados,
         d1Status:
-          totalZerado < ontem.zerados
+          totalZerado < yesterday.zerados
             ? ("melhora" as const)
-            : totalZerado > ontem.zerados
+            : totalZerado > yesterday.zerados
               ? ("piora" as const)
               : ("estavel" as const),
-        serieZerados: dias.map((dia) => contaDia(porDia.get(dia.data) ?? []).zerados),
+        serieZerados: days.map((day) => countDay(byDay.get(day.data) ?? []).zerados),
       };
     })
     .sort((a, b) => b.totalZerado - a.totalZerado);
@@ -395,19 +395,19 @@ function regional(
  * absence reads as idleness.
  */
 function vendedores(
-  rows: PessoaDia[],
+  rows: PersonDay[],
   diasUteis: string[],
   refDate: string,
   diasUteisMes: number,
 ): VendedorRow[] {
-  const people = new Map<string, { first: PessoaDia; dias: Map<string, number> }>();
+  const people = new Map<string, { first: PersonDay; days: Map<string, number> }>();
 
   for (const r of rows) {
     if (!r.matricula) continue;
 
-    const cur = people.get(r.matricula) ?? { first: r, dias: new Map<string, number>() };
+    const cur = people.get(r.matricula) ?? { first: r, days: new Map<string, number>() };
 
-    cur.dias.set(r.d, (cur.dias.get(r.d) ?? 0) + r.v);
+    cur.days.set(r.d, (cur.days.get(r.d) ?? 0) + r.v);
 
     // Identity and status come from the person's FIRST day in the range, so
     // someone active on day 1 who went on leave later still shows as active.
@@ -425,8 +425,8 @@ function vendedores(
     let diasSemVenda = 0;
     let totalVendas = 0;
 
-    for (const dia of diasUteis) {
-      const v = p.dias.get(dia) ?? 0;
+    for (const day of diasUteis) {
+      const v = p.days.get(day) ?? 0;
 
       totalVendas += v;
 
@@ -434,7 +434,7 @@ function vendedores(
       else diasSemVenda += 1;
     }
 
-    const avaliados = diasComVenda + diasSemVenda;
+    const evaluated = diasComVenda + diasSemVenda;
 
     out.push({
       matricula,
@@ -448,13 +448,13 @@ function vendedores(
       totalVendas,
       diasComVenda,
       diasSemVenda,
-      aproveitamento: avaliados > 0 ? Math.round((diasComVenda / avaliados) * 100) : 0,
+      aproveitamento: evaluated > 0 ? Math.round((diasComVenda / evaluated) * 100) : 0,
       // Pace × the month's full working days. The original multiplied by a
       // hard-coded 22 ("month of June 2026"); the real count now comes from the
       // source's own holiday flag.
-      projecao: avaliados > 0 ? Math.round((totalVendas / avaliados) * diasUteisMes) : 0,
-      vendasPorDia: diasUteis.map((d) => p.dias.get(d) ?? 0),
-      zerouHoje: (p.dias.get(refDate) ?? 0) === 0,
+      projecao: evaluated > 0 ? Math.round((totalVendas / evaluated) * diasUteisMes) : 0,
+      vendasByDay: diasUteis.map((d) => p.days.get(d) ?? 0),
+      zeradoToday: (p.days.get(refDate) ?? 0) === 0,
       firstDay: p.first.d,
     });
   }
@@ -465,8 +465,8 @@ function vendedores(
 }
 
 /** Bloco 6 — daily production matrix for the selected grouping. */
-function matriz(rows: ServicoDia[], dias: DiaEixo[], order: Map<string, string>): MatrizRow[] {
-  const indice = new Map(dias.map((d, i) => [d.data, i]));
+function matriz(rows: ServicoDay[], days: DayAxis[], order: Map<string, string>): MatrizRow[] {
+  const index = new Map(days.map((d, i) => [d.data, i]));
   const acc = new Map<string, MatrizRow>();
   // The name column prints the subject's whole production, not the row's.
   const totalByName = new Map<string, number>();
@@ -482,15 +482,15 @@ function matriz(rows: ServicoDia[], dias: DiaEixo[], order: Map<string, string>)
         nome: r.nome,
         detalhe: r.detalhe ?? "",
         servico,
-        valores: dias.map(() => 0),
+        values: days.map(() => 0),
         total: 0,
         subjectTotal: 0,
         breakdown: {},
       } satisfies MatrizRow);
-    const i = indice.get(r.d);
+    const i = index.get(r.d);
 
     if (i !== undefined) {
-      row.valores[i] += r.v;
+      row.values[i] += r.v;
 
       const byDay = breakdowns.get(key) ?? new Map<number, Map<string, number>>();
       const byIndicador = byDay.get(i) ?? new Map<string, number>();
@@ -527,13 +527,13 @@ function matriz(rows: ServicoDia[], dias: DiaEixo[], order: Map<string, string>)
 const SERVICO_ORDER = ["INTERNET", "FWA", "5G", "RENOVACAO"];
 
 /** First day each matrix subject appears — the ordering key. */
-function subjectOrder(rows: PessoaDia[], visao: MatrizVisao): Map<string, string> {
-  const key = (r: PessoaDia) =>
-    visao === "gerencia"
+function subjectOrder(rows: PersonDay[], view: MatrizView): Map<string, string> {
+  const key = (r: PersonDay) =>
+    view === "gerencia"
       ? r.gerente
-      : visao === "coordenacao"
+      : view === "coordenacao"
         ? r.coordenacao
-        : visao === "cidade"
+        : view === "cidade"
           ? r.cidade
           : r.consultor;
   const out = new Map<string, string>();
@@ -552,24 +552,24 @@ function subjectOrder(rows: PessoaDia[], visao: MatrizVisao): Map<string, string
 }
 
 /** Bloco 7 — cumulative daily PDU: (Σ sales ÷ Σ business days) ÷ active HC. */
-function pduDia(servicoRows: ServicoDia[], dias: DiaEixo[], totalHc: number): PduDia[] {
-  const porDia = new Map<string, number>();
+function pduDay(servicoRows: ServicoDay[], days: DayAxis[], totalHc: number): PduDay[] {
+  const byDay = new Map<string, number>();
 
-  for (const r of servicoRows) porDia.set(r.d, (porDia.get(r.d) ?? 0) + r.v);
+  for (const r of servicoRows) byDay.set(r.d, (byDay.get(r.d) ?? 0) + r.v);
 
-  let vendasAcum = 0;
-  let diasAcum = 0;
+  let cumulativeVendas = 0;
+  let cumulativeDays = 0;
 
-  return dias.map((dia) => {
-    if (!dia.fimDeSemana && !dia.feriado) diasAcum += 1;
+  return days.map((day) => {
+    if (!day.fimDeSemana && !day.feriado) cumulativeDays += 1;
 
-    const producao = porDia.get(dia.data) ?? 0;
+    const producao = byDay.get(day.data) ?? 0;
 
-    vendasAcum += producao;
+    cumulativeVendas += producao;
 
     return {
-      label: dia.label.replace(" - ", "-").toLowerCase(),
-      pdu: diasAcum > 0 && totalHc > 0 ? +(vendasAcum / diasAcum / totalHc).toFixed(2) : 0,
+      label: day.label.replace(" - ", "-").toLowerCase(),
+      pdu: cumulativeDays > 0 && totalHc > 0 ? +(cumulativeVendas / cumulativeDays / totalHc).toFixed(2) : 0,
       producao,
     };
   });
@@ -582,14 +582,14 @@ function pduDia(servicoRows: ServicoDia[], dias: DiaEixo[], totalHc: number): Pd
  * "2000-01-01" to draw a 12-month history. The source only holds 2026 onward, so
  * the chart shows the months that exist rather than padding empty ones.
  */
-async function pduMes(f: HcFilters): Promise<PduMes[]> {
+async function pduMonth(f: HcFilters): Promise<PduMonth[]> {
   const params: unknown[] = [];
   const where = hcWhere(f, params) + vendasWhere(f, params);
   const sql = `
     WITH base AS (
       SELECT date_format(data, 'yyyy-MM') m, data, hash_user, situacao,
              UPPER(TRIM(servico)) servico, total_vendas, dias_trabalhado
-      FROM ${FONTE}
+      FROM ${SOURCE}
       WHERE data >= add_months(DATE'${f.to}', -11) AND data <= DATE'${f.to}'
         AND UPPER(TRIM(flag_feriado)) = 'NAO'${where}
     ),
@@ -615,7 +615,7 @@ async function pduMes(f: HcFilters): Promise<PduMes[]> {
 
   const rows = await q<{
     m: string;
-    dias: number;
+    days: number;
     hc: number;
     worked: number;
     total: number;
@@ -628,11 +628,11 @@ async function pduMes(f: HcFilters): Promise<PduMes[]> {
   return rows.map((r) => {
     const total = num(r.total);
     const worked = num(r.worked);
-    const [ano, mes] = r.m.split("-");
+    const [year, month] = r.m.split("-");
 
     return {
-      mes: r.m,
-      label: `${MESES[Number(mes) - 1]} - ${ano}`,
+      month: r.m,
+      label: `${MONTHS[Number(month) - 1]} - ${year}`,
       // Production per WORKED person-day: `dias_trabalhado` already weighs a
       // half day as 0.5 and an absence as 0. Matches the app being replaced.
       pdu: worked > 0 ? +(total / worked).toFixed(2) : 0,
@@ -642,64 +642,64 @@ async function pduMes(f: HcFilters): Promise<PduMes[]> {
       renovacoes: num(r.renov),
       total,
       hcAtivo: num(r.hc),
-      diasUteis: num(r.dias),
+      diasUteis: num(r.days),
     };
   });
 }
 
-export type MatrizVisao = "consultor" | "gerencia" | "coordenacao" | "cidade";
+export type MatrizView = "consultor" | "gerencia" | "coordenacao" | "cidade";
 
-export async function databricksHcDesempenho(f: HcFilters, visao: MatrizVisao): Promise<HcDesempenhoView> {
+export async function databricksHcDesempenho(f: HcFilters, view: MatrizView): Promise<HcDesempenhoView> {
   const d1 = previousDay(f.to);
   // Every leg is independent — one round trip's latency for all of them.
   const [todasPessoaDia, servicoRows, pdum, diasUteisMes] = await Promise.all([
-    fetchPessoaDia(f),
-    fetchServicoDia(f, visao),
-    pduMes(f),
-    diasUteisDoMes(f.to),
+    fetchPersonDay(f),
+    fetchServicoDay(f, view),
+    pduMonth(f),
+    diasUteisInMonth(f.to),
   ]);
 
   // The regional block keeps every group visible even when one is cross-filtered;
   // every other block sees the narrowed set.
-  const pessoaDia = aplicaCrossDeGrupo(todasPessoaDia, f).filter((r) => r.d >= f.from);
-  const doPeriodo = todasPessoaDia.filter((r) => r.d >= f.from);
-  const porDia = new Map<string, PessoaDia[]>();
+  const personDay = applyGroupCross(todasPessoaDia, f).filter((r) => r.d >= f.from);
+  const ofPeriod = todasPessoaDia.filter((r) => r.d >= f.from);
+  const byDay = new Map<string, PersonDay[]>();
 
-  for (const r of pessoaDia) porDia.set(r.d, [...(porDia.get(r.d) ?? []), r]);
+  for (const r of personDay) byDay.set(r.d, [...(byDay.get(r.d) ?? []), r]);
 
-  const diasDoPeriodo = dateRangeList(f.from, f.to);
-  const zerado = zeradoPorDia(porDia, diasDoPeriodo);
-  const feriadoPorDia = new Map(zerado.map((z) => [z.data, z.feriado]));
-  const dias: DiaEixo[] = diasDoPeriodo.map((data) => ({
+  const periodDays = dateRangeList(f.from, f.to);
+  const zerado = zeradoByDay(byDay, periodDays);
+  const holidayByDay = new Map(zerado.map((z) => [z.data, z.feriado]));
+  const days: DayAxis[] = periodDays.map((data) => ({
     data,
-    label: labelDia(data),
-    feriado: feriadoPorDia.get(data) ?? false,
+    label: dayLabel(data),
+    feriado: holidayByDay.get(data) ?? false,
     fimDeSemana: isWeekend(data),
   }));
   // The original's fn_FiltroDiaUtil: days that exist in the data and are not
   // flagged as a holiday.
-  const comDados = new Set(pessoaDia.map((r) => r.d));
-  const diasUteis = diasDoPeriodo.filter((d) => comDados.has(d) && !feriadoPorDia.get(d));
+  const withData = new Set(personDay.map((r) => r.d));
+  const diasUteis = periodDays.filter((d) => withData.has(d) && !holidayByDay.get(d));
   const refDate = diasUteis[diasUteis.length - 1] ?? f.to;
-  const hcAtivo = new Set(pessoaDia.filter((r) => r.ativo === 1 && r.k).map((r) => r.k));
+  const hcAtivo = new Set(personDay.filter((r) => r.ativo === 1 && r.k).map((r) => r.k));
 
   return {
-    dias,
-    quadroGeral: quadroGeral(pessoaDia, refDate),
+    days,
+    quadroGeral: quadroGeral(personDay, refDate),
     totalizadores: totalizadores(servicoRows),
-    zeradoPorDia: zerado,
+    zeradoByDay: zerado,
     regional: {
-      gerencia: regional(doPeriodo, (r) => r.gerente, dias, f.to, d1),
-      coordenacao: regional(doPeriodo, (r) => r.coordenacao, dias, f.to, d1),
-      cidade: regional(doPeriodo, (r) => r.cidade, dias, f.to, d1),
+      gerencia: regional(ofPeriod, (r) => r.gerente, days, f.to, d1),
+      coordenacao: regional(ofPeriod, (r) => r.coordenacao, days, f.to, d1),
+      cidade: regional(ofPeriod, (r) => r.cidade, days, f.to, d1),
     },
-    vendedores: vendedores(pessoaDia, diasUteis, refDate, diasUteisMes),
+    vendedores: vendedores(personDay, diasUteis, refDate, diasUteisMes),
     matriz: {
-      [visao]: matriz(servicoRows, dias, subjectOrder(pessoaDia, visao)),
+      [view]: matriz(servicoRows, days, subjectOrder(personDay, view)),
     } as HcDesempenhoView["matriz"],
-    pduDia: pduDia(servicoRows, dias, hcAtivo.size),
-    pduMes: pdum,
-    diasUteisDecorridos: diasUteis.length,
+    pduDay: pduDay(servicoRows, days, hcAtivo.size),
+    pduMonth: pdum,
+    diasUteisElapsed: diasUteis.length,
     refDate,
   };
 }
@@ -709,10 +709,10 @@ export async function databricksHcDesempenho(f: HcFilters, visao: MatrizVisao): 
  * monthly projection extrapolates to. Counted from the source's own holiday
  * flag, replacing the hard-coded 22 the original carried.
  */
-async function diasUteisDoMes(to: string): Promise<number> {
+async function diasUteisInMonth(to: string): Promise<number> {
   const rows = await q<{ d: number }>(
     `SELECT COUNT(DISTINCT CASE WHEN ${FERIADO} = 0 AND dayofweek(data) NOT IN (1, 7) THEN data END) d
-     FROM ${FONTE}
+     FROM ${SOURCE}
      WHERE date_format(data, 'yyyy-MM') = date_format(DATE'${to}', 'yyyy-MM')`,
     [],
   );
@@ -741,7 +741,7 @@ export function databricksHcFilterTuples(from: string, to: string): Promise<HcFi
       TRIM(indicador) indicador,
       TRIM(tipo_cidade) perfil,
       TRIM(status_experiencia) experiencia
-    FROM ${FONTE}
+    FROM ${SOURCE}
     WHERE data BETWEEN DATE'${from}' AND DATE'${to}'`;
 
   return q<HcFilterTuple>(sql, []);

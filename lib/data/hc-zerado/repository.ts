@@ -8,7 +8,7 @@ import { cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";
 import { hcFiltersToQuery } from "./filters";
 import type { HcDesempenhoView, HcFilters, HcFilterOptions, HcFilterTuple } from "./types";
-import type { MatrizVisao } from "./databricks";
+import type { MatrizView } from "./databricks";
 
 // Bump on any change to the shape OR the maths of a cached value: the
 // in-process cache survives a hot-reload and would keep serving the old one.
@@ -21,18 +21,18 @@ export class HcMockUnsupportedError extends Error {
   }
 }
 
-function cacheKey(build: string, f: HcFilters, visao: MatrizVisao): string {
-  return `hc:${HC_CACHE_VERSION}:${build}:desempenho:${visao}:${hcFiltersToQuery(f)}`;
+function cacheKey(build: string, f: HcFilters, view: MatrizView): string {
+  return `hc:${HC_CACHE_VERSION}:${build}:desempenho:${view}:${hcFiltersToQuery(f)}`;
 }
 
-export async function getHcDesempenho(f: HcFilters, visao: MatrizVisao): Promise<HcDesempenhoView> {
+export async function getHcDesempenho(f: HcFilters, view: MatrizView): Promise<HcDesempenhoView> {
   if (!isDatabricks()) throw new HcMockUnsupportedError();
 
   const { databricksHcWatermark, databricksHcDesempenho, HC_ADAPTER_BUILD } = await import("./databricks");
   const watermark = await databricksHcWatermark();
 
-  return cachedByWatermark<HcDesempenhoView>(cacheKey(HC_ADAPTER_BUILD, f, visao), watermark, () =>
-    databricksHcDesempenho(f, visao),
+  return cachedByWatermark<HcDesempenhoView>(cacheKey(HC_ADAPTER_BUILD, f, view), watermark, () =>
+    databricksHcDesempenho(f, view),
   );
 }
 

@@ -5,7 +5,7 @@ import { Database } from "lucide-react";
  * port of an app that only ever read the real table, so there is no mock to fall
  * back to — saying so is better than inventing headcount.
  */
-export function HcSemFonte({ motivo }: { motivo: string }) {
+export function HcNoSource({ reason }: { reason: string }) {
   return (
     <div
       style={{
@@ -23,7 +23,7 @@ export function HcSemFonte({ motivo }: { motivo: string }) {
       <h2 className="font-display" style={{ fontSize: 15, fontWeight: 800, color: "var(--s-t1)" }}>
         Sem acesso aos dados
       </h2>
-      <p style={{ fontSize: 12.5, color: "var(--s-t3)", maxWidth: 460 }}>{motivo}</p>
+      <p style={{ fontSize: 12.5, color: "var(--s-t3)", maxWidth: 460 }}>{reason}</p>
     </div>
   );
 }

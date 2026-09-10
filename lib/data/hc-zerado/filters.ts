@@ -134,7 +134,7 @@ export function hcWhere(
   skipCross: Array<keyof HcFilters["cross"]> = [],
 ): string {
   const cl: string[] = [];
-  const multi: Array<[string, string[]]> = [
+  const multiFilter: Array<[string, string[]]> = [
     ["gerente", f.gerente],
     ["coordenacao", f.coordenacao],
     ["supervisao", f.supervisao],
@@ -145,7 +145,7 @@ export function hcWhere(
     ["nicho", f.nicho],
   ];
 
-  for (const [col, values] of multi) {
+  for (const [col, values] of multiFilter) {
     if (values.length) cl.push(inList(col, values, params));
   }
 
