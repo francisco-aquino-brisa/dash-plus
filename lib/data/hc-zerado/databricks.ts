@@ -1,7 +1,5 @@
-// Databricks adapter for the HC Zerado module. Read-only, aggregated in SQL.
-//
-// Source (verified): projeto_brisa_performance.tb_producao_hc_zero_venda —
-// one row per sale-ish event with the seller's HR attributes attached.
+// Databricks adapter for the Desempenho HC screen. Read-only, aggregated in
+// SQL over the shared source declared in `source.ts`.
 //
 // Period dates are laundered through `safeIsoDate` before being inlined as
 // DATE literals; every dimension value is bound as an ordinal `?` parameter.
@@ -9,8 +7,8 @@
 // their `?` appears in the SQL text, which is why the row filter (inside the
 // `base` CTE) is always built before the sale expression (used further down).
 
-import { getDataClient } from "../client";
 import { num } from "../_shared";
+import { ATIVO, CIDADE, FERIADO, HC_KEY, MONTHS, SOURCE, q } from "./source";
 import { hcWhere, vendasExpr, vendasWhere } from "./filters";
 import { dateRangeList, isWeekend, dayLabel, previousDay } from "./dates";
 import type {
@@ -28,74 +26,12 @@ import type {
   VendedorRow,
 } from "./types";
 
-/**
- * Part of the cache key. Constant in production (ADR 0002 unchanged); in dev it
- * is re-evaluated on every recompile, so editing an aggregation invalidates what
- * the previous version of it cached without needing a manual version bump.
- */
-export const HC_ADAPTER_BUILD = process.env.NODE_ENV === "production" ? "prod" : String(Date.now());
-
-const CAT = process.env.DATABRICKS_CITIES_CATALOG ?? "gdb_brisanet_comunidade_dev";
-const SCHEMA = process.env.DATABRICKS_HC_SCHEMA ?? "projeto_brisa_performance";
-// The materialized table, NOT `vw_producao_hc_zero_venda`. The view rebuilds a
-// long CTE chain (waves + 5G + renovação FULL OUTER JOINed against the payroll
-// snapshot) on every read — the same one-month aggregate takes ~8s through the
-// view and ~0s through the table. Same 44 columns, same totals; the table trails
-// the view by a refresh cycle.
-const SOURCE = `\`${CAT}\`.\`${SCHEMA}\`.\`${process.env.DATABRICKS_HC_TABLE ?? "tb_producao_hc_zero_venda"}\``;
-
-/**
- * Stable identity of one HC. `documento_hc` is the source's own key; the
- * matrícula fallback covers the rows where it is blank. When neither exists the
- * key is NULL and the row drops out of the DISTINCT counts instead of collapsing
- * every anonymous row into a single fake person — the original used two
- * different fallback prefixes (`CPF-` / `MAT-`) in different blocks, which meant
- * the same person could be counted twice across blocks.
- */
-const HC_KEY = `CASE
-  WHEN documento_hc IS NOT NULL AND TRIM(documento_hc) <> '' THEN TRIM(documento_hc)
-  WHEN matricula IS NOT NULL THEN CONCAT('MAT-', CAST(matricula AS STRING))
-END`;
-
-/** The original accepted three spellings of "active". */
-const ATIVO = `CASE WHEN UPPER(TRIM(situacao)) IN ('ATIVO','ATIVOS','ACTIVE') THEN 1 ELSE 0 END`;
-
-const FERIADO = `CASE WHEN UPPER(TRIM(flag_feriado)) LIKE 'SIM%' THEN 1 ELSE 0 END`;
-
-const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-
-function q<T>(sql: string, params: unknown[]): Promise<T[]> {
-  return getDataClient().query<T>(sql, params);
-}
-
 /** `base` CTE: every row in the period that survives the row-level filters. */
 function baseCte(f: HcFilters, params: unknown[], skipCross: Parameters<typeof hcWhere>[2] = []): string {
   return `base AS (
     SELECT * FROM ${SOURCE}
     WHERE data BETWEEN DATE'${f.from}' AND DATE'${f.to}'${hcWhere(f, params, skipCross)}
   )`;
-}
-
-// Asked for twice per render (the view and the filter options) for a source
-// that only advances hourly.
-const WM_TTL_MS = 60_000;
-const gWm = globalThis as unknown as { __hcWatermark?: { value: string; at: number } };
-
-export async function databricksHcWatermark(): Promise<string> {
-  const memo = gWm.__hcWatermark;
-
-  if (memo && Date.now() - memo.at < WM_TTL_MS) return memo.value;
-
-  try {
-    const r = await q<{ wm: string }>(`SELECT CAST(MAX(data) AS STRING) wm FROM ${SOURCE}`, []);
-    const value = r[0]?.wm ?? "unknown";
-
-    gWm.__hcWatermark = { value, at: Date.now() };
-
-    return value;
-  } catch {
-    return "unknown";
-  }
 }
 
 /**
@@ -141,7 +77,7 @@ async function fetchPersonDay(f: HcFilters): Promise<PersonDay[]> {
            SUM(${vendas}) v,
            COALESCE(NULLIF(TRIM(gerente), ''), 'Sem Regional') gerente,
            COALESCE(NULLIF(TRIM(coordenacao), ''), 'Sem Regional') coordenacao,
-           COALESCE(NULLIF(TRIM(cidade_vendedor), ''), 'Sem Regional') cidade,
+           ${CIDADE} cidade,
            MAX(consultor) consultor,
            MAX(canal) canal,
            MAX(situacao) situacao
@@ -149,7 +85,7 @@ async function fetchPersonDay(f: HcFilters): Promise<PersonDay[]> {
     GROUP BY data, ${HC_KEY}, CAST(matricula AS STRING),
              COALESCE(NULLIF(TRIM(gerente), ''), 'Sem Regional'),
              COALESCE(NULLIF(TRIM(coordenacao), ''), 'Sem Regional'),
-             COALESCE(NULLIF(TRIM(cidade_vendedor), ''), 'Sem Regional')`;
+             ${CIDADE}`;
 
   const rows = await q<PersonDay>(sql, params);
 
@@ -173,7 +109,7 @@ async function fetchServicoDay(f: HcFilters, view: MatrizView): Promise<ServicoD
       : view === "coordenacao"
         ? "COALESCE(NULLIF(TRIM(coordenacao), ''), 'Sem Regional')"
         : view === "cidade"
-          ? "COALESCE(NULLIF(TRIM(cidade_vendedor), ''), 'Sem Cidade')"
+          ? CIDADE
           : "COALESCE(NULLIF(TRIM(consultor), ''), 'Sem Consultor')";
   const detalhe = view === "consultor" ? "MAX(canal)" : "MAX(cidade_vendedor)";
   const params: unknown[] = [];

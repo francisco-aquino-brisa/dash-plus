@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { ChipFilter, FilterClearButton } from "@/components/ui/chip-filter";
 import { DateFilter } from "@/components/ui/date-filter";
@@ -15,7 +15,7 @@ import {
   parseIso,
   parsePeriodLabel,
 } from "@/lib/data/hc-zerado/dates";
-import { hcFiltersToQuery, statusLockIgnored } from "@/lib/data/hc-zerado/filters";
+import { hcFiltersToQuery, keepScreenParams, statusLockIgnored } from "@/lib/data/hc-zerado/filters";
 import type {
   Agilidade,
   Experiencia,
@@ -59,18 +59,19 @@ function keyOf<T extends string>(map: Record<string, T>, value: T): string {
 export function HcFilterPanel({
   filters,
   options,
-  mostrarExperiencia = false,
-  travas,
+  showExperiencia = false,
+  locked,
 }: {
   filters: HcFilters;
   options: HcFilterOptions;
   /** The experience cut only exists on Análise de Produtividade. */
-  mostrarExperiencia?: boolean;
+  showExperiencia?: boolean;
   /** Fields the global rules (Regras Globais) lock for everyone. */
-  travas?: { servico?: boolean; status?: boolean; agilidade?: boolean };
+  locked?: { servico?: boolean; status?: boolean; agilidade?: boolean };
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const current = useSearchParams();
   const [pending, startTransition] = useTransition();
 
   useReportNavPending(pending);
@@ -78,17 +79,19 @@ export function HcFilterPanel({
   const apply = (patch: Partial<HcFilters>) => {
     const next = { ...filters, ...patch };
     const range = clampRange(next.from, next.to);
+    const q = keepScreenParams(
+      new URLSearchParams(hcFiltersToQuery({ ...next, from: range.from, to: range.to })),
+      current,
+    );
 
     startTransition(() => {
-      router.push(`${pathname}?${hcFiltersToQuery({ ...next, from: range.from, to: range.to })}`, {
-        scroll: false,
-      });
+      router.push(`${pathname}?${q.toString()}`, { scroll: false });
     });
   };
 
   const defaults = defaultHcRange();
   const statusLocked =
-    statusLockIgnored(filters.cross.servico ? [filters.cross.servico] : filters.servico) || travas?.status;
+    statusLockIgnored(filters.cross.servico ? [filters.cross.servico] : filters.servico) || locked?.status;
   const multiFilters: Array<{
     label: string;
     values: string[];
@@ -224,7 +227,7 @@ export function HcFilterPanel({
           onChange={(v) => apply({ perfilCidade: PERFIS[v] })}
           align="end"
         />
-        {mostrarExperiencia && (
+        {showExperiencia && (
           <ChipFilter
             label="Experiência"
             value={keyOf(EXPERIENCIAS, filters.experiencia)}
@@ -236,7 +239,11 @@ export function HcFilterPanel({
         )}
         <FilterClearButton
           count={dirtyCount}
-          onClear={() => startTransition(() => router.push(pathname, { scroll: false }))}
+          onClear={() => {
+            const kept = keepScreenParams(new URLSearchParams(), current).toString();
+
+            startTransition(() => router.push(kept ? `${pathname}?${kept}` : pathname, { scroll: false }));
+          }}
         />
       </div>
     </div>
@@ -250,17 +257,18 @@ export function HcFilterPanel({
  */
 export function HcActiveContext({
   filters,
-  rotulos,
+  labels,
 }: {
   filters: HcFilters;
   /** Friendly text for a cross-filter whose value is an id (e.g. a matrícula). */
-  rotulos?: Partial<Record<keyof HcFilters["cross"], string>>;
+  labels?: Partial<Record<keyof HcFilters["cross"], string>>;
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const current = useSearchParams();
   const chips = (
     [
-      ["cf_vendedor", "Vendedor", rotulos?.vendedor ?? filters.cross.vendedor],
+      ["cf_vendedor", "Vendedor", labels?.vendedor ?? filters.cross.vendedor],
       ["cf_gerencia", "Gerência", filters.cross.gerencia],
       ["cf_coordenacao", "Coordenação", filters.cross.coordenacao],
       ["cf_canal", "Canal", filters.cross.canal],
@@ -271,10 +279,10 @@ export function HcActiveContext({
 
   if (chips.length === 0) return null;
 
-  const withoutKey = (chaves: string[]) => {
-    const q = new URLSearchParams(hcFiltersToQuery(filters));
+  const withoutKey = (keys: string[]) => {
+    const q = keepScreenParams(new URLSearchParams(hcFiltersToQuery(filters)), current);
 
-    for (const key of chaves) q.delete(key);
+    for (const key of keys) q.delete(key);
 
     router.push(`${pathname}?${q.toString()}`, { scroll: false });
   };

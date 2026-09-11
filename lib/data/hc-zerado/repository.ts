@@ -7,7 +7,15 @@
 import { cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";
 import { hcFiltersToQuery } from "./filters";
-import type { HcDesempenhoView, HcFilters, HcFilterOptions, HcFilterTuple } from "./types";
+import type {
+  HcDesempenhoView,
+  HcFilters,
+  HcFilterOptions,
+  HcFilterTuple,
+  HcProdutividadeView,
+  HcZeradosView,
+  ProdutividadeGrouping,
+} from "./types";
 import type { MatrizView } from "./databricks";
 
 // Bump on any change to the shape OR the maths of a cached value: the
@@ -28,7 +36,8 @@ function cacheKey(build: string, f: HcFilters, view: MatrizView): string {
 export async function getHcDesempenho(f: HcFilters, view: MatrizView): Promise<HcDesempenhoView> {
   if (!isDatabricks()) throw new HcMockUnsupportedError();
 
-  const { databricksHcWatermark, databricksHcDesempenho, HC_ADAPTER_BUILD } = await import("./databricks");
+  const { databricksHcWatermark, HC_ADAPTER_BUILD } = await import("./source");
+  const { databricksHcDesempenho } = await import("./databricks");
   const watermark = await databricksHcWatermark();
 
   return cachedByWatermark<HcDesempenhoView>(cacheKey(HC_ADAPTER_BUILD, f, view), watermark, () =>
@@ -99,7 +108,8 @@ function cascade(tuples: HcFilterTuple[], f: HcFilters): HcFilterOptions {
 export async function getHcFilterOptions(f: HcFilters): Promise<HcFilterOptions> {
   if (!isDatabricks()) return EMPTY_OPTIONS;
 
-  const { databricksHcWatermark, databricksHcFilterTuples, HC_ADAPTER_BUILD } = await import("./databricks");
+  const { databricksHcWatermark, HC_ADAPTER_BUILD } = await import("./source");
+  const { databricksHcFilterTuples } = await import("./databricks");
 
   try {
     const watermark = await databricksHcWatermark();
@@ -115,4 +125,39 @@ export async function getHcFilterOptions(f: HcFilters): Promise<HcFilterOptions>
     // A failed option list degrades the dropdowns, never the screen.
     return EMPTY_OPTIONS;
   }
+}
+
+/**
+ * Tela 2. The two tabs are cached apart so switching the grouping of one leaves
+ * the other's aggregation untouched.
+ */
+export async function getHcProdutividade(
+  f: HcFilters,
+  grouping: ProdutividadeGrouping,
+): Promise<HcProdutividadeView> {
+  if (!isDatabricks()) throw new HcMockUnsupportedError();
+
+  const { databricksHcWatermark, HC_ADAPTER_BUILD } = await import("./source");
+  const { databricksHcProdutividade } = await import("./produtividade");
+  const watermark = await databricksHcWatermark();
+
+  return cachedByWatermark<HcProdutividadeView>(
+    `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:produtividade:${grouping}:${hcFiltersToQuery(f)}`,
+    watermark,
+    () => databricksHcProdutividade(f, grouping),
+  );
+}
+
+export async function getHcZerados(f: HcFilters, grouping: ProdutividadeGrouping): Promise<HcZeradosView> {
+  if (!isDatabricks()) throw new HcMockUnsupportedError();
+
+  const { databricksHcWatermark, HC_ADAPTER_BUILD } = await import("./source");
+  const { databricksHcZerados } = await import("./produtividade");
+  const watermark = await databricksHcWatermark();
+
+  return cachedByWatermark<HcZeradosView>(
+    `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:zerados:${grouping}:${hcFiltersToQuery(f)}`,
+    watermark,
+    () => databricksHcZerados(f, grouping),
+  );
 }

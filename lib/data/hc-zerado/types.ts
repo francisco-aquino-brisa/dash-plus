@@ -216,3 +216,70 @@ export interface HcDesempenhoView {
   diasUteisElapsed: number;
   refDate: string;
 }
+
+/* --------------------------------------------- Tela 2 — Análise de Produtividade */
+
+/** Both tabs group by the same four dimensions, each with its own selector. */
+export type ProdutividadeGrouping = "vendedor" | "gerencia" | "coordenacao" | "cidade";
+
+/** One column of the 12-month analysis window. */
+export interface MonthAxis {
+  /** `yyyy-MM`. */
+  month: string;
+  /** `SET-2026`. */
+  label: string;
+}
+
+/** Aba 1 — one subject, with its production per service and month. */
+export interface ProdutividadeRow {
+  id: string;
+  nome: string;
+  /** Canal for a seller; `N consultores` for a group. */
+  detalhe: string;
+  /** `Em Exp.` / `Efetivo`, empty for groups. */
+  experiencia: string;
+  /** Days left in the probation period, when the source carries them. */
+  diasExperiencia: number | null;
+  total: number;
+  /** Serviço → production per month, aligned with `months`. Sparse. */
+  values: Record<string, number[]>;
+  /** Serviço → production across the window. Sparse. */
+  totals: Record<string, number>;
+  /**
+   * `serviço|monthIndex` → the cell's top indicators as `[nome, valor]`. Sparse,
+   * and a tuple rather than an object: named keys tripled this screen's payload,
+   * which carries a breakdown for every seller in twelve months.
+   */
+  breakdown: Record<string, Array<[string, number]>>;
+}
+
+/**
+ * Aba 2 — one subject's idleness per month.
+ *
+ * `values` means different things per grouping, exactly as in the origin: for a
+ * seller it is the count of business days they sold nothing; for a group it is
+ * the average headcount idle on a business day.
+ */
+export interface ZeradosRow {
+  id: string;
+  nome: string;
+  detalhe: string;
+  experiencia: string;
+  diasExperiencia: number | null;
+  /** Aligned with `months`. */
+  values: number[];
+  /** Share of the month's business days (seller) or of the team (group). */
+  pcts: number[];
+  consolidado: number;
+  consolidadoPct: number;
+}
+
+export interface HcProdutividadeView {
+  months: MonthAxis[];
+  rows: ProdutividadeRow[];
+}
+
+export interface HcZeradosView {
+  months: MonthAxis[];
+  rows: ZeradosRow[];
+}

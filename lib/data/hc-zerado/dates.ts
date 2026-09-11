@@ -144,3 +144,25 @@ export function parsePeriodLabel(value: string): { from: string; to: string } | 
 
   return null;
 }
+
+/** Months the analysis screen spans: the 12 ending on `to`'s own month. */
+export function monthWindow(to: string, count = 12): Array<{ month: string; label: string }> {
+  const end = parseIso(to);
+  const out: Array<{ month: string; label: string }> = [];
+
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - i, 1));
+    const month = toIso(d).slice(0, 7);
+
+    out.push({ month, label: `${MONTHS_SHORT[d.getUTCMonth()].toUpperCase()}-${d.getUTCFullYear()}` });
+  }
+
+  return out;
+}
+
+/** First day of the window `monthWindow` describes — the SQL lower bound. */
+export function monthWindowStart(to: string, count = 12): string {
+  const end = parseIso(to);
+
+  return toIso(new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - (count - 1), 1)));
+}

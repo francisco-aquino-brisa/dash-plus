@@ -107,6 +107,49 @@ export function hcFiltersToQuery(f: HcFilters): string {
 }
 
 /**
+ * The querystring keys `hcFiltersToQuery` owns. Everything else in the URL
+ * belongs to the screen — which matrix, which tab — and has to survive a filter
+ * change, so the filter panel re-appends it. Keep in sync with the `put` calls
+ * above; `hcFiltersToQuery` is the only writer of these keys.
+ */
+export const HC_FILTER_PARAMS: ReadonlySet<string> = new Set([
+  "de",
+  "ate",
+  "gerente",
+  "coordenacao",
+  "supervisao",
+  "lider",
+  "cidade",
+  "consultor",
+  "canal",
+  "nicho",
+  "servico",
+  "indicador",
+  "exp",
+  "status",
+  "agilidade",
+  "perfil",
+  "cf_vendedor",
+  "cf_gerencia",
+  "cf_coordenacao",
+  "cf_canal",
+  "cf_cidade",
+  "cf_servico",
+]);
+
+/**
+ * Carry the screen's own querystring into a URL rebuilt from the filters.
+ * Without it, touching a filter or clicking a card resets which matrix and
+ * which tab the user was looking at, because the filter set does not know
+ * those params exist.
+ */
+export function keepScreenParams(q: URLSearchParams, current: URLSearchParams): URLSearchParams {
+  for (const [key, value] of current) if (!HC_FILTER_PARAMS.has(key)) q.set(key, value);
+
+  return q;
+}
+
+/**
  * `isStatusLockIgnored` in the original: when every selected service is one the
  * sale-status column does not describe (5G / Renovação), the status filter is
  * bypassed instead of zeroing every 5G sale.

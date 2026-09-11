@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Area,
   AreaChart,
@@ -22,8 +22,22 @@ import { Segmented } from "@/components/ui/segmented";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HcActiveContext, HcFilterPanel } from "./HcFilterPanel";
+import {
+  Block,
+  card,
+  SERVICO_LABEL,
+  SERVICO_ROWS,
+  matrizTd,
+  matrizTh,
+  nf,
+  ptBr,
+  stickyCol,
+  tooltipLine,
+  tooltipPanel,
+  tooltipTitle,
+} from "./ui";
 import { useReportNavPending } from "@/lib/ui/nav-pending";
-import { hcFiltersToQuery } from "@/lib/data/hc-zerado/filters";
+import { hcFiltersToQuery, keepScreenParams } from "@/lib/data/hc-zerado/filters";
 import type {
   HcCrossFilters,
   HcDesempenhoView,
@@ -33,66 +47,6 @@ import type {
   RegionalRow,
   VendedorRow,
 } from "@/lib/data/hc-zerado/types";
-
-const card: React.CSSProperties = {
-  border: "1px solid var(--s-border)",
-  borderRadius: 14,
-  background: "var(--s-card)",
-  boxShadow: "var(--s-sh)",
-};
-
-const blockTitle: React.CSSProperties = {
-  fontSize: 13.5,
-  fontWeight: 800,
-  color: "var(--s-t1)",
-  letterSpacing: "-.01em",
-};
-
-const nf = new Intl.NumberFormat("pt-BR");
-
-function ptBr(iso: string): string {
-  return iso.split("-").reverse().join("/");
-}
-
-/** Section wrapper: a dot, a title, an optional note and the block's controls. */
-function Block({
-  title,
-  note,
-  actions,
-  children,
-}: {
-  title: string;
-  note?: React.ReactNode;
-  actions?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section style={card}>
-      <header
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: 10,
-          padding: "12px 14px",
-          borderBottom: "1px solid var(--s-border)",
-        }}
-      >
-        <span
-          style={{ flex: "none", width: 7, height: 7, borderRadius: 999, background: "var(--s-brand)" }}
-        />
-        <h2 className="font-display" style={blockTitle}>
-          {title}
-        </h2>
-        {note && <span style={{ fontSize: 11, color: "var(--s-t3)" }}>{note}</span>}
-        <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          {actions}
-        </div>
-      </header>
-      <div style={{ padding: 14 }}>{children}</div>
-    </section>
-  );
-}
 
 export function DesempenhoScreen({
   view,
@@ -105,30 +59,32 @@ export function DesempenhoScreen({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const current = useSearchParams();
   const [pending, startTransition] = useTransition();
   // The click has to look answered before the data comes back: the chip/row
   // paints selected from this optimistic copy while the server recomputes, and
   // the screen dims until it lands. Without it a click reads as a dead control.
-  const [otimista, setOtimista] = useState<HcCrossFilters | null>(null);
-  const cross = otimista ?? filters.cross;
+  const [optimistic, setOptimistic] = useState<HcCrossFilters | null>(null);
+  const cross = optimistic ?? filters.cross;
   const appliedCross = Object.values(filters.cross).join("|");
 
   useReportNavPending(pending);
 
   useEffect(() => {
-    setOtimista(null);
+    setOptimistic(null);
   }, [appliedCross]);
 
   /** Click-to-filter: toggling writes the cross-filter into the URL. */
   const applyCross = (key: keyof HcCrossFilters, value: string) => {
-    const q = new URLSearchParams(hcFiltersToQuery(filters));
+    // The matrix grouping is the screen's, not the filters' — keep it.
+    const q = keepScreenParams(new URLSearchParams(hcFiltersToQuery(filters)), current);
     const param = `cf_${key}`;
     const clearing = q.get(param) === value;
 
     if (clearing) q.delete(param);
     else q.set(param, value);
 
-    setOtimista({ ...filters.cross, [key]: clearing ? "" : value });
+    setOptimistic({ ...filters.cross, [key]: clearing ? "" : value });
     startTransition(() => router.push(`${pathname}?${q.toString()}`, { scroll: false }));
   };
 
@@ -219,13 +175,13 @@ export function DesempenhoScreen({
       </header>
 
       <HcFilterPanel filters={filters} options={options} />
-      <HcActiveContext filters={filters} rotulos={{ vendedor: vendedorName }} />
+      <HcActiveContext filters={filters} labels={{ vendedor: vendedorName }} />
       <QuadroGeralBlock view={view} />
       <TotalizadoresBlock
         view={view}
         filters={filters}
         cross={cross}
-        onCruzar={(s) => applyCross("servico", s)}
+        onCross={(s) => applyCross("servico", s)}
       />
       <ZeradoDayBlock view={view} />
       <RegionalBlock view={view} filters={filters} cross={cross} onCross={applyCross} />
@@ -330,12 +286,12 @@ function TotalizadoresBlock({
   view,
   filters,
   cross,
-  onCruzar,
+  onCross,
 }: {
   view: HcDesempenhoView;
   filters: HcFilters;
   cross: HcCrossFilters;
-  onCruzar: (servico: string) => void;
+  onCross: (servico: string) => void;
 }) {
   const t = view.totalizadores;
   const cards = [
@@ -384,7 +340,7 @@ function TotalizadoresBlock({
               key={c.servico}
               type="button"
               disabled={value === null}
-              onClick={() => onCruzar(c.servico)}
+              onClick={() => onCross(c.servico)}
               style={{
                 ...card,
                 boxShadow: "none",
@@ -578,32 +534,6 @@ function ZeradoDayBlock({ view }: { view: HcDesempenhoView }) {
  * with `--s-page` text. (`--s-ink-a` is a 6% veil, not an ink — using it as a
  * background left the card see-through.)
  */
-const tooltipPanel: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 2,
-  padding: "7px 10px",
-  borderRadius: 10,
-  background: "var(--s-t1)",
-  boxShadow: "var(--s-sh-2)",
-};
-
-const tooltipTitle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  color: "var(--s-page)",
-  opacity: 0.75,
-};
-
-const tooltipLine: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 700,
-  color: "var(--s-page)",
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 14,
-};
-
 function TooltipZerado({
   active,
   payload,
@@ -626,7 +556,7 @@ function TooltipZerado({
         <span className="font-mono">{nf.format(d.ativos)}</span>
       </span>
       <span style={tooltipLine}>
-        <span style={{ opacity: 0.7 }}>Zerados no day</span>
+        <span style={{ opacity: 0.7 }}>Zerados no dia</span>
         <span className="font-mono">{nf.format(d.zerados)}</span>
       </span>
       <span
@@ -1062,17 +992,6 @@ const MATRIZ_OPTS = [
   { value: "cidade" as const, label: "Cidade" },
 ];
 
-// Every subject gets these four rows, empty ones included, so the grid keeps a
-// constant height per person.
-const SERVICO_ROWS = ["INTERNET", "FWA", "5G", "RENOVACAO"];
-const SERVICO_LABEL: Record<string, string> = {
-  INTERNET: "FTTH",
-  FWA: "FWA",
-  "5G": "5G",
-  RENOVACAO: "Renovação",
-  RENOVAÇÃO: "Renovação",
-};
-
 const COL_NAME = 190;
 const COL_CANAL = 96;
 const COL_SERVICO = 104;
@@ -1080,6 +999,7 @@ const COL_SERVICO = 104;
 function MatrizBlock({ view, filters }: { view: HcDesempenhoView; filters: HcFilters }) {
   const router = useRouter();
   const pathname = usePathname();
+  const current = useSearchParams();
   const [, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const grouping = (Object.keys(view.matriz).find(
@@ -1100,7 +1020,7 @@ function MatrizBlock({ view, filters }: { view: HcDesempenhoView; filters: HcFil
   }, [filtered]);
 
   const changeView = (v: string) => {
-    const q = new URLSearchParams(hcFiltersToQuery(filters));
+    const q = keepScreenParams(new URLSearchParams(hcFiltersToQuery(filters)), current);
 
     q.set("matriz", v);
     startTransition(() => router.push(`${pathname}?${q.toString()}`, { scroll: false }));
@@ -1396,7 +1316,7 @@ function MatrizBlock({ view, filters }: { view: HcDesempenhoView; filters: HcFil
             }}
           >
             <span style={{ ...tooltipTitle, display: "flex", justifyContent: "space-between", gap: 10 }}>
-              <span>Detalhamento do day</span>
+              <span>Detalhamento do dia</span>
               <span className="font-mono">{hovered.day}</span>
             </span>
             <span style={{ ...tooltipLine, color: "var(--s-brand-2)" }}>
@@ -1432,40 +1352,6 @@ function MatrizBlock({ view, filters }: { view: HcDesempenhoView; filters: HcFil
     </Block>
   );
 }
-
-/** Sticky left column: same offset on the header and the body cell. */
-function stickyCol(left: number, width: number): React.CSSProperties {
-  return {
-    position: "sticky",
-    left,
-    zIndex: 1,
-    width,
-    minWidth: width,
-    maxWidth: width,
-  };
-}
-
-const matrizTh: React.CSSProperties = {
-  position: "sticky",
-  top: 0,
-  zIndex: 2,
-  background: "var(--s-card)",
-  borderBottom: "1px solid var(--s-border)",
-  padding: "7px 6px",
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: ".06em",
-  textTransform: "uppercase",
-  color: "var(--s-t3)",
-  textAlign: "center",
-  whiteSpace: "nowrap",
-};
-
-const matrizTd: React.CSSProperties = {
-  padding: "5px 6px",
-  borderBottom: "1px solid var(--s-border)",
-  whiteSpace: "nowrap",
-};
 
 /* ---------------------------------------------------------------- Bloco 7 */
 
@@ -1620,7 +1506,7 @@ function TooltipPduDay({
         <span className="font-mono">{d.pdu.toLocaleString("pt-BR")}</span>
       </span>
       <span style={tooltipLine}>
-        <span style={{ opacity: 0.7 }}>Produção do day</span>
+        <span style={{ opacity: 0.7 }}>Produção do dia</span>
         <span className="font-mono">{nf.format(d.producao)}</span>
       </span>
     </div>
@@ -1676,7 +1562,7 @@ function TooltipPduMonth({
         <span className="font-mono">
           {/* `situacao` is only filled from March 2026 on — before that the
               count is absent, not zero. */}
-          {m.hcAtivo > 0 ? nf.format(m.hcAtivo) : "—"} · {m.diasUteis} days úteis
+          {m.hcAtivo > 0 ? nf.format(m.hcAtivo) : "—"} · {m.diasUteis} dias úteis
         </span>
       </span>
     </div>

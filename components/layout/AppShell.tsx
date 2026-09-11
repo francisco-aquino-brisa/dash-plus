@@ -83,7 +83,7 @@ const HC_ZERADO_NAV: NavItem[] = [
   {
     title: "Análise de Produtividade",
     short: "Produtiv.",
-    subtitle: "RH, Exp. e Férias",
+    subtitle: "Mensal e Zerados",
     href: "/hc-zerado/produtividade",
     icon: Database,
   },

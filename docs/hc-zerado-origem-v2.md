@@ -435,3 +435,143 @@ despejo, então várias combinações somariam; e boa parte dos 14 MB é string
 repetida — separar uma dimensão de pessoas (~2,5 mil) da série pessoa×dia (62
 mil) derrubaria isso bastante. Mexe na decisão registrada na ADR 0006, por isso
 está aqui em vez de aplicado.
+
+## Tela 2 — Análise de Produtividade (portada)
+
+Duas abas sobre a **janela de 12 meses que termina no mês do `até` filtrado** —
+o período do filtro só move o fim da janela, não recorta as colunas. A origem
+baixava os 12 meses (`/api/dados-historico?detalhado=true` e `?matriz_zerados=true`)
+e pivotava no browser; aqui cada aba é uma agregação em SQL, cacheada por
+(filtros × hierarquia). Cada aba tem sua própria hierarquia na URL (`ap` e `az`),
+então trocar a de uma não recalcula a outra.
+
+### Divergência deliberada: os filtros de venda zeram, não descartam
+
+O backend da origem aplica serviço/indicador/status/agilidade como
+`AND col IN (...)` nas duas abas. Como **5G só existe com `status_venda = '5G ATIVO'`
+e Renovação só com `'RENOVACAO EFETIVADA'`**, e o status padrão da tela é
+`CRIADO`, na origem:
+
+- a matriz de Produtividade mostra **FTTH e FWA apenas** — as linhas de 5G e
+  Renovação ficam permanentemente vazias, apesar de 5G ser o maior serviço da
+  base (668.404 unidades em 12 meses);
+- na Média de Zerados, quem vendeu **só 5G** no dia conta como **zerado**.
+
+Aqui as duas abas usam a regra do módulo (`vendasExpr`: zera a venda, mantém a
+linha, com o escape de 5G/Renovação já documentado na Tela 1). Consequência:
+FTTH e FWA batem com a origem; 5G aparece; e um dia com venda de 5G não conta
+como zerado — igual à Tela 1 desta aplicação. Consistência interna venceu
+paridade com uma inconsistência da origem.
+
+Conferido em 01–09/09/2026, com as três hierarquias somando o mesmo total:
+
+| Serviço | Tela 2 (SET-2026) | Regra da Tela 1 | Origem (status CRIADO) |
+| ------- | ----------------- | --------------- | ---------------------- |
+| FTTH    | 14.836            | 14.836          | 14.836                 |
+| FWA     | 1.354             | 1.354           | 1.354                  |
+| 5G      | 24.288            | 24.288          | 0                      |
+
+### Produção sem dono: são integrações, não pessoas
+
+`documento_hc` e `matrícula` são ambos nulos em ~23% da produção FTTH. Essas
+linhas **não são vendedores**: são canais de integração
+(`INTEGRACAO - SITE -> NOVOREVAN`, `INTEGRACAO - MUNDIALE2 -> NOVOREVAN`), com
+`situacao` nula. Chaveá-las só por `HC_KEY` faria a aba por vendedor somar
+36.691 enquanto a por gerência somava 40.478 — 3.787 vendas somem sem aviso.
+
+A chave da aba por vendedor é `COALESCE(HC_KEY, 'SEM-HC:' || consultor)`, então
+a integração aparece como uma linha nomeada e os totais das quatro hierarquias
+fecham. A aba Média de Zerados não as inclui: filtra `situacao = ATIVO`, e elas
+não têm situação.
+
+### Calendário de dias úteis por UF — e o defeito de `uf_cidade_vendedor`
+
+Dia útil = todo dia presente na fonte com `flag_feriado = 'NAO'`. Isso **inclui
+sábado** e exclui domingo (que vem marcado). Contado por UF e global, **antes**
+dos filtros: filtrar por um gerente não pode encurtar o mês. Vendedor e cidade
+leem o calendário do estado; gerência e coordenação, o global — eles atravessam
+estados.
+
+`uf_cidade_vendedor` é derivada dos **dois últimos caracteres de
+`cidade_vendedor`**. Funciona quando a cidade vem como `FORTALEZA/CE`; quando
+vem sem a UF, produz lixo: `GROSSOS → OS`, `MADALENA → NA`, `FORQUILHA → HA`.
+São 46 "UFs" distintas em agosto/2026, mais 1.061 pessoas com UF vazia.
+
+Impacto medido em agosto/2026: **28 de 4.324 pessoas** (0,6%) caem num
+calendário curto (mínimo 2 dias) — os buckets de lixo juntam gente suficiente
+para quase sempre render o mês inteiro. Portado como está, com uma proteção que
+a origem não tem: sem linha de calendário para a UF, cai no calendário global
+(a origem caía num `|| 22` fixo). **A correção pertence à fonte**, não a nós.
+
+### `cidade_vendedor` sem o nome da cidade vira "Sem Cidade"
+
+Além da UF derivada errada, parte das linhas perdeu a metade da cidade e guarda
+só `/CE`, `//GO`, `/RN`, `/PI` ou `/`. Cada uma abria a própria linha na visão
+por cidade. A normalização (`CIDADE`, em `source.ts`) trata como desconhecida
+qualquer cidade em branco ou começada por barra, e **vale para as duas telas** —
+a Tela 1 tinha o mesmo defeito. Na janela de 12 meses são 7 buckets a menos
+(669 → 662 cidades) e menos de dez pessoas envolvidas; os totais não mudam.
+
+### Janeiro e fevereiro vazios na Média de Zerados
+
+A aba filtra `situacao = ATIVO` e `situacao` é nula para todo mundo até
+março/2026 (mesmo achado que zerava a PDU Mês). As colunas OUT-2025 a FEV-2026
+saem vazias para todos — na origem também.
+
+### Colunas: o que a origem mostra em cada hierarquia
+
+Canal e "Dias Restantes Exp." descrevem uma pessoa, então a origem só as mostra
+na visão por vendedor — as visões por hierarquia têm apenas a coluna do grupo.
+Portado assim. O tamanho da equipe, que a origem calcula e nunca chega a
+renderizar, aparece aqui como subtítulo do nome do grupo: sem ele não dá para
+ler o percentual, que é justamente HC ocioso ÷ tamanho da equipe.
+
+`dias_restantes_experiencia` vale 0 para todo mundo já efetivo (e é nulo em
+34.579 linhas), então a coluna só mostra o número de quem está `Em Exp.` — 403
+pessoas na janela, de 1 a 180 dias. A origem imprimia um badge fixo de "45 dias"
+quando o status era `EXPERIENCIA`, valor que não existe na fonte.
+
+### Ordenação
+
+A origem lista os vendedores na ordem em que aparecem no resultado ordenado por
+`mes_referencia` — não reproduzível e sem significado. Aqui as quatro
+hierarquias ordenam **alfabeticamente**, o que combina com a busca local.
+
+### Código morto na origem
+
+`hoveredVendedorId` / "Sinalizador de Férias" está declarado em
+`TelaAnalise.tsx` e nunca é usado — não existe overlay de férias na tela. O
+tooltip da matriz também está quebrado na visão por vendedor: filtra
+`it.matricula === Number(vendedorId)` sendo que `vendedorId` é o `documento_hc`,
+então nunca casa. Aqui a quebra por indicador funciona nas quatro hierarquias.
+
+### Estado de tela na URL: `keepScreenParams`
+
+Trocar a hierarquia jogava o usuário de volta na aba Produtividade. A aba era
+`useState`, e um `router.push` remonta a rota sob o `loading.tsx`, levando o
+estado junto. A aba passou a viajar na URL (`aba`), semeada no `useState`, então
+a troca de aba continua instantânea e sobrevive à navegação.
+
+Ao corrigir apareceu um irmão **que já existia na Tela 1**: todo `router.push`
+do módulo remontava a query só com `hcFiltersToQuery(filters)`, que não conhece
+os parâmetros da tela. Consequência: mexer em qualquer filtro, limpar filtros ou
+clicar num card/linha devolvia a matriz da Tela 1 para `consultor` — e, na Tela
+2, zerava as duas hierarquias e a aba.
+
+`keepScreenParams(q, current)` (em `filters.ts`) recopia da URL atual tudo que
+não está em `HC_FILTER_PARAMS`. Assim qualquer parâmetro de tela sobrevive sem
+que cada chamada precise listá-lo. Aplicado nos seis pontos que remontam URL no
+módulo.
+
+### Custo medido
+
+| Momento                              | Tempo   |
+| ------------------------------------ | ------- |
+| Carga fria (3 consultas em paralelo) | 3.213ms |
+| Repetição (cache por watermark)      | 10ms    |
+| Trocar a hierarquia de **uma** aba   | 373ms   |
+
+Payload da visão por vendedor: **3,76 MB** (7.986 linhas na Produtividade,
+2.018 na Média de Zerados). A quebra por indicador é ~1,4 MB disso — por isso
+ela é `[nome, valor]` em vez de `{ indicador, value }`, e no máximo 3 por
+célula. As visões por hierarquia ficam entre 0,01 e 0,37 MB.
