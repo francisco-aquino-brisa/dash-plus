@@ -2,6 +2,8 @@
 // the frozen-column matrix styles and the hover card. Kept apart so Tela 1 and
 // Tela 2 stay visually identical without either importing the other.
 
+import { Search } from "lucide-react";
+
 export const card: React.CSSProperties = {
   border: "1px solid var(--s-border)",
   borderRadius: 14,
@@ -139,3 +141,50 @@ export const SERVICO_LABEL: Record<string, string> = {
   RENOVACAO: "Renovação",
   RENOVAÇÃO: "Renovação",
 };
+
+/** The module's search box: a pill with a magnifier, filtering the list beside it. */
+export function SearchInput({
+  value,
+  onChange,
+  placeholder,
+  label = "Buscar",
+  width = 150,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  label?: string;
+  width?: number;
+}) {
+  return (
+    <label
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 7,
+        height: 34,
+        padding: "0 12px",
+        border: "1px solid var(--s-border)",
+        borderRadius: 999,
+        background: "var(--s-sunken)",
+      }}
+    >
+      <Search size={13} strokeWidth={2.2} style={{ color: "var(--s-t3)", flex: "none" }} />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={label}
+        style={{
+          border: 0,
+          background: "none",
+          outline: "none",
+          font: "inherit",
+          fontSize: 12.5,
+          color: "var(--s-t1)",
+          width,
+        }}
+      />
+    </label>
+  );
+}

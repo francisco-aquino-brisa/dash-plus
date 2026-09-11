@@ -2,13 +2,14 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { RefreshCw, Search, Sparkles, User } from "lucide-react";
+import { RefreshCw, Sparkles, User } from "lucide-react";
 import { Segmented } from "@/components/ui/segmented";
 import { HcActiveContext, HcFilterPanel } from "./HcFilterPanel";
 import {
   Block,
   SERVICO_LABEL,
   SERVICO_ROWS,
+  SearchInput,
   matrizTd,
   matrizTh,
   nf,
@@ -212,35 +213,7 @@ function Controls({
 }) {
   return (
     <>
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 7,
-          height: 34,
-          padding: "0 12px",
-          border: "1px solid var(--s-border)",
-          borderRadius: 999,
-          background: "var(--s-sunken)",
-        }}
-      >
-        <Search size={13} strokeWidth={2.2} style={{ color: "var(--s-t3)", flex: "none" }} />
-        <input
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          placeholder={placeholder}
-          aria-label="Localizar nesta análise"
-          style={{
-            border: 0,
-            background: "none",
-            outline: "none",
-            font: "inherit",
-            fontSize: 12.5,
-            color: "var(--s-t1)",
-            width: 150,
-          }}
-        />
-      </label>
+      <SearchInput value={search} onChange={onSearch} placeholder={placeholder} />
       <Segmented
         options={GROUPINGS}
         value={grouping}

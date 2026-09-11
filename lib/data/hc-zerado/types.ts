@@ -283,3 +283,36 @@ export interface HcZeradosView {
   months: MonthAxis[];
   rows: ZeradosRow[];
 }
+
+/* ------------------------------------------------ Tela 3 — Matriz Gerencial */
+
+/** Gerência and coordenação render cards; cidade renders the regional table. */
+export type OciosidadeGrouping = "gerencia" | "coordenacao" | "cidade";
+
+/** One name on a card's idle list. */
+export interface ZeradoPessoa {
+  matricula: string;
+  consultor: string;
+  /** Coordenação under a gerência, cidade under a coordenação. */
+  detalhe: string;
+}
+
+/** One card: a group's headcount on the reference day, and who went idle. */
+export interface OciosidadeGroup {
+  nome: string;
+  totalAtivo: number;
+  totalVenderam: number;
+  totalZerado: number;
+  pctZerado: number;
+  zerados: ZeradoPessoa[];
+}
+
+export interface HcMatrizView {
+  /** The single day every number here refers to. */
+  d0: string;
+  days: DayAxis[];
+  /** Filled for gerência and coordenação. */
+  grupos: OciosidadeGroup[];
+  /** Filled for cidade — the same rows Bloco 4 shows. */
+  cidades: RegionalRow[];
+}

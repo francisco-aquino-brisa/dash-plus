@@ -12,8 +12,10 @@ import type {
   HcFilters,
   HcFilterOptions,
   HcFilterTuple,
+  HcMatrizView,
   HcProdutividadeView,
   HcZeradosView,
+  OciosidadeGrouping,
   ProdutividadeGrouping,
 } from "./types";
 import type { MatrizView } from "./databricks";
@@ -159,5 +161,20 @@ export async function getHcZerados(f: HcFilters, grouping: ProdutividadeGrouping
     `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:zerados:${grouping}:${hcFiltersToQuery(f)}`,
     watermark,
     () => databricksHcZerados(f, grouping),
+  );
+}
+
+/** Tela 3. One person × day scan; the grouping decides what is derived from it. */
+export async function getHcMatriz(f: HcFilters, grouping: OciosidadeGrouping): Promise<HcMatrizView> {
+  if (!isDatabricks()) throw new HcMockUnsupportedError();
+
+  const { databricksHcWatermark, HC_ADAPTER_BUILD } = await import("./source");
+  const { databricksHcMatriz } = await import("./matriz");
+  const watermark = await databricksHcWatermark();
+
+  return cachedByWatermark<HcMatrizView>(
+    `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:matriz:${grouping}:${hcFiltersToQuery(f)}`,
+    watermark,
+    () => databricksHcMatriz(f, grouping),
   );
 }

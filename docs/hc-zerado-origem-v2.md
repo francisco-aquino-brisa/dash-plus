@@ -575,3 +575,57 @@ Payload da visão por vendedor: **3,76 MB** (7.986 linhas na Produtividade,
 2.018 na Média de Zerados). A quebra por indicador é ~1,4 MB disso — por isso
 ela é `[nome, valor]` em vez de `{ indicador, value }`, e no máximo 3 por
 célula. As visões por hierarquia ficam entre 0,01 e 0,37 MB.
+
+## Tela 3 — Matriz Gerencial (portada)
+
+Diferente das outras, esta tela responde sobre **um único dia**: o fim do
+período filtrado. O período ainda importa — desenha a sparkline da visão Cidade
+e decide quais linhas o scan lê —, mas HC ativo, quem vendeu e quem zerou são
+todos de D0.
+
+Três hierarquias no seletor (`mg` na URL):
+
+- **Gerência** e **Coordenação** → um card por grupo, em trilho horizontal,
+  ordenado do mais ocioso para o menos. Cada card traz o percentual gigante, HC
+  ativo / venderam / zeraram, e a lista nominal de quem zerou com matrícula e
+  coordenação (ou cidade, na visão por coordenação).
+- **Cidade** → a tabela do Bloco 4. A origem diz isso com todas as letras:
+  "Desempenho Regional por Cidade (Assim como Bloco 4)".
+
+Só a tabela de Cidade é clicável, como na origem — os cards não cruzam filtro.
+
+### Um grupo só existe se alguém estava ativo em D0
+
+Os cards iteram apenas os registros de D0, então um grupo sem ninguém ativo
+naquele dia não aparece. Por isso a visão Gerência mostra 13 cards enquanto o
+Bloco 4 da Tela 1 lista 15 linhas para o mesmo período: o Bloco 4 agrupa o
+período inteiro e mostra o grupo com zero. Comportamento da origem, mantido.
+
+Conferido em 09/09/2026: Gerência e Coordenação somam o mesmo HC ativo (876) e
+os mesmos 220 zerados, como têm de somar.
+
+### D0 no meio da carga
+
+A referência é literalmente o fim do período. Se o usuário deixa o período
+terminando hoje e o warehouse ainda está carregando o dia, a ociosidade
+aparece inflada — em 10/09/2026 às 1.033 pessoas contra 2.144 no dia anterior,
+metade do quadro ainda não tinha chegado. Vale para o Bloco 4 da Tela 1, que
+usa o mesmo D0, e para a origem. O card imprime o HC ativo justamente por isso:
+um número muito abaixo do usual é o sinal de que o dia não fechou.
+
+### Código morto na origem
+
+O título diz "(D-3)" e os cards dizem "Ref: D-0", porque `diasZerado` é uma
+constante `0`. Toda a maquinaria de sequência — `filteredDataForStreak`,
+`salesMapForStreak`, `totalVendasPeriodo`, `checkDates` — é calculada e nunca
+lida; `filteredSellers` e `dataMaximaFormatted` também não. Não portamos nada
+disso: a tela é de um dia só.
+
+### Reorganização que esta tela forçou
+
+O grão pessoa × dia saiu de `databricks.ts` para **`person-day.ts`**
+(`fetchPersonDay`, `applyGroupCross`, `countDay`, `zeradoByDay`, `regional`),
+porque Telas 1 e 3 leem o mesmo scan para perguntas diferentes. E o Bloco 4
+virou **`RegionalTable.tsx`**, que recebe linhas em vez de alcançar o
+view-model de uma tela. Os números da Tela 1 foram conferidos antes e depois:
+idênticos.

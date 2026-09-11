@@ -11,19 +11,19 @@ import {
   LabelList,
   Legend,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip as ChartTooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import { Eye, Info, MinusCircle, RefreshCw, Search, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { Info, RefreshCw, Users } from "lucide-react";
 import { Segmented } from "@/components/ui/segmented";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HcActiveContext, HcFilterPanel } from "./HcFilterPanel";
+import { RegionalTable, TrendHover } from "./RegionalTable";
 import {
   Block,
+  SearchInput,
   card,
   SERVICO_LABEL,
   SERVICO_ROWS,
@@ -44,7 +44,6 @@ import type {
   HcFilterOptions,
   HcFilters,
   MatrizRow,
-  RegionalRow,
   VendedorRow,
 } from "@/lib/data/hc-zerado/types";
 
@@ -583,6 +582,7 @@ const HIERARCHY_OPTS = [
   { value: "cidade" as const, label: "Cidade" },
 ];
 
+/** Bloco 4 — the shared regional table plus this screen's hierarchy switch. */
 function RegionalBlock({
   view,
   filters,
@@ -595,84 +595,16 @@ function RegionalBlock({
   onCross: (key: keyof HcCrossFilters, value: string) => void;
 }) {
   const [hierarchy, setHierarchy] = useState<"gerencia" | "coordenacao" | "cidade">("gerencia");
-  const rows = view.regional[hierarchy];
-  const label =
-    hierarchy === "gerencia" ? "Gerência" : hierarchy === "coordenacao" ? "Coordenação" : "Cidade";
-  const crossKey: keyof HcCrossFilters =
-    hierarchy === "gerencia" ? "gerencia" : hierarchy === "coordenacao" ? "coordenacao" : "cidade";
-  const selectedName = cross[crossKey];
-  const columns: Column<RegionalRow>[] = [
-    {
-      key: "nome",
-      header: label,
-      render: (r) => (
-        <span
-          style={{
-            fontWeight: r.nome === selectedName ? 800 : 700,
-            color: r.nome === selectedName ? "var(--s-brand)" : "var(--s-t1)",
-          }}
-        >
-          {r.nome}
-        </span>
-      ),
-    },
-    {
-      key: "ativo",
-      header: "Total HC Ativo",
-      numeric: true,
-      align: "right",
-      render: (r) => nf.format(r.totalAtivo),
-    },
-    {
-      key: "vendeu",
-      header: "QTD. HC Vendeu",
-      numeric: true,
-      align: "right",
-      render: (r) => nf.format(r.totalWithSales),
-    },
-    {
-      key: "pctv",
-      header: "% QTD. HC Vendeu",
-      numeric: true,
-      align: "right",
-      render: (r) => `${r.pctVendeu}%`,
-    },
-    {
-      key: "zerou",
-      header: "Total HC que Zerou",
-      numeric: true,
-      align: "right",
-      render: (r) => (
-        <span style={{ color: "var(--s-bad)", fontWeight: 800 }}>{nf.format(r.totalZerado)}</span>
-      ),
-    },
-    {
-      key: "pctz",
-      header: "% HC que Zerou",
-      numeric: true,
-      align: "right",
-      render: (r) => <span style={{ color: "var(--s-bad)", fontWeight: 800 }}>{r.pctZerado}%</span>,
-    },
-    { key: "d1", header: "Comparativo D-1", align: "center", render: (r) => <D1Comparison row={r} /> },
-    {
-      key: "obs",
-      header: "Obs.",
-      align: "center",
-      render: (r) => (
-        <TrendHover
-          title={`Ociosidade (HC Zerado): ${r.nome}`}
-          values={r.serieZerados}
-          days={view.days}
-          color="var(--s-bad)"
-        />
-      ),
-    },
-  ];
+  const crossKey: keyof HcCrossFilters = hierarchy;
 
   return (
-    <Block
-      title="Desempenho Regional por Hierarquia"
-      note={`Dados referentes a: ${ptBr(filters.to)}`}
+    <RegionalTable
+      rows={view.regional[hierarchy]}
+      days={view.days}
+      label={HIERARCHY_OPTS.find((o) => o.value === hierarchy)?.label ?? "Gerência"}
+      refDate={filters.to}
+      selected={cross[crossKey]}
+      onSelect={(nome) => onCross(crossKey, nome)}
       actions={
         <Segmented
           options={HIERARCHY_OPTS}
@@ -682,173 +614,9 @@ function RegionalBlock({
           ariaLabel="Hierarquia"
         />
       }
-    >
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(r) => r.id}
-        minWidth={880}
-        maxHeight={420}
-        pageSize={hierarchy === "cidade" ? 25 : undefined}
-        infiniteScroll
-        onRowClick={(r) => onCross(crossKey, r.nome)}
-        isRowSelected={(r) => r.nome === selectedName}
-        empty={{ title: "Sem dados no período", hint: "Ajuste o período ou os filtros de hierarquia." }}
-      />
-    </Block>
+    />
   );
 }
-
-function D1Comparison({ row }: { row: RegionalRow }) {
-  const delta = row.countZeradoD0 - row.countZeradoD1;
-  const base: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: 6,
-    padding: "1px 7px",
-    fontSize: 11,
-    fontWeight: 800,
-  };
-
-  if (delta === 0) {
-    return (
-      <span
-        style={{ ...base, background: "var(--s-sunken)", color: "var(--s-t3)" }}
-        title="Estável — sem alteração na quantidade de HC zerado"
-      >
-        <MinusCircle size={13} />0
-      </span>
-    );
-  }
-
-  const improved = delta < 0;
-  const Icon = improved ? TrendingDown : TrendingUp;
-
-  return (
-    <span
-      style={{
-        ...base,
-        background: improved ? "var(--s-ok-bg)" : "var(--s-bad-bg)",
-        color: improved ? "var(--s-ok)" : "var(--s-bad)",
-      }}
-      title={`${improved ? "Melhorou" : "Piorou"} em ${Math.abs(delta)} HC — zerados de ${row.countZeradoD1} para ${row.countZeradoD0}`}
-    >
-      <Icon size={13} />
-      {improved ? `-${Math.abs(delta)}` : `+${delta}`}
-    </span>
-  );
-}
-
-/**
- * The "Obs." column: an eye that opens the daily trend on hover.
- *
- * It goes through the shared Radix tooltip because these tables scroll — an
- * absolutely positioned card gets clipped by the scroll container, which is why
- * an inline sparkline read as "nothing happens".
- */
-function TrendHover({
-  title,
-  values,
-  days,
-  color,
-}: {
-  title: string;
-  values: number[];
-  days: HcDesempenhoView["days"];
-  color: string;
-}) {
-  const points = values.map((value, i) => ({ label: days[i]?.label.replace(" - ", "-") ?? "", value }));
-
-  return (
-    <Tooltip delayDuration={80}>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          onClick={(e) => e.stopPropagation()}
-          aria-label={title}
-          style={{
-            display: "inline-grid",
-            placeItems: "center",
-            width: 26,
-            height: 26,
-            border: 0,
-            borderRadius: 7,
-            background: "transparent",
-            color: "var(--s-t3)",
-            cursor: "help",
-          }}
-        >
-          <Eye size={14} />
-        </button>
-      </TooltipTrigger>
-      {/* The shared tooltip paints itself with `bg-primary`, which is the brand
-          red — a chart inside it disappears. This one is a panel, not a hint. */}
-      <TooltipContent
-        side="left"
-        style={{
-          width: 420,
-          padding: 12,
-          background: "var(--s-card)",
-          color: "var(--s-t1)",
-          border: "1px solid var(--s-border)",
-          boxShadow: "var(--s-sh-2)",
-        }}
-      >
-        <div
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
-            color: "var(--s-t3)",
-            marginBottom: 6,
-          }}
-        >
-          {title}
-        </div>
-        <div style={{ height: 150 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={points} margin={{ top: 16, right: 14, left: -12, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--s-border)" />
-              <XAxis
-                dataKey="label"
-                padding={{ left: 12, right: 8 }}
-                tick={{ fontSize: 9, fill: "var(--s-t2)", fontWeight: 600 }}
-                tickLine={false}
-                axisLine={false}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                tick={{ fontSize: 8, fill: "var(--s-t3)" }}
-                tickLine={false}
-                axisLine={false}
-                width={20}
-                domain={[0, "dataMax + 1"]}
-              />
-              <Line
-                type="monotone"
-                dataKey="valor"
-                stroke={color}
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              >
-                <LabelList
-                  dataKey="valor"
-                  position="top"
-                  style={{ fill: color, fontSize: 9, fontWeight: 700 }}
-                />
-              </Line>
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/* ---------------------------------------------------------------- Bloco 5 */
 
 const INDIVIDUAL_OPTS = [
   { value: "hoje" as const, label: "Zerando Hoje" },
@@ -1100,35 +868,13 @@ function MatrizBlock({ view, filters }: { view: HcDesempenhoView; filters: HcFil
       }
       actions={
         <>
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
-              height: 34,
-              padding: "0 12px",
-              border: "1px solid var(--s-border)",
-              borderRadius: 999,
-              background: "var(--s-sunken)",
-            }}
-          >
-            <Search size={13} strokeWidth={2.2} style={{ color: "var(--s-t3)", flex: "none" }} />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar consultor..."
-              aria-label="Buscar na matriz"
-              style={{
-                border: 0,
-                background: "none",
-                outline: "none",
-                font: "inherit",
-                fontSize: 12.5,
-                color: "var(--s-t1)",
-                width: 130,
-              }}
-            />
-          </label>
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar consultor..."
+            label="Buscar na matriz"
+            width={130}
+          />
           <Segmented
             options={MATRIZ_OPTS}
             value={grouping as string}
