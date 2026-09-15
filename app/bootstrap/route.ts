@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getForwardedEmail } from "@/lib/auth/identity";
 import { authorizeByEmail } from "@/lib/auth/gate";
 import { signSession, SESSION_COOKIE, getSessionTtlSeconds } from "@/lib/auth/jwt";
+import { redirectToPath } from "@/lib/redirect";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
   const email = getForwardedEmail();
 
   if (!email) {
-    return NextResponse.redirect(new URL("/sem-acesso", req.url));
+    return redirectToPath("/sem-acesso");
   }
 
   let user;
@@ -35,11 +36,11 @@ export async function GET(req: NextRequest) {
     // table. Log the full error (no secrets in here) so the cause is visible.
     console.error("[bootstrap] tb_usuarios lookup failed:", err);
 
-    return NextResponse.redirect(new URL("/sem-acesso?erro=lookup", req.url));
+    return redirectToPath("/sem-acesso?erro=lookup");
   }
 
   if (!user) {
-    return NextResponse.redirect(new URL("/sem-acesso", req.url));
+    return redirectToPath("/sem-acesso");
   }
 
   let token: string;
@@ -49,10 +50,10 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     console.error("[bootstrap] session signing failed:", (err as Error)?.message);
 
-    return NextResponse.redirect(new URL("/sem-acesso?erro=sessao", req.url));
+    return redirectToPath("/sem-acesso?erro=sessao");
   }
 
-  const res = NextResponse.redirect(new URL(target, req.url));
+  const res = redirectToPath(target);
 
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,

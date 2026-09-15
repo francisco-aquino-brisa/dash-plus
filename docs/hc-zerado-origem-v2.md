@@ -629,3 +629,177 @@ porque Telas 1 e 3 leem o mesmo scan para perguntas diferentes. E o Bloco 4
 virou **`RegionalTable.tsx`**, que recebe linhas em vez de alcançar o
 view-model de uma tela. Os números da Tela 1 foram conferidos antes e depois:
 idênticos.
+
+## Telas 4 e 5 — Justificar HC / Auditar Justificativas (portadas)
+
+As três primeiras telas só leem. Estas duas **gravam**, e são o primeiro caminho
+de escrita do módulo. A regra read-only do `CLAUDE.md` vale para os scripts de
+validação em `scripts/`; o app grava em tabelas próprias (ADR 0005), aqui
+`justificativas_hc_zerado` e `regras_justificativa_hc`.
+
+### O que muda tudo: "zerado" aqui não responde aos filtros da tela
+
+Nas Telas 1–3, zerado é relativo aos filtros de venda que o usuário marcou. Na
+Tela 4, não: quem decide é a linha única de **`regras_justificativa_hc`** —
+serviços cobrados, status da venda e agilidade. É uma trava global, para que o
+dia que uma pessoa precisa justificar seja o mesmo dia para todo mundo que abre
+a tela.
+
+Consequência de UI: os chips de **Serviço, Indicador, Status da venda e
+Agilidade somem** do painel nesta tela (`locked` no `HcFilterPanel`, que já
+previa o caso). Oferecer um filtro que não muda nada é pior do que não oferecer.
+A regra vigente fica impressa numa barra no topo, com botão de editar.
+
+### Decisões fechadas antes de codar
+
+| #   | Questão                                                  | Decisão                                                                           |
+| --- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 1   | `autor_id` / `avaliador_id` / `avaliado_em` — 100% nulos | **Passar a preencher** com `tb_usuarios.id`                                       |
+| 2   | Quem justifica, quem avalia                              | **Igual à origem**: qualquer usuário logado faz as duas coisas, inclusive para si |
+| 3   | Comprovante                                              | **Removido** do formulário                                                        |
+| 4   | Catálogo de categorias                                   | Lista fixa, **reconciliada com o que a tabela já grava**                          |
+| 5   | Edição da trava global                                   | Igual à origem: aberta a qualquer usuário logado                                  |
+| 6   | Sábado                                                   | Igual à origem: a Tela 4 conta **só seg–sex**                                     |
+| 7   | Reeditar devolve para "Em Análise"                       | Mantido, e levado até o fim (ver abaixo)                                          |
+
+### 1. A trilha de auditoria que a origem nunca escreveu
+
+As três colunas existiam e estavam sempre nulas. O `SHOW CREATE TABLE` mostra
+que foram desenhadas exatamente para isto — `autor_id BIGINT COMMENT
+'tb_usuarios.id de quem registrou a justificativa'`. Faltava o `id` na sessão:
+`SessionUser` tinha `email`/`nome`/`cpf`/`matricula`/`nivelId`, nenhum id
+numérico. Agora tem (`lib/auth/jwt.ts` + `gate.ts`), leniente na verificação
+como `matricula`.
+
+**E leniente não basta.** Cookie emitido antes do campo carrega `id: null` por
+até 8h (o TTL), e a primeira versão gravava esse null — as colunas continuavam
+tão vazias quanto a origem as deixou, sem nenhum sinal de que algo estava errado.
+Pego na primeira gravação de teste real. Por isso a escrita não confia só no
+cookie: `resolveUserId(email)` em `gate.ts` resolve pelo e-mail quando o cookie
+não traz o id, memoizado por processo.
+
+A Tela 5 imprime a trilha sempre, inclusive vazia: as linhas escritas pela
+origem dizem "não registrado" em vez de parecerem intocadas.
+
+### 2. Sem modelo de permissão, de propósito
+
+A origem não tem nenhum: qualquer pessoa aprova a própria justificativa, no
+mesmo modal. Mantido. O repo **tem** um modelo de capacidades por nível
+(`tb_permissoes` / `tb_permissoes_nivel`, com matriz no /admin), hoje sem nada
+aplicado além de `isAdmin` — se o negócio pedir a restrição depois, é ali que
+ela entra, não em regra nova.
+
+### 3. O comprovante era uma promessa vazia
+
+A origem persistia `comprovante_nome` e `comprovante_tamanho` e **descartava o
+arquivo**. Para quem avalia, isso se lê como prova que não existe. Campo
+removido da UI; as colunas ficam nulas até haver armazenamento de verdade
+(Databricks Volume) — aí o que se guarda é o caminho.
+
+### 4. As categorias divergiam da própria tabela
+
+A origem oferecia `Atestado Médico`; toda linha gravada diz `Atestado médico /
+Licença`. E a tabela tem `Outros motivos`, que a lista não oferecia. Gravar a
+grafia da origem partiria uma categoria em duas com o mesmo significado. O
+catálogo (`lib/data/hc-zerado/catalog.ts`) usa as grafias reais e inclui
+`Outros motivos` — 12 categorias.
+
+O catálogo mora num módulo separado porque `justificativas.ts` alcança o cliente
+Databricks via `source.ts`, e o modal é client component: importar de lá
+arrastava `@databricks/sql` (e o `import 'fs'` dele) para o bundle do navegador
+e quebrava o build. `tsc` não pega isso — só abrir a página pega.
+
+### 6. Sábado sai, feriado fica — e o feriado quase passou batido
+
+A Tela 4 exclui sábado e domingo (`dayofweek(data) NOT IN (1,7)` — confirmado
+contra `nome_dia_semana`: 1=DOM, 7=SAB). As Telas 1–3 contam sábado, porque
+`flag_feriado` só marca domingo. Então o total de dias zerados da Tela 4 lê mais
+baixo que o da Tela 1 para o mesmo período. Confirmado como intencional.
+
+**Feriado, ao contrário, continua sendo cobrado.** A primeira versão desta tela
+excluiu feriado usando `flag_feriado` do warehouse, no raciocínio de que é a
+mesma ideia da lista fixa da origem (`HOLIDAYS`/`isHoliday`, filtro default em
+"Não") só que vinda da fonte. Não é: a lista da origem tem **duas datas, ambas
+de jun/2026**, então na prática ela nunca exclui nada. O "upgrade" derrubou um
+terço da lista sem que ninguém pedisse.
+
+Medido em 01–14/09/2026, com filtros padrão:
+
+|                                        | dias zerados | pessoas |
+| -------------------------------------- | ------------ | ------- |
+| Cobrando feriado (origem, e agora nós) | **2.745**    | **830** |
+| Excluindo feriado (a versão errada)    | 2.003        | 654     |
+
+A diferença inteira é **07/09 (segunda, Independência)**, único feriado em dia de
+semana no período: 742 dias e 176 pessoas. Paridade ganhou. O dia agora aparece
+marcado no card e no modal — cobrar alguém por não vender no 7 de setembro sem
+dizer que era 7 de setembro foi justamente o que fez a divergência passar
+despercebida. Se o negócio decidir não cobrar feriado, é um predicado
+(`AND feriado = 0` em `fetchDiasZerados`) — e a mesma mudança na origem, senão
+os dois apps voltam a divergir.
+
+### 7. Reeditar apaga o parecer, não só o status
+
+O `MERGE` da origem força `status = 'Em Análise'` ao casar. Mantivemos, e
+levamos até a consequência: `observacao_lider`, `avaliador_id` e `avaliado_em`
+também são limpos. A aprovação tinha sido dada para um texto que acabou de ser
+substituído; manter o parecer ao lado do texto novo deixaria uma justificativa
+aprovada que ninguém aprovou. O modal avisa antes.
+
+**Uma instrução, não duas.** A origem fazia POST da justificativa e depois PATCH
+da avaliação porque eram dois endpoints HTTP; copiar essa forma custava um
+segundo MERGE no Delta sem ganho semântico nenhum. Medido numa gravação real:
+6,0s entre `criado_em` e `avaliado_em` da mesma linha. O parecer agora entra no
+próprio MERGE (`status`, `observacao_lider`, `avaliador_id`, `avaliado_em`), num
+commit só. `avaliado_em` sai de `CURRENT_TIMESTAMP()` sob um flag — tem de vir do
+relógio do warehouse, então não pode ser valor ligado.
+
+Também memoizamos o `tb_usuarios.id` por e-mail: sem isso o fallback de autoria
+(abaixo) somava um round-trip a cada gravação.
+
+### `id` é IDENTITY — o handoff dizia o contrário
+
+`justificativas_hc_zerado.id` é `BIGINT GENERATED BY DEFAULT AS IDENTITY`. O
+INSERT omite a coluna e o Delta atribui. Não é preciso conferir unicidade à mão
+como em `lib/data/indicators/write.ts` (lá o `id` é STRING mesmo). A chave de
+negócio que o app endereça continua sendo `(matricula, data_ocorrencia)`.
+
+`status` já tem `DEFAULT 'Em Análise'` e `criado_em`/`atualizado_em`
+`DEFAULT CURRENT_TIMESTAMP()`; o MERGE ainda os escreve explicitamente para que
+um update mova `atualizado_em`.
+
+### Cache: a escrita não pode ficar atrás do watermark
+
+O watermark do módulo é `MAX(data)` da tabela de produção — ele **não anda**
+quando alguém salva uma justificativa. Então o `repository.ts` cacheia só as
+metades caras (a varredura de dias zerados e o diretório de pessoas) e lê as
+justificativas frescas a cada render. Cachear tudo junto mostraria o status
+velho logo depois de salvá-lo.
+
+A chave da varredura inclui a regra global: editá-la tem de recalcular quem está
+zerado, mesmo com a fonte parada.
+
+### Tela 5 audita, mas não avalia
+
+O parecer é dado no modal da Tela 4, como na origem — a Tela 5 é leitura. Vale
+revisitar com o negócio: uma tela chamada "Auditar" que não fecha a ocorrência é
+sinal de que a origem parou no meio. A navegação lateral ainda diz "Consultar &
+Avaliar", que não confere com o que a tela faz.
+
+Uma justificativa cuja matrícula não aparece no período **continua visível**
+(o `hasMeta` da origem): o diretório de pessoas é montado sem filtro justamente
+para isso, e os filtros de hierarquia só valem para quem tem metadados. Medido
+em 14/09/2026: das 6 matrículas com justificativa, 5 resolvem em setembro e a de
+nº 231 não — ela aparece como "Matrícula 231", sem cidade.
+
+### Lista longa: revelação por página
+
+Um mês corrido dá centenas de pessoas (654 pessoas / 2.003 dias zerados em
+01–14/09/2026), cada uma com uma fileira de cards de dia. A origem montava
+todas e engasgava. Aqui a lista abre 40 por vez, com contagem do que falta.
+
+### Custo medido
+
+A varredura de dias zerados de 01–12/09 devolve 1.759 linhas (614 pessoas) —
+conferida por script antes de qualquer UI, e bate com a tela. O diretório de
+pessoas do mesmo período tem 997 linhas. As justificativas do período são 1.

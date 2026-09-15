@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth/jwt";
+import { redirectToPath } from "@/lib/redirect";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
  * screen. There is no password to forget (ADR 0005): the platform still forwards
  * the identity, so "sair" means dropping the app's own token; re-entry re-mints it.
  */
-export async function GET(req: NextRequest) {
-  const res = NextResponse.redirect(new URL("/entrar", req.url));
+export async function GET() {
+  const res = redirectToPath("/entrar");
 
   res.cookies.set(SESSION_COOKIE, "", {
     httpOnly: true,

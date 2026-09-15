@@ -8,21 +8,26 @@ import { cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";
 import { hcFiltersToQuery } from "./filters";
 import type {
+  HcAuditarView,
   HcDesempenhoView,
   HcFilters,
   HcFilterOptions,
   HcFilterTuple,
+  HcJustificarView,
   HcMatrizView,
   HcProdutividadeView,
+  HcRegras,
   HcZeradosView,
   OciosidadeGrouping,
+  PessoaMeta,
   ProdutividadeGrouping,
 } from "./types";
 import type { MatrizView } from "./databricks";
+import type { ZeroedRow } from "./justificativas";
 
 // Bump on any change to the shape OR the maths of a cached value: the
 // in-process cache survives a hot-reload and would keep serving the old one.
-export const HC_CACHE_VERSION = "v3";
+export const HC_CACHE_VERSION = "v5";
 
 export class HcMockUnsupportedError extends Error {
   constructor() {
@@ -177,4 +182,54 @@ export async function getHcMatriz(f: HcFilters, grouping: OciosidadeGrouping): P
     watermark,
     () => databricksHcMatriz(f, grouping),
   );
+}
+
+/**
+ * Telas 4 and 5. These two read an app-owned table the app itself writes, and the
+ * source watermark (`MAX(data)` of the production table) does not move when
+ * somebody saves a justification. So only the expensive halves go through the
+ * cache — the zeroed-day scan and the person directory — and the justifications
+ * are read fresh on every render. Caching them together would show a stale
+ * status right after saving it.
+ */
+export async function getHcJustificar(f: HcFilters): Promise<HcJustificarView> {
+  if (!isDatabricks()) throw new HcMockUnsupportedError();
+
+  const { databricksHcWatermark, HC_ADAPTER_BUILD } = await import("./source");
+  const { buildJustificar, fetchDiasZerados, fetchJustificativas, fetchRegras } =
+    await import("./justificativas");
+  const [watermark, regras] = await Promise.all([databricksHcWatermark(), fetchRegras()]);
+  // The rules decide who is zeroed, so they belong in the key: editing them has
+  // to re-run the scan even though the source has not moved.
+  const key = `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:zerados-dia:${regrasKey(regras)}:${hcFiltersToQuery(f)}`;
+  const [rows, justificativas] = await Promise.all([
+    cachedByWatermark<ZeroedRow[]>(key, watermark, () => fetchDiasZerados(f, regras)),
+    fetchJustificativas(f.from, f.to),
+  ]);
+
+  return buildJustificar(regras, rows, justificativas);
+}
+
+export async function getHcAuditar(f: HcFilters): Promise<HcAuditarView> {
+  if (!isDatabricks()) throw new HcMockUnsupportedError();
+
+  const { databricksHcWatermark, HC_ADAPTER_BUILD } = await import("./source");
+  const { buildAuditar, fetchJustificativas, fetchPessoas } = await import("./justificativas");
+  const watermark = await databricksHcWatermark();
+  // Keyed by period only: the directory is deliberately filter-free so an
+  // unknown matrícula stays visible (see `fetchPessoas`).
+  const [justificativas, pessoas] = await Promise.all([
+    fetchJustificativas(f.from, f.to),
+    cachedByWatermark<PessoaMeta[]>(
+      `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:pessoas:${f.from}:${f.to}`,
+      watermark,
+      () => fetchPessoas(f.from, f.to),
+    ),
+  ]);
+
+  return buildAuditar(f, justificativas, pessoas);
+}
+
+function regrasKey(r: HcRegras): string {
+  return `${r.servicos.join("+")}|${r.statusVenda}|${r.agilidade}`;
 }

@@ -25,6 +25,18 @@ const SCHEMA = process.env.DATABRICKS_HC_SCHEMA ?? "projeto_brisa_performance";
 export const SOURCE = `\`${CAT}\`.\`${SCHEMA}\`.\`${process.env.DATABRICKS_HC_TABLE ?? "tb_producao_hc_zero_venda"}\``;
 
 /**
+ * The module's two app-owned tables — the only ones it writes (ADR 0005, and
+ * [[app-crud-write-path-allowed]]): the justifications themselves and the single
+ * row that defines what counts as a sale when deciding "zerado". They live
+ * alongside the `tb_*` identity tables, not under `DATABRICKS_HC_SCHEMA`, because
+ * the justification join reaches `tb_usuarios` for the author's name.
+ */
+const APP_SCHEMA = process.env.DATABRICKS_CITIES_SCHEMA ?? "projeto_brisa_performance";
+
+export const JUSTIFICATIVAS = `\`${CAT}\`.\`${APP_SCHEMA}\`.\`justificativas_hc_zerado\``;
+export const REGRAS = `\`${CAT}\`.\`${APP_SCHEMA}\`.\`regras_justificativa_hc\``;
+
+/**
  * Stable identity of one HC. `documento_hc` is the source's own key; the
  * matrícula fallback covers the rows where it is blank. When neither exists the
  * key is NULL and the row drops out of the DISTINCT counts instead of collapsing

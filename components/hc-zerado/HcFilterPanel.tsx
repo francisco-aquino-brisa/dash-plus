@@ -66,8 +66,14 @@ export function HcFilterPanel({
   options: HcFilterOptions;
   /** The experience cut only exists on Análise de Produtividade. */
   showExperiencia?: boolean;
-  /** Fields the global rules (Regras Globais) lock for everyone. */
-  locked?: { servico?: boolean; status?: boolean; agilidade?: boolean };
+  /**
+   * Sale-side fields to hide, because the screen does not answer to them.
+   * Justificar HC decides "zerado" from `regras_justificativa_hc` instead of from
+   * the panel, so leaving these chips on screen would let a user set a filter
+   * that changes nothing — worse than not offering it. `indicador` is included
+   * for the same reason: the rules have no indicator dimension.
+   */
+  locked?: { servico?: boolean; status?: boolean; agilidade?: boolean; indicador?: boolean };
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -139,26 +145,35 @@ export function HcFilterPanel({
     },
     { label: "Canal", values: filters.canal, options: options.canais, onChange: (v) => apply({ canal: v }) },
     { label: "Nicho", values: filters.nicho, options: options.nichos, onChange: (v) => apply({ nicho: v }) },
-    {
-      label: "Serviço",
-      values: filters.servico,
-      options: options.servicos,
-      onChange: (v) => apply({ servico: v }),
-    },
-    {
-      label: "Indicador",
-      values: filters.indicador,
-      options: options.indicadores,
-      onChange: (v) => apply({ indicador: v }),
-      align: "end",
-    },
+    ...(locked?.servico
+      ? []
+      : [
+          {
+            label: "Serviço",
+            values: filters.servico,
+            options: options.servicos,
+            onChange: (v: string[]) => apply({ servico: v }),
+          },
+        ]),
+    ...(locked?.indicador
+      ? []
+      : [
+          {
+            label: "Indicador",
+            values: filters.indicador,
+            options: options.indicadores,
+            onChange: (v: string[]) => apply({ indicador: v }),
+            align: "end" as const,
+          },
+        ]),
   ];
 
+  // A hidden chip is not a dirty one — the screen ignores it either way.
   const dirtyCount =
     (filters.from !== defaults.from || filters.to !== defaults.to ? 1 : 0) +
     multiFilters.filter((m) => m.values.length > 0).length +
-    (filters.statusVenda !== "CRIADO" ? 1 : 0) +
-    (filters.agilidade ? 1 : 0) +
+    (!statusLocked && filters.statusVenda !== "CRIADO" ? 1 : 0) +
+    (!locked?.agilidade && filters.agilidade ? 1 : 0) +
     (filters.perfilCidade ? 1 : 0) +
     (filters.experiencia ? 1 : 0);
 
@@ -212,13 +227,15 @@ export function HcFilterPanel({
             onChange={(v) => apply({ statusVenda: v as StatusVenda })}
           />
         )}
-        <ChipFilter
-          label="Agilidade"
-          value={keyOf(AGILIDADE, filters.agilidade)}
-          options={Object.keys(AGILIDADE)}
-          defaultValue={ALL}
-          onChange={(v) => apply({ agilidade: AGILIDADE[v] })}
-        />
+        {!locked?.agilidade && (
+          <ChipFilter
+            label="Agilidade"
+            value={keyOf(AGILIDADE, filters.agilidade)}
+            options={Object.keys(AGILIDADE)}
+            defaultValue={ALL}
+            onChange={(v) => apply({ agilidade: AGILIDADE[v] })}
+          />
+        )}
         <ChipFilter
           label="Tipo de cidade"
           value={keyOf(PERFIS, filters.perfilCidade)}

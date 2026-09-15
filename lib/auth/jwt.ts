@@ -12,6 +12,8 @@ export const SESSION_COOKIE = "brisa_session";
 
 export interface SessionUser {
   email: string; // login key (from X-Forwarded-Email / tb_usuarios)
+  /** `tb_usuarios.id` — the bigint the app-owned tables store as author/reviewer. */
+  id: number | null;
   nome: string; // from tb_usuarios
   cpf: string | null; // join key to other tables (not used for login)
   matricula: string | null; // tb_usuarios.matricula — keys the vendedor screen to self
@@ -67,10 +69,11 @@ export async function verifySession(token: string | undefined): Promise<SessionU
       typeof payload.nivel === "string" &&
       typeof payload.isAdmin === "boolean"
     ) {
-      // `matricula` is lenient so cookies minted before it existed still verify
-      // (→ null until re-minted).
+      // `matricula` and `id` are lenient so cookies minted before they existed
+      // still verify (→ null until re-minted).
       return {
         email: payload.email,
+        id: typeof payload.id === "number" ? payload.id : null,
         nome: payload.nome,
         cpf: (payload.cpf as string | null) ?? null,
         matricula: typeof payload.matricula === "string" ? payload.matricula : null,

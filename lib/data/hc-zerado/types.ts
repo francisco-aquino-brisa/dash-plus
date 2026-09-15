@@ -102,8 +102,11 @@ export interface Totalizadores {
   fwa: number;
   chips5g: number;
   /**
-   * Renovações. The source carries no `RENOVAÇÃO` service today, so this is
-   * always null — rendered as "sem dado na fonte", never as a silent zero.
+   * Renovações. Null only while the source carries no `RENOVACAO` row at all —
+   * rendered as "sem dado na fonte", never as a silent zero. It stopped being
+   * structurally null in set/2026: the serviço existed since mar/2026 with
+   * `total_vendas` = 0 in every month, and carries real production from then on
+   * (6.327 em set/2026, verificado em 14/09/2026).
    */
   renovacoes: number | null;
 }
@@ -315,4 +318,115 @@ export interface HcMatrizView {
   grupos: OciosidadeGroup[];
   /** Filled for cidade — the same rows Bloco 4 shows. */
   cidades: RegionalRow[];
+}
+
+/* ------------------------- Telas 4 e 5 — Justificar HC / Auditar Justificativas */
+
+/**
+ * The global lock (`regras_justificativa_hc`, single row `id = 1`): what counts
+ * as a sale when deciding whether a day was zeroed. Tela 4 applies THESE instead
+ * of the sale filters the user picked in the panel, so "zerado" means the same
+ * thing to everyone who opens the screen.
+ */
+export interface HcRegras {
+  /** `servicos_obrigatorios`, split — only these services count as production. */
+  servicos: string[];
+  /** `status_venda_obrigatorio`, charged to INTERNET/FWA only (see `regrasExpr`). */
+  statusVenda: string;
+  /** `agilidade_obrigatoria`: "Todos" | "Efetivado" | "Instalado". */
+  agilidade: string;
+  atualizadoEm: string | null;
+}
+
+export type JustificativaStatus = "Em Análise" | "Aprovado" | "Rejeitado";
+
+/**
+ * One stored justification. The business key is `(matricula, dataOcorrencia)` —
+ * `justificativas_hc_zerado.id` is an identity column nothing addresses.
+ */
+export interface Justificativa {
+  matricula: string;
+  dataOcorrencia: string;
+  categoria: string;
+  motivo: string;
+  status: JustificativaStatus;
+  observacaoLider: string;
+  /** Names resolved from `tb_usuarios` — null for the rows written before the
+   *  app started filling `autor_id`/`avaliador_id`. */
+  autor: string | null;
+  avaliador: string | null;
+  avaliadoEm: string | null;
+  atualizadoEm: string | null;
+}
+
+/** The management attributes of one person in the period — what the screens cross by matrícula. */
+export interface PessoaMeta {
+  matricula: string;
+  consultor: string;
+  cargo: string;
+  cidade: string;
+  coordenacao: string;
+  gerente: string;
+  supervisao: string;
+  lider: string;
+  canal: string;
+  nicho: string;
+}
+
+/** Tela 4 — one business day this person was active and sold nothing. */
+export interface DiaZerado {
+  data: string;
+  /** The services present in the person's rows that day, narrowed to the enforced ones. */
+  servicos: string[];
+  /**
+   * `flag_feriado` for the day. It does NOT take the day out of the list — the
+   * origin charges holidays too — but the card says so, because asking someone to
+   * justify not selling on Independence Day without naming the date is how the
+   * 742-day gap against the origin went unnoticed.
+   */
+  feriado: boolean;
+  justificativa: Justificativa | null;
+}
+
+export interface PessoaZerada {
+  matricula: string;
+  consultor: string;
+  cargo: string;
+  cidade: string;
+  coordenacao: string;
+  dias: DiaZerado[];
+}
+
+/** Tela 4's header counters. */
+export interface JustificarStats {
+  pessoas: number;
+  diasZerados: number;
+  justificados: number;
+  pendentes: number;
+  emAnalise: number;
+  aprovados: number;
+  rejeitados: number;
+  /** Share of zeroed days that carry a justification. */
+  conclusao: number;
+}
+
+export interface HcJustificarView {
+  regras: HcRegras;
+  pessoas: PessoaZerada[];
+  stats: JustificarStats;
+}
+
+/** Tela 5 — a justification with the person it belongs to. */
+export interface AuditoriaRow {
+  justificativa: Justificativa;
+  /** Null when the matrícula has no row in the period (the person left, or the
+   *  justification predates the range) — the origin kept those visible. */
+  pessoa: PessoaMeta | null;
+}
+
+export interface HcAuditarView {
+  rows: AuditoriaRow[];
+  /** The categories actually present in the period — what the filter offers. */
+  categorias: string[];
+  porStatus: Record<JustificativaStatus | "Todos", number>;
 }

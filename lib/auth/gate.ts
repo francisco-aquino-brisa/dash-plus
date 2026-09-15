@@ -27,6 +27,7 @@ export async function authorizeByEmail(email: string): Promise<SessionUser | nul
   if (!normalized) return null;
 
   const rows = await new DatabricksDataClient().query<{
+    id: unknown;
     nome: unknown;
     cpf: unknown;
     matricula: unknown;
@@ -34,7 +35,7 @@ export async function authorizeByEmail(email: string): Promise<SessionUser | nul
     nivel: unknown;
     ativo: unknown;
   }>(
-    `SELECT u.nome, u.cpf, u.matricula, u.nivel_id, n.nome AS nivel, u.ativo
+    `SELECT u.id, u.nome, u.cpf, u.matricula, u.nivel_id, n.nome AS nivel, u.ativo
        FROM ${USERS} u
        LEFT JOIN ${NIVEIS} n ON u.nivel_id = n.id
       WHERE lower(u.email) = ? AND u.ativo = true
@@ -50,6 +51,7 @@ export async function authorizeByEmail(email: string): Promise<SessionUser | nul
 
   return {
     email: normalized,
+    id: r.id == null ? null : Number(r.id),
     nome: String(r.nome ?? ""),
     cpf: r.cpf == null ? null : String(r.cpf),
     matricula: r.matricula == null ? null : String(r.matricula),
@@ -57,4 +59,28 @@ export async function authorizeByEmail(email: string): Promise<SessionUser | nul
     nivel,
     isAdmin: nivel.toLowerCase() === "admin",
   };
+}
+
+/**
+ * The `tb_usuarios.id` of an e-mail, for the writes that stamp authorship.
+ *
+ * `SessionUser.id` gained the field later than the cookie, so a session minted
+ * before it carries `id: null` for up to the token's whole TTL — and a write
+ * that trusts the cookie alone stamps NULL, which is precisely the hole the
+ * audit columns exist to close. Callers fall back to this. Returns null only
+ * when the e-mail has no active row, in which case there is genuinely nobody to
+ * attribute the write to.
+ */
+export async function resolveUserId(email: string): Promise<number | null> {
+  const normalized = email.trim().toLowerCase();
+
+  if (!normalized) return null;
+
+  const rows = await new DatabricksDataClient().query<{ id: unknown }>(
+    `SELECT id FROM ${USERS} WHERE lower(email) = ? AND ativo = true LIMIT 1`,
+    [normalized],
+  );
+  const id = rows[0]?.id;
+
+  return id == null ? null : Number(id);
 }

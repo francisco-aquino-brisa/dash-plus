@@ -9,6 +9,12 @@ import { verifySession, SESSION_COOKIE } from "@/lib/auth/jwt";
  * - No/invalid session → send to `/bootstrap?next=…` (which resolves + mints).
  * - Valid session + `/admin/*` but not admin → bounce to /dashboard.
  * - `/` → /dashboard.
+ *
+ * Redirects here keep the absolute `new URL(path, req.url)` form even though
+ * `req.url` carries the internal bind address in production (`https://0.0.0.0:8000`,
+ * see lib/redirect.ts): Next relativizes a middleware `Location` before it leaves
+ * the server, and a relative one would make it throw `Invalid URL`. Route handlers
+ * are the opposite case — they must use `redirectToPath`.
  */
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;

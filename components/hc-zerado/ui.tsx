@@ -3,6 +3,7 @@
 // Tela 2 stay visually identical without either importing the other.
 
 import { Search } from "lucide-react";
+import type { JustificativaStatus } from "@/lib/data/hc-zerado/types";
 
 export const card: React.CSSProperties = {
   border: "1px solid var(--s-border)",
@@ -141,6 +142,75 @@ export const SERVICO_LABEL: Record<string, string> = {
   RENOVACAO: "Renovação",
   RENOVAÇÃO: "Renovação",
 };
+
+/**
+ * Colours for a justification's verdict, shared by Telas 4 and 5 so a day card
+ * and its audit card never disagree. "Em Análise" is a warning, not a neutral:
+ * a justification nobody has judged is an open item, and the screens exist to
+ * close them.
+ *
+ * Two labels because the origin uses two: on a day card the badge sits next to
+ * the date and reads `Análise`, while the audit card and the tab rail spell out
+ * whose turn it is (`Pendente gestor`).
+ */
+export const STATUS_TONE: Record<
+  JustificativaStatus,
+  { fg: string; bg: string; label: string; short: string }
+> = {
+  "Em Análise": { fg: "var(--s-warn)", bg: "var(--s-warn-bg)", label: "Pendente gestor", short: "Análise" },
+  Aprovado: { fg: "var(--s-ok)", bg: "var(--s-ok-bg)", label: "Aprovado", short: "Aprovado" },
+  Rejeitado: { fg: "var(--s-bad)", bg: "var(--s-bad-bg)", label: "Rejeitado", short: "Rejeitado" },
+};
+
+/** A day with no justification at all — the state before any of the three above. */
+export const SEM_JUSTIFICATIVA = {
+  fg: "var(--s-bad)",
+  bg: "var(--s-bad-bg)",
+  label: "Pendente colab.",
+  short: "Pendente",
+};
+
+/**
+ * Service colours, taken from Tela 1's Totalizadores so one serviço reads the
+ * same everywhere in the module. The origin used its own teal/amber/indigo; we
+ * keep our palette — the point is that the chips are not all grey, not that they
+ * match another app's hues.
+ */
+export const SERVICO_TONE: Record<string, { fg: string; bg: string }> = {
+  INTERNET: { fg: "var(--s-brand)", bg: "var(--s-brand-weak)" },
+  FWA: { fg: "var(--s-blue)", bg: "var(--s-blue-bg)" },
+  "5G": { fg: "var(--s-ok)", bg: "var(--s-ok-bg)" },
+  RENOVACAO: { fg: "var(--s-warn)", bg: "var(--s-warn-bg)" },
+  RENOVAÇÃO: { fg: "var(--s-warn)", bg: "var(--s-warn-bg)" },
+};
+
+const NEUTRO = { fg: "var(--s-t3)", bg: "var(--s-sunken)" };
+
+export function servicoTone(servico: string): { fg: string; bg: string } {
+  return SERVICO_TONE[servico.toUpperCase()] ?? NEUTRO;
+}
+
+const WEEKDAYS_SHORT = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"];
+
+/**
+ * `TER, 01/09` — the origin's day-card heading. The weekday is read with
+ * `getUTC*` from a UTC-midnight date: a calendar day must not shift with the
+ * reader's zone (CLAUDE.md, "Dates").
+ */
+export function diaLabel(iso: string): string {
+  const weekday = WEEKDAYS_SHORT[new Date(`${iso}T00:00:00Z`).getUTCDay()];
+
+  return `${weekday}, ${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
+
+/** Up to two initials, for the avatar discs both screens draw. */
+export function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) return "?";
+
+  return (parts[0][0] + (parts.length > 1 ? parts[1][0] : "")).toUpperCase();
+}
 
 /** The module's search box: a pill with a magnifier, filtering the list beside it. */
 export function SearchInput({
