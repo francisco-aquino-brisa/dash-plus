@@ -9,8 +9,12 @@ import {
   Briefcase,
   ChevronRight,
   ChevronsUpDown,
+  ClipboardCheck,
+  Database,
+  Eye,
   Files,
   KeyRound,
+  LayoutDashboard,
   LayoutGrid,
   LogOut,
   Moon,
@@ -24,7 +28,9 @@ import {
   User,
   UserRound,
   Users,
+  UserX,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SetNavPendingContext } from "@/lib/ui/nav-pending";
 
@@ -35,16 +41,26 @@ interface ShellUser {
   isAdmin: boolean;
 }
 
-const NAV = [
+interface NavItem {
+  title: string;
+  short: string;
+  href: string;
+  icon: LucideIcon;
+  /** Second line under the title. Only the HC Zerado screens carry one. */
+  subtitle?: string;
+}
+
+const NAV: NavItem[] = [
   { title: "Performance Cidades", short: "Cidades", href: "/dashboard", icon: Activity },
   { title: "Vendas · Canais", short: "Canais", href: "/vendas", icon: ShoppingCart },
   { title: "Produtividade Comercial", short: "Produtiv.", href: "/produtividade", icon: Users },
   { title: "Dashboard Vendedor", short: "Vendedor", href: "/vendedor", icon: UserRound },
+  { title: "HC Zerado", short: "HC Zerado", href: "/hc-zerado/desempenho", icon: UserX },
 ];
 
 // Entering the admin area swaps the whole navigation to the management screens
 // (DESIGN_SYSTEM §5). The swap and its explicit exit exist on both platforms.
-const ADMIN_NAV = [
+const ADMIN_NAV: NavItem[] = [
   { title: "Usuários", short: "Usuários", href: "/admin/usuarios", icon: Users },
   { title: "Níveis de acesso", short: "Níveis", href: "/admin/niveis", icon: ShieldCheck },
   { title: "Cargos", short: "Cargos", href: "/admin/cargos", icon: Briefcase },
@@ -52,6 +68,46 @@ const ADMIN_NAV = [
   { title: "Permissões", short: "Permiss.", href: "/admin/capacidades", icon: KeyRound },
   { title: "Permissões por nível", short: "Matriz", href: "/admin/permissoes", icon: LayoutGrid },
   { title: "Indicadores", short: "Indic.", href: "/admin/indicadores", icon: Activity },
+];
+
+// HC Zerado swaps the sidebar the same way the admin area does. Titles and
+// subtitles are the ones the original Brisa Radar screens carry.
+const HC_ZERADO_NAV: NavItem[] = [
+  {
+    title: "Desempenho HC",
+    short: "Desemp.",
+    subtitle: "Ativos e Zerados",
+    href: "/hc-zerado/desempenho",
+    icon: LayoutDashboard,
+  },
+  {
+    title: "Análise de Produtividade",
+    short: "Produtiv.",
+    subtitle: "Mensal e Zerados",
+    href: "/hc-zerado/produtividade",
+    icon: Database,
+  },
+  {
+    title: "Matriz Gerencial",
+    short: "Matriz",
+    subtitle: "Ociosidade de Regional",
+    href: "/hc-zerado/matriz",
+    icon: LayoutGrid,
+  },
+  {
+    title: "Justificar HC",
+    short: "Justificar",
+    subtitle: "Ociosidade Zerados",
+    href: "/hc-zerado/justificar",
+    icon: ClipboardCheck,
+  },
+  {
+    title: "Auditar Justificativas",
+    short: "Auditar",
+    subtitle: "Consultar & Avaliar",
+    href: "/hc-zerado/auditar",
+    icon: Eye,
+  },
 ];
 
 const COLLAPSE_KEY = "brisa-sidebar-collapsed";
@@ -183,7 +239,9 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
 
   const expanded = !railed;
   const inAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
-  const navItems = inAdmin ? ADMIN_NAV : NAV;
+  const inHcZerado = pathname === "/hc-zerado" || pathname.startsWith("/hc-zerado/");
+  const inSubArea = inAdmin || inHcZerado;
+  const navItems = inHcZerado ? HC_ZERADO_NAV : inAdmin ? ADMIN_NAV : NAV;
   const navHeading = "Navegação";
   const activeTitle = navItems.find((n) => pathname === n.href || pathname.startsWith(`${n.href}/`))?.title;
 
@@ -509,16 +567,30 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                     >
                       <Icon size={17} style={{ flex: "none", opacity: 0.95 }} />
                       {expanded && (
-                        <span
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {item.title}
+                        <span style={{ flex: 1, minWidth: 0, display: "grid", gap: 1 }}>
+                          <span
+                            style={{
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {item.title}
+                          </span>
+                          {item.subtitle && (
+                            <span
+                              style={{
+                                fontSize: 10.5,
+                                fontWeight: 600,
+                                color: "var(--s-t3)",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {item.subtitle}
+                            </span>
+                          )}
                         </span>
                       )}
                       {expanded && (
@@ -539,7 +611,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
 
               {/* Footer (fixed) */}
               <div style={{ flex: "none", display: "flex", flexDirection: "column", gap: 10 }}>
-                {inAdmin ? (
+                {inSubArea ? (
                   <Link
                     href="/dashboard"
                     onClick={navTo("/dashboard")}
@@ -880,12 +952,14 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                     className="font-display"
                     style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-.02em", color: "var(--s-t1)" }}
                   >
-                    {inAdmin ? "Administração" : "Dashboards"}
+                    {inHcZerado ? "HC Zerado" : inAdmin ? "Administração" : "Dashboards"}
                   </div>
                   <div style={{ fontSize: 11.5, color: "var(--s-t3)", marginTop: 2 }}>
-                    {inAdmin
-                      ? "Telas gerenciais da área administrativa."
-                      : "Novas telas aparecem aqui automaticamente."}
+                    {inHcZerado
+                      ? "Ociosidade comercial: HC ativo, zerados e justificativas."
+                      : inAdmin
+                        ? "Telas gerenciais da área administrativa."
+                        : "Novas telas aparecem aqui automaticamente."}
                   </div>
                 </div>
                 {navItems.map((item) => {
@@ -913,22 +987,36 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                       }}
                     >
                       <Icon size={18} style={{ flex: "none" }} />
-                      <span
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {item.title}
+                      <span style={{ flex: 1, minWidth: 0, display: "grid", gap: 1 }}>
+                        <span
+                          style={{
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {item.title}
+                        </span>
+                        {item.subtitle && (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: "var(--s-t3)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {item.subtitle}
+                          </span>
+                        )}
                       </span>
                       <ChevronRight size={15} style={{ flex: "none", opacity: 0.5 }} />
                     </Link>
                   );
                 })}
-                {!inAdmin && (
+                {!inSubArea && (
                   <div
                     style={{
                       display: "flex",
@@ -946,7 +1034,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                     Espaço reservado para os próximos dashboards.
                   </div>
                 )}
-                {inAdmin ? (
+                {inSubArea ? (
                   <Link
                     href="/dashboard"
                     onClick={navTo("/dashboard")}

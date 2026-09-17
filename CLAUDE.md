@@ -73,6 +73,26 @@ cubes (`indicadores_cidades`, `indicadores_cidades_5g`, `metas_cidades`), the
 join keys (`id_cidade`/`id_indicador`/`servico`), aggregation rules, the
 indicator→source map and the known gotchas — see [docs/data-map.md](./docs/data-map.md).
 
+## Dates: "hoje" is a Brazilian calendar day
+
+**Never** derive a calendar date from `new Date().toISOString()` or from a
+`Date`'s local getters. `toISOString()` is UTC, so from 21:00 in Brazil it
+already reports tomorrow; the Databricks Apps server runs on UTC, so reading its
+local clock is no better. Use the helpers in `lib/data/_shared.ts`, which pin the
+day to `America/Sao_Paulo`:
+
+- `todayIso()` → today in Brazil, `yyyy-MM-dd`
+- `todayUtc()` → the same day as a Date at **UTC midnight**
+- `parseIsoUtc` / `isoUtc` / `addDaysUtc` / `startOfMonthUtc` → calendar
+  arithmetic that stays in UTC
+
+Calendar dates are UTC-midnight `Date`s. Never mix them with `new Date(y, m, d)`,
+`setDate` or `getDate` — those shift with the runner's zone; read components with
+the `getUTC*` form.
+
+**Client components are the exception**: there the browser's zone is the user's,
+so `lib/date.ts` (`toIso`/`fromIso`) is correct as-is and must stay local.
+
 ## Formatting & linting
 
 Code style is enforced by **Prettier** (config in `.prettierrc.json`, incl.

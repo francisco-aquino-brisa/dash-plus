@@ -4,6 +4,60 @@
 
 import type { KpiBlock } from "./sales/types";
 
+/**
+ * "Hoje" is a Brisanet calendar day, not the server's. `toISOString()` is UTC —
+ * from 21:00 in Brazil it already reports tomorrow — and the server runs on UTC
+ * too, so the zone has to be named. Brazil has no DST since 2019 and every
+ * state Brisanet operates in is UTC-3.
+ */
+const BUSINESS_TZ = "America/Sao_Paulo";
+
+// `en-CA`'s short date format is already `yyyy-MM-dd`.
+const isoFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TZ,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** Today's calendar date in Brazil, as `yyyy-MM-dd`. */
+export function todayIso(): string {
+  return isoFormatter.format(new Date());
+}
+
+/** Today in Brazil, as a Date pinned to UTC midnight (see `parseIsoUtc`). */
+export function todayUtc(): Date {
+  return parseIsoUtc(todayIso());
+}
+
+/**
+ * A calendar date as a Date at UTC midnight. `new Date(y, m, d)` and `setDate`
+ * shift with the runner's zone, so calendar arithmetic stays in UTC — pair this
+ * with `isoUtc` and `addDaysUtc`.
+ */
+export function parseIsoUtc(value: string): Date {
+  return new Date(`${value}T00:00:00Z`);
+}
+
+/** Format a UTC-midnight Date back to `yyyy-MM-dd`. */
+export function isoUtc(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/** Shift a UTC-midnight Date by whole days, staying in UTC. */
+export function addDaysUtc(d: Date, n: number): Date {
+  const x = new Date(d);
+
+  x.setUTCDate(x.getUTCDate() + n);
+
+  return x;
+}
+
+/** First day of the month a UTC-midnight Date falls in. */
+export function startOfMonthUtc(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+}
+
 /** Coerce an unknown DB/JSON value to a finite number (non-finite → 0). */
 export function num(v: unknown): number {
   const n = typeof v === "number" ? v : Number(v);
