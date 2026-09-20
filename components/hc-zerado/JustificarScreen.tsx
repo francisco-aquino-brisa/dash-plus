@@ -37,6 +37,7 @@ import {
   servicoTone,
 } from "./ui";
 import { useReportNavPending } from "@/lib/ui/nav-pending";
+import { useIsMobile } from "@/lib/hooks/use-media-query";
 import { hcFiltersToQuery, keepScreenParams } from "@/lib/data/hc-zerado/filters";
 import {
   excluirJustificativa,
@@ -85,6 +86,7 @@ export function JustificarScreen({
   const pathname = usePathname();
   const current = useSearchParams();
   const [pending, startTransition] = useTransition();
+  const isMobile = useIsMobile();
   const [search, setSearch] = useState("");
   const [visible, setVisible] = useState(PAGE);
   const [target, setTarget] = useState<{ pessoa: PessoaZerada; dia: DiaZerado } | null>(null);
@@ -242,7 +244,7 @@ export function JustificarScreen({
             Justificar HC
           </h1>
           <p style={{ fontSize: 13, color: "var(--s-t3)", marginTop: 4 }}>
-            Dias de semana (seg–sex, feriado incluído) entre {ptBr(filters.from)} e {ptBr(filters.to)} em que
+            Dias de semana (seg–sex, feriado excluído) entre {ptBr(filters.from)} e {ptBr(filters.to)} em que
             a pessoa estava ativa e não registrou venda
           </p>
         </div>
@@ -434,7 +436,9 @@ export function JustificarScreen({
           style={{
             position: "fixed",
             right: 18,
-            bottom: 18,
+            // Clears the mobile bottom tab bar, which otherwise sits under the
+            // toast for its whole 3.5s.
+            bottom: isMobile ? 84 : 18,
             zIndex: 60,
             display: "flex",
             alignItems: "center",
@@ -619,6 +623,8 @@ function Empty({ hasRows }: { hasRows: boolean }) {
 }
 
 function PessoaRow({ pessoa, onPick }: { pessoa: PessoaZerada; onPick: (dia: DiaZerado) => void }) {
+  const isMobile = useIsMobile();
+
   return (
     <article
       style={{
@@ -696,10 +702,25 @@ function PessoaRow({ pessoa, onPick }: { pessoa: PessoaZerada; onPick: (dia: Dia
         </div>
       </div>
 
-      <div style={{ flex: "999 1 320px", minWidth: 0, overflowX: "auto", paddingBottom: 2 }}>
-        <div style={{ display: "flex", gap: 8, minWidth: "min-content" }}>
+      <div
+        style={{
+          flex: "999 1 320px",
+          minWidth: 0,
+          overflowX: isMobile ? "visible" : "auto",
+          paddingBottom: isMobile ? 0 : 2,
+          width: isMobile ? "100%" : undefined,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: isMobile ? "column" : "row",
+            gap: 8,
+            minWidth: isMobile ? undefined : "min-content",
+          }}
+        >
           {pessoa.dias.map((dia) => (
-            <DiaCard key={dia.data} dia={dia} onPick={() => onPick(dia)} />
+            <DiaCard key={dia.data} dia={dia} onPick={() => onPick(dia)} stacked={isMobile} />
           ))}
         </div>
       </div>
@@ -728,7 +749,17 @@ function Meta({ label, value, mono }: { label: string; value: string; mono?: boo
   );
 }
 
-function DiaCard({ dia, onPick }: { dia: DiaZerado; onPick: () => void }) {
+function DiaCard({
+  dia,
+  onPick,
+  stacked,
+}: {
+  dia: DiaZerado;
+  onPick: () => void;
+  /** Full-width, in the mobile vertical layout, instead of the fixed-width
+   *  card in the desktop horizontal row. */
+  stacked?: boolean;
+}) {
   const tone = dia.justificativa ? STATUS_TONE[dia.justificativa.status] : SEM_JUSTIFICATIVA;
 
   return (
@@ -743,7 +774,11 @@ function DiaCard({ dia, onPick }: { dia: DiaZerado; onPick: () => void }) {
         flexDirection: "column",
         justifyContent: "space-between",
         gap: 6,
-        width: 208,
+        // `width: "100%"` doesn't resolve here — the column's own width is
+        // only implicitly auto-filled, not a declared size, so percentages on
+        // its children don't resolve against it. Omitting the width and
+        // relying on the container's default `align-items: stretch` does.
+        width: stacked ? undefined : 208,
         padding: 10,
         // Tinted by verdict, so a row of days reads at a glance instead of one
         // badge at a time. An unjudged day keeps the plain border — the heavier

@@ -50,6 +50,12 @@ export function Segmented<T extends string>({
         borderRadius: 999,
         background: "var(--s-sunken)",
         border: "1px solid var(--s-border)",
+        // A flex item's default min-width is its content width, which refuses
+        // to shrink and gets clipped by the row it sits in (e.g. on mobile,
+        // next to a search input) instead of scrolling. `minWidth: 0` lets it
+        // shrink; `overflowX` makes the overflow a scroll instead of a cut.
+        minWidth: 0,
+        overflowX: "auto",
       }}
     >
       {options.map((opt) => {

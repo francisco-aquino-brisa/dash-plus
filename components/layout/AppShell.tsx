@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition, type CSSProperties } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition, type CSSProperties } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Activity,
@@ -34,6 +34,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SetNavPendingContext } from "@/lib/ui/nav-pending";
+import { HC_FILTER_PARAMS } from "@/lib/data/hc-zerado/filters";
 
 interface ShellUser {
   nome: string;
@@ -245,6 +246,32 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   const navItems = inHcZerado ? HC_ZERADO_NAV : inAdmin ? ADMIN_NAV : NAV;
   const navHeading = "Navegação";
   const activeTitle = navItems.find((n) => pathname === n.href || pathname.startsWith(`${n.href}/`))?.title;
+
+  // Carry the active filters along when switching between the 5 HC Zerado
+  // screens, so a filter set on one screen doesn't reset on the next — the
+  // same querystring keys `HcFilterPanel` already writes on every screen.
+  const searchParams = useSearchParams();
+  const hcFilterQuery = useMemo(() => {
+    if (!inHcZerado) return "";
+
+    const q = new URLSearchParams();
+
+    for (const key of HC_FILTER_PARAMS) {
+      const value = searchParams.get(key);
+
+      if (value) q.set(key, value);
+    }
+
+    return q.toString();
+  }, [inHcZerado, searchParams]);
+  const navHref = (href: string) => (hcFilterQuery ? `${href}?${hcFilterQuery}` : href);
+
+  // The mobile tab bar only shows the first 3 items; a screen reached through
+  // "Mais" (e.g. Justificar HC, Auditar Justificativas) would otherwise leave
+  // every tab unlit, reading as if the bar lost track of where you are.
+  const overflowActive = !navItems
+    .slice(0, 3)
+    .some((n) => pathname === n.href || pathname.startsWith(`${n.href}/`));
 
   const ghostBtn: CSSProperties = {
     display: "flex",
@@ -544,8 +571,8 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                   return (
                     <Link
                       key={item.href}
-                      href={item.href}
-                      onClick={navTo(item.href)}
+                      href={navHref(item.href)}
+                      onClick={navTo(navHref(item.href))}
                       title={item.title}
                       className="bd-nav"
                       style={{
@@ -918,13 +945,22 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
               const Icon = item.icon;
 
               return (
-                <Link key={item.href} href={item.href} onClick={navTo(item.href)} style={tabItem(active)}>
+                <Link
+                  key={item.href}
+                  href={navHref(item.href)}
+                  onClick={navTo(navHref(item.href))}
+                  style={tabItem(active)}
+                >
                   <Icon size={20} />
                   <span style={tabLabel}>{item.short}</span>
                 </Link>
               );
             })}
-            <button type="button" onClick={() => setMoreOpen(true)} style={tabItem(moreOpen)}>
+            <button
+              type="button"
+              onClick={() => setMoreOpen(true)}
+              style={tabItem(moreOpen || overflowActive)}
+            >
               <MoreHorizontal size={20} />
               <span style={tabLabel}>Mais</span>
             </button>
@@ -981,8 +1017,8 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                   return (
                     <Link
                       key={item.href}
-                      href={item.href}
-                      onClick={navTo(item.href)}
+                      href={navHref(item.href)}
+                      onClick={navTo(navHref(item.href))}
                       style={{
                         display: "flex",
                         alignItems: "center",

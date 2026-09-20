@@ -19,7 +19,7 @@ import type { Agilidade, Experiencia, HcFilters, PerfilCidade, StatusVenda } fro
 type SearchParams = Record<string, string | string[] | undefined>;
 
 const STATUS: StatusVenda[] = ["CRIADO", "EFETIVADO", "INSTALADO"];
-const PERFIS: PerfilCidade[] = ["FTTH", "HIBRIDA", "5G ONLY"];
+const PERFIS: PerfilCidade[] = ["FTTH", "HIBRIDA", "ONLY"];
 const EXPERIENCIAS: Experiencia[] = ["Em Exp.", "Efetivo"];
 
 function one(sp: SearchParams, key: string): string {

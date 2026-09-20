@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Inbox } from "lucide-react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Inbox } from "lucide-react";
 
 /**
  * Data table (DESIGN_SYSTEM §4.5).
@@ -18,6 +18,14 @@ export interface Column<T> {
   /** Mark numeric columns so values use tabular figures + right alignment. */
   numeric?: boolean;
   render: (row: T) => ReactNode;
+  /** Enables click-to-sort on this column's header. The comparator sorts
+   *  numbers numerically and everything else as pt-BR text. */
+  sortValue?: (row: T) => string | number;
+}
+
+interface SortState {
+  key: string;
+  dir: "asc" | "desc";
 }
 
 export interface DataTableProps<T> {
@@ -52,18 +60,40 @@ export function DataTable<T>({
   empty = { title: "Nada por aqui", hint: "Ajuste os filtros para ver resultados." },
 }: DataTableProps<T>) {
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<SortState | null>(null);
   const infinite = infiniteScroll && Boolean(pageSize);
 
   // Reset to the first page whenever the row set changes (e.g. a new search).
   useEffect(() => setPage(1), [rows]);
 
-  const pageCount = pageSize ? Math.max(1, Math.ceil(rows.length / pageSize)) : 1;
+  const sortedRows = useMemo(() => {
+    const col = sort && columns.find((c) => c.key === sort.key);
+
+    if (!sort || !col?.sortValue) return rows;
+
+    const { sortValue } = col;
+    const dir = sort.dir === "asc" ? 1 : -1;
+
+    return [...rows].sort((a, b) => {
+      const av = sortValue(a);
+      const bv = sortValue(b);
+
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+
+      return String(av).localeCompare(String(bv), "pt-BR") * dir;
+    });
+  }, [rows, sort, columns]);
+
+  const toggleSort = (key: string) =>
+    setSort((s) => (s?.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+
+  const pageCount = pageSize ? Math.max(1, Math.ceil(sortedRows.length / pageSize)) : 1;
   const safePage = Math.min(page, pageCount);
   const visibleRows = !pageSize
-    ? rows
+    ? sortedRows
     : infinite
-      ? rows.slice(0, safePage * pageSize)
-      : rows.slice((safePage - 1) * pageSize, safePage * pageSize);
+      ? sortedRows.slice(0, safePage * pageSize)
+      : sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (!infinite || safePage >= pageCount) return;
@@ -113,11 +143,49 @@ export function DataTable<T>({
         <table style={{ width: "100%", minWidth, borderCollapse: "collapse" }}>
           <thead style={maxHeight ? { position: "sticky", top: 0, zIndex: 1 } : undefined}>
             <tr style={{ background: "var(--s-sunken)" }}>
-              {columns.map((col) => (
-                <th key={col.key} style={headCellStyle(col)}>
-                  {col.header}
-                </th>
-              ))}
+              {columns.map((col) => {
+                const dir = sort?.key === col.key ? sort.dir : undefined;
+
+                if (!col.sortValue) {
+                  return (
+                    <th key={col.key} style={headCellStyle(col)}>
+                      {col.header}
+                    </th>
+                  );
+                }
+
+                return (
+                  <th key={col.key} style={headCellStyle(col)} aria-sort={ariaSort(dir)}>
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(col.key)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
+                        justifyContent: col.align === "right" || col.numeric ? "flex-end" : "flex-start",
+                        width: "100%",
+                        border: 0,
+                        background: "transparent",
+                        padding: 0,
+                        font: "inherit",
+                        letterSpacing: "inherit",
+                        color: dir ? "var(--s-t1)" : "inherit",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {col.header}
+                      {dir === "asc" ? (
+                        <ChevronUp size={11} strokeWidth={2.6} />
+                      ) : dir === "desc" ? (
+                        <ChevronDown size={11} strokeWidth={2.6} />
+                      ) : (
+                        <ChevronDown size={11} strokeWidth={2.2} style={{ opacity: 0.35 }} />
+                      )}
+                    </button>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -256,6 +324,10 @@ function PagerButton({
       {children}
     </button>
   );
+}
+
+function ariaSort(dir: "asc" | "desc" | undefined): "ascending" | "descending" | "none" {
+  return dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none";
 }
 
 type CellStyleInput = { align?: "left" | "center" | "right"; numeric?: boolean };

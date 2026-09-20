@@ -38,8 +38,6 @@ export function MatrizScreen({
   const pathname = usePathname();
   const current = useSearchParams();
   const [pending, startTransition] = useTransition();
-  // The cards scroll sideways, so finding one group among thirty means dragging
-  // past the rest. The Cidade view gets the same box inside the table.
   const [search, setSearch] = useState("");
 
   useReportNavPending(pending);
@@ -70,6 +68,13 @@ export function MatrizScreen({
 
     return term ? view.grupos.filter((g) => g.nome.toLowerCase().includes(term)) : view.grupos;
   }, [view.grupos, search]);
+  // Heat range for the cards' colour scale — relative to what's on screen, so
+  // it re-centers when the search narrows the set.
+  const heatRange = useMemo(() => {
+    const totals = found.map((g) => g.totalZerado);
+
+    return totals.length === 0 ? { min: 0, max: 0 } : { min: Math.min(...totals), max: Math.max(...totals) };
+  }, [found]);
   const switcher = (
     <Segmented
       options={GROUPINGS}
@@ -209,15 +214,23 @@ export function MatrizScreen({
           ) : (
             <div
               style={{
-                display: "flex",
+                display: "grid",
+                // `auto-fit` (not `auto-fill`) collapses columns nothing sits
+                // in, so the `1fr` on the columns that DO have a card actually
+                // redistributes the freed width to them — the cards fill the
+                // row edge to edge instead of leaving a gap when the count
+                // doesn't divide the width evenly.
+                gridTemplateColumns: `repeat(auto-fit, minmax(${CARD_WIDTH}px, 1fr))`,
                 gap: 12,
-                overflowX: "auto",
-                paddingBottom: 6,
-                scrollSnapType: "x proximity",
               }}
             >
               {found.map((g) => (
-                <OciosidadeCard key={g.nome} group={g} label={label} />
+                <OciosidadeCard
+                  key={g.nome}
+                  group={g}
+                  label={label}
+                  heat={heatOf(g.totalZerado, heatRange.min, heatRange.max)}
+                />
               ))}
             </div>
           )}
@@ -228,38 +241,48 @@ export function MatrizScreen({
 }
 
 /**
- * Idleness bands, as in the origin: everyone idle is the loudest state, then
- * three-quarters, then half; nobody idle gets its own colour so a clean group
- * reads as an achievement rather than as a low number.
+ * Colour scale relative to the groups on screen: the one with the most
+ * zeroed HC sits at the "hot" end (`--s-bad`), the one with the least at the
+ * "cool" end (`--s-ok`) — `color-mix` blends the design tokens directly, so
+ * it tracks light/dark without hardcoding a second palette.
  */
-function band(pct: number): { fg: string; bg: string; alerta: boolean } {
-  if (pct >= 100) return { fg: "var(--s-bad)", bg: "var(--s-bad-bg)", alerta: true };
+function heatOf(totalZerado: number, min: number, max: number): { fg: string; bg: string } {
+  const t = max === min ? 50 : Math.round(((totalZerado - min) / (max - min)) * 100);
 
-  if (pct >= 75) return { fg: "var(--s-bad)", bg: "var(--s-bad-bg)", alerta: false };
-
-  if (pct >= 50) return { fg: "var(--s-warn)", bg: "var(--s-warn-bg)", alerta: false };
-
-  if (pct === 0) return { fg: "var(--s-ok)", bg: "var(--s-ok-bg)", alerta: false };
-
-  return { fg: "var(--s-brand)", bg: "var(--s-brand-weak)", alerta: false };
+  return {
+    fg: `color-mix(in srgb, var(--s-bad) ${t}%, var(--s-ok) ${100 - t}%)`,
+    bg: `color-mix(in srgb, var(--s-bad-bg) ${t}%, var(--s-ok-bg) ${100 - t}%)`,
+  };
 }
 
 const CARD_WIDTH = 268;
 const CARD_HEIGHT = 540;
 
-function OciosidadeCard({ group, label }: { group: OciosidadeGroup; label: string }) {
-  const tone = band(group.pctZerado);
+function OciosidadeCard({
+  group,
+  label,
+  heat,
+}: {
+  group: OciosidadeGroup;
+  label: string;
+  heat: { fg: string; bg: string };
+}) {
+  // "Alerta máx" is an absolute signal (the whole group is idle) — it stays
+  // tied to the group's own percentage, independent of the relative heat scale.
+  const alerta = group.pctZerado >= 100;
+  const tone = heat;
 
   return (
     <article
       style={{
         ...card,
-        width: CARD_WIDTH,
-        minWidth: CARD_WIDTH,
+        // Width comes from the grid cell (`minmax(CARD_WIDTH, 1fr)` on the
+        // container) so the card stretches to fill it instead of leaving the
+        // row's leftover space empty.
+        minWidth: 0,
         height: CARD_HEIGHT,
         display: "flex",
         flexDirection: "column",
-        scrollSnapAlign: "start",
       }}
     >
       <header
@@ -292,10 +315,14 @@ function OciosidadeCard({ group, label }: { group: OciosidadeGroup; label: strin
               padding: "2px 6px",
               borderRadius: 999,
               background: "var(--s-card)",
-              color: tone.fg,
+              // Stays a fixed red when triggered — the relative heat scale
+              // could otherwise land it on the cool end (a small group where
+              // everyone idle is still a small absolute number) and an
+              // "Alerta máx" pill reading green would contradict itself.
+              color: alerta ? "var(--s-bad)" : tone.fg,
             }}
           >
-            {tone.alerta ? "Alerta máx" : "Regional"}
+            {alerta ? "Alerta máx" : "Regional"}
           </span>
         </div>
 

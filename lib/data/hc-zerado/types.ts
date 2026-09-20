@@ -13,8 +13,10 @@ export type StatusVenda = "CRIADO" | "EFETIVADO" | "INSTALADO";
 /** "Agilidade do processo": same-day confirmation / same-day install. */
 export type Agilidade = "" | "efetivado" | "instalado";
 
-/** Service-availability class of the seller's city. */
-export type PerfilCidade = "" | "FTTH" | "HIBRIDA" | "5G ONLY";
+/** Service-availability class of the seller's city. `ONLY` is the source's own
+ *  spelling for 5G-only cities (verified against `tipo_cidade` in the warehouse
+ *  — it is not "5G ONLY"). */
+export type PerfilCidade = "" | "FTTH" | "HIBRIDA" | "ONLY";
 
 /** Employment-experience cut. Values are the ones the source actually stores. */
 export type Experiencia = "" | "Em Exp." | "Efetivo";
@@ -150,6 +152,10 @@ export interface VendedorRow {
   gerente: string;
   coordenacao: string;
   situacao: string;
+  /** "Ativo" / "Férias DD-MM-AAAA a DD-MM-AAAA" / other payroll bucket, as of
+   *  the person's LAST day in the period — unlike `situacao` above (first day,
+   *  used for stable identity), this one is meant to read as "current status". */
+  statusLabel: string;
   ativo: boolean;
   totalVendas: number;
   diasComVenda: number;

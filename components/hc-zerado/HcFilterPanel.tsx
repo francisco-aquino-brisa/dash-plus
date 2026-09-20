@@ -37,7 +37,7 @@ const PERFIS: Record<string, PerfilCidade> = {
   Todos: "",
   FTTH: "FTTH",
   HÍBRIDA: "HIBRIDA",
-  "5G ONLY": "5G ONLY",
+  "5G ONLY": "ONLY",
 };
 const EXPERIENCIAS: Record<string, Experiencia> = { Todos: "", "Em Exp.": "Em Exp.", Efetivo: "Efetivo" };
 

@@ -641,6 +641,7 @@ function IndividualBlock({
     {
       key: "nome",
       header: "Nome",
+      sortValue: (r) => r.consultor,
       render: (r) => (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <span
@@ -659,22 +660,26 @@ function IndividualBlock({
           >
             {(r.consultor || "?").charAt(0)}
           </span>
-          <span
-            style={{
-              fontWeight: r.matricula === cross.vendedor ? 800 : 700,
-              color: r.matricula === cross.vendedor ? "var(--s-brand)" : "var(--s-t1)",
-            }}
-          >
-            {r.consultor || "—"}
+          <span style={{ display: "grid", gap: 1 }}>
+            <span
+              style={{
+                fontWeight: r.matricula === cross.vendedor ? 800 : 700,
+                color: r.matricula === cross.vendedor ? "var(--s-brand)" : "var(--s-t1)",
+              }}
+            >
+              {r.consultor || "—"}
+            </span>
+            <span style={{ fontSize: 10.5, color: "var(--s-t3)" }}>{r.statusLabel}</span>
           </span>
         </span>
       ),
     },
-    { key: "canal", header: "Canal", render: (r) => r.canal || "—" },
-    { key: "cidade", header: "Cidade", render: (r) => r.cidade || "—" },
+    { key: "canal", header: "Canal", sortValue: (r) => r.canal, render: (r) => r.canal || "—" },
+    { key: "cidade", header: "Cidade", sortValue: (r) => r.cidade, render: (r) => r.cidade || "—" },
     {
       key: "lideranca",
       header: "Liderança",
+      sortValue: (r) => r.gerente,
       render: (r) => (
         <span style={{ display: "grid", gap: 1 }}>
           <span style={{ fontWeight: 700, color: "var(--s-t1)" }}>{r.gerente || "—"}</span>
@@ -687,6 +692,7 @@ function IndividualBlock({
       header: "Dias com venda",
       numeric: true,
       align: "right",
+      sortValue: (r) => r.diasComVenda,
       render: (r) => <span style={{ color: "var(--s-ok)", fontWeight: 800 }}>{r.diasComVenda}</span>,
     },
     {
@@ -694,6 +700,7 @@ function IndividualBlock({
       header: "Dias que zerou",
       numeric: true,
       align: "right",
+      sortValue: (r) => r.diasSemVenda,
       render: (r) => <span style={{ color: "var(--s-bad)", fontWeight: 800 }}>{r.diasSemVenda}</span>,
     },
     {
@@ -701,6 +708,7 @@ function IndividualBlock({
       header: "Aproveitamento",
       numeric: true,
       align: "right",
+      sortValue: (r) => r.aproveitamento,
       render: (r) => `${r.aproveitamento}%`,
     },
     {
@@ -786,6 +794,13 @@ function MatrizBlock({ view, filters }: { view: HcDesempenhoView; filters: HcFil
 
     return [...map.entries()].slice(0, 120);
   }, [filtered]);
+  // "Ativo"/"Férias ..." under the consultant's name — Bloco 5 already computed
+  // it per person; matched here by name, the same key the adapter itself uses
+  // to keep Bloco 5 and 6 in the same order (see `matriz()` in databricks.ts).
+  const statusByName = useMemo(
+    () => new Map(view.vendedores.map((v) => [v.consultor.trim(), v.statusLabel])),
+    [view.vendedores],
+  );
 
   const changeView = (v: string) => {
     const q = keepScreenParams(new URLSearchParams(hcFiltersToQuery(filters)), current);
@@ -968,6 +983,11 @@ function MatrizBlock({ view, filters }: { view: HcDesempenhoView; filters: HcFil
                                 {nf.format(subjectRows[0]?.subjectTotal ?? 0)}
                               </strong>
                             </div>
+                            {grouping === "consultor" && statusByName.get(nome.trim()) && (
+                              <div style={{ fontSize: 10.5, color: "var(--s-t3)", marginTop: 1 }}>
+                                {statusByName.get(nome.trim())}
+                              </div>
+                            )}
                           </td>
                           {showCanal && (
                             <td

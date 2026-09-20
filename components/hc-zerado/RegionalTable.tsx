@@ -45,6 +45,7 @@ export function RegionalTable({
     {
       key: "nome",
       header: label,
+      sortValue: (r) => r.nome,
       render: (r) => (
         <span
           style={{
@@ -61,6 +62,7 @@ export function RegionalTable({
       header: "Total HC Ativo",
       numeric: true,
       align: "center",
+      sortValue: (r) => r.totalAtivo,
       render: (r) => nf.format(r.totalAtivo),
     },
     {
@@ -68,6 +70,7 @@ export function RegionalTable({
       header: "QTD. HC Vendeu",
       numeric: true,
       align: "center",
+      sortValue: (r) => r.totalWithSales,
       render: (r) => nf.format(r.totalWithSales),
     },
     {
@@ -75,6 +78,7 @@ export function RegionalTable({
       header: "% QTD. HC Vendeu",
       numeric: true,
       align: "center",
+      sortValue: (r) => r.pctVendeu,
       render: (r) => `${r.pctVendeu}%`,
     },
     {
@@ -82,6 +86,7 @@ export function RegionalTable({
       header: "Total HC que Zerou",
       numeric: true,
       align: "center",
+      sortValue: (r) => r.totalZerado,
       render: (r) => (
         <span style={{ color: "var(--s-bad)", fontWeight: 800 }}>{nf.format(r.totalZerado)}</span>
       ),
@@ -91,9 +96,16 @@ export function RegionalTable({
       header: "% HC que Zerou",
       numeric: true,
       align: "center",
+      sortValue: (r) => r.pctZerado,
       render: (r) => <span style={{ color: "var(--s-bad)", fontWeight: 800 }}>{r.pctZerado}%</span>,
     },
-    { key: "d1", header: "Comparativo D-1", align: "center", render: (r) => <D1Comparison row={r} /> },
+    {
+      key: "d1",
+      header: "Comparativo D-1",
+      align: "center",
+      sortValue: (r) => r.countZeradoD0 - r.countZeradoD1,
+      render: (r) => <D1Comparison row={r} />,
+    },
     {
       key: "obs",
       header: "Obs.",

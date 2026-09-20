@@ -158,6 +158,28 @@ function totalizadores(rows: ServicoDay[]): Totalizadores {
   return { ftth, fwa, chips5g, renovacoes };
 }
 
+/** `"yyyy-mm-dd" → "dd-mm-yyyy"`, for the "Férias" status label. */
+function ddmmyyyy(iso: string): string {
+  const [y, m, d] = iso.split("-");
+
+  return `${d}-${m}-${y}`;
+}
+
+/** The "current status" line shown under a seller's name — Bloco 5 and 6. */
+function computeStatusLabel(day: PersonDay): string {
+  const cat = situacaoCategory(day.situacao);
+
+  if (cat === "Ativos") return "Ativo";
+
+  if (cat === "Férias") {
+    return day.feriasInicio && day.feriasFim
+      ? `Férias ${ddmmyyyy(day.feriasInicio)} a ${ddmmyyyy(day.feriasFim)}`
+      : "Férias";
+  }
+
+  return cat;
+}
+
 /**
  * Bloco 5 — one row per seller.
  *
@@ -172,18 +194,22 @@ function vendedores(
   refDate: string,
   diasUteisMes: number,
 ): VendedorRow[] {
-  const people = new Map<string, { first: PersonDay; days: Map<string, number> }>();
+  const people = new Map<string, { first: PersonDay; last: PersonDay; days: Map<string, number> }>();
 
   for (const r of rows) {
     if (!r.matricula) continue;
 
-    const cur = people.get(r.matricula) ?? { first: r, days: new Map<string, number>() };
+    const cur = people.get(r.matricula) ?? { first: r, last: r, days: new Map<string, number>() };
 
     cur.days.set(r.d, (cur.days.get(r.d) ?? 0) + r.v);
 
-    // Identity and status come from the person's FIRST day in the range, so
-    // someone active on day 1 who went on leave later still shows as active.
+    // Identity comes from the person's FIRST day in the range, so someone
+    // active on day 1 who went on leave later still shows as active there.
     if (r.d < cur.first.d) cur.first = r;
+
+    // `statusLabel` (below) reads the LAST day instead, so it shows the
+    // person's current status rather than the one they had at the start.
+    if (r.d > cur.last.d) cur.last = r;
 
     people.set(r.matricula, cur);
   }
@@ -216,6 +242,7 @@ function vendedores(
       gerente: p.first.gerente ?? "",
       coordenacao: p.first.coordenacao ?? "",
       situacao: p.first.situacao ?? "",
+      statusLabel: computeStatusLabel(p.last),
       ativo: true,
       totalVendas,
       diasComVenda,

@@ -45,6 +45,8 @@ export interface PersonDay {
   consultor: string;
   canal: string;
   situacao: string;
+  feriasInicio: string | null;
+  feriasFim: string | null;
 }
 
 export async function fetchPersonDay(f: HcFilters): Promise<PersonDay[]> {
@@ -66,7 +68,9 @@ export async function fetchPersonDay(f: HcFilters): Promise<PersonDay[]> {
            ${CIDADE} cidade,
            MAX(consultor) consultor,
            MAX(canal) canal,
-           MAX(situacao) situacao
+           MAX(situacao) situacao,
+           CAST(MAX(data_inicio_ferias) AS STRING) feriasInicio,
+           CAST(MAX(data_fim_ferias) AS STRING) feriasFim
     FROM base
     GROUP BY data, ${HC_KEY}, CAST(matricula AS STRING),
              COALESCE(NULLIF(TRIM(gerente), ''), 'Sem Regional'),

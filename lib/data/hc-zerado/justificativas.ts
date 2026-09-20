@@ -132,20 +132,14 @@ export interface ZeroedRow {
  * Every person × business day in the period where the person was ACTIVE and the
  * rules counted no sale.
  *
- * Business day here means **Monday to Friday, holidays included** — the origin's
- * effective rule, and what this screen has to agree with:
+ * Business day here means **Monday to Friday, holidays excluded**:
  *
  *  - **Saturday is not a business day.** Telas 1–3 count it (the source's
  *    `flag_feriado` only marks Sunday), so this screen's zeroed-day count reads
  *    lower than Tela 1's for the same period. Confirmed as intended.
- *  - **A holiday still has to be justified.** The origin filtered holidays out
- *    against a hardcoded JS list that holds two dates in jun/2026, so in practice
- *    it never excluded one. Using the warehouse's `flag_feriado` instead looked
- *    like an upgrade, but it silently dropped a third of the list: in 01–14/09/2026
- *    it cut 07/09 (Independência, a Monday) and with it 742 zeroed days and 176
- *    people — 2.003/654 against the origin's 2.745/830. Parity wins here; if the
- *    business would rather not charge a holiday, the fix is one predicate
- *    (`AND feriado = 0` below) plus the same change in the origin.
+ *  - **A holiday does not need a justification.** Filtered out via `feriado = 0`
+ *    below, using the warehouse's own `flag_feriado` (not the origin's hardcoded
+ *    JS list of two dates, which in practice never excluded one).
  *
  * The person grain is the matrícula, not `HC_KEY`: the justification table keys
  * by `matricula`, so anything without one cannot be justified and is dropped.
@@ -180,7 +174,7 @@ export function fetchDiasZerados(f: HcFilters, regras: HcRegras): Promise<Zeroed
     )
     SELECT d, matricula, consultor, cargo, cidade, coordenacao, servicos, feriado
     FROM dias
-    WHERE ativo = 1 AND v = 0
+    WHERE ativo = 1 AND v = 0 AND feriado = 0
     ORDER BY consultor, d`;
 
   return q<ZeroedRow>(sql, params);
