@@ -19,6 +19,7 @@ import {
   LogOut,
   Moon,
   MoreHorizontal,
+  Network,
   PanelLeft,
   Plus,
   Settings,
@@ -866,6 +867,17 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                         >
                           <User size={15} style={{ flex: "none" }} />
                           <span>Ver perfil</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setUserMenu(false);
+                            startNav(() => router.push("/organograma"));
+                          }}
+                          className="bd-menuitem"
+                          style={menuItem("var(--s-t1)")}
+                        >
+                          <Network size={15} style={{ flex: "none" }} />
+                          <span>Organograma</span>
                         </button>
                         <button
                           onClick={() => {
