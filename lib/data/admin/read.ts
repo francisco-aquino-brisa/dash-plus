@@ -1,6 +1,8 @@
 import "server-only";
 
 import { DatabricksDataClient } from "@/lib/data/databricks";
+import { isScopeKind } from "@/lib/auth/jwt";
+import { HIERARQUIA, cpfDigits } from "@/lib/data/scope-sql";
 import { T } from "./tables";
 import { isLockedNivel } from "./derive";
 import type { AdminData, Cargo, Capacidade, Nivel, Pagina, Usuario } from "./types";
@@ -140,12 +142,17 @@ export async function readCapacidades(client: DatabricksDataClient): Promise<Cap
 
 export async function readUsuarios(client: DatabricksDataClient): Promise<Usuario[]> {
   return safe("usuarios", async () => {
+    // The escopo join resolves the delegated manager's name for display. It is a
+    // read of the RH view (2.885 rows), and it only matches for escopo_tipo='gestor'.
     const rows = await client.query<Record<string, unknown>>(
-      `SELECT u.id, u.nome, u.email, u.nivel_id, n.nome AS nivel_nome,
-              u.cargo_id, c.nome AS cargo_nome, u.ativo, u.sincronizado
+      `SELECT u.id, u.nome, u.email, u.cpf, u.nivel_id, n.nome AS nivel_nome,
+              u.cargo_id, c.nome AS cargo_nome, u.ativo, u.sincronizado,
+              u.escopo_tipo, u.escopo_cpf, g.nome AS escopo_nome
          FROM ${T.usuarios} u
          LEFT JOIN ${T.niveis} n ON n.id = u.nivel_id
          LEFT JOIN ${T.cargos} c ON c.id = u.cargo_id
+         LEFT JOIN ${HIERARQUIA} g
+                ON g.cpf_digits = regexp_replace(u.escopo_cpf, '[^0-9]', '')
         ORDER BY u.nome`,
     );
 
@@ -153,6 +160,7 @@ export async function readUsuarios(client: DatabricksDataClient): Promise<Usuari
       id: toNum(r.id),
       nome: toStr(r.nome),
       email: toStr(r.email),
+      cpf: cpfDigits(toNullStr(r.cpf)) || null,
       nivelId: r.nivel_id == null ? null : toNum(r.nivel_id),
       nivelNome: toNullStr(r.nivel_nome),
       cargoId: r.cargo_id == null ? null : toNum(r.cargo_id),
@@ -160,6 +168,10 @@ export async function readUsuarios(client: DatabricksDataClient): Promise<Usuari
       ativo: r.ativo === true,
       // `sincronizado` is a nullable tinyint (1 = synced); null/0 → not synced.
       sincronizado: r.sincronizado === true || toNum(r.sincronizado) === 1,
+      // A row with no escopo yet reads as `proprio` — never as unrestricted.
+      escopoTipo: isScopeKind(r.escopo_tipo) ? r.escopo_tipo : "proprio",
+      escopoCpf: cpfDigits(toNullStr(r.escopo_cpf)) || null,
+      escopoNome: toNullStr(r.escopo_nome),
     }));
   });
 }

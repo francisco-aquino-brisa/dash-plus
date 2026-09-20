@@ -13,9 +13,9 @@ import { usePreference } from "@/lib/preferences/use-preference";
 import { useSetNavPending } from "@/lib/ui/nav-pending";
 import { DEFAULT_SELECTION, SELECTION_PREF_KEY, type SalesIndicatorVM } from "@/lib/data/sales/indicators";
 import { formatMonth } from "@/lib/format";
-import type { SalesFilters, SalesFilterOptions, SalesView } from "@/lib/data/sales/types";
+import type { SalesUrlFilters, SalesFilterOptions, SalesView } from "@/lib/data/sales/types";
 
-const DEFAULT_FILTERS: SalesFilters = {
+const DEFAULT_FILTERS: SalesUrlFilters = {
   period: "mes_atual",
   from: undefined,
   to: undefined,
@@ -28,7 +28,7 @@ const DEFAULT_FILTERS: SalesFilters = {
   tipo: "",
 };
 
-function toQuery(f: SalesFilters): string {
+function toQuery(f: SalesUrlFilters): string {
   const p = new URLSearchParams();
 
   if (f.period && f.period !== "mes_atual") p.set("periodo", f.period);
@@ -64,7 +64,7 @@ export function SalesDashboard({ view, options }: { view: SalesView; options: Sa
 
   // Optimistic filters: the chips reflect the new value instantly, while the
   // server request (which recomputes the data) runs behind the transition.
-  const [uiFilters, setUiFilters] = useState<SalesFilters>(view.filters);
+  const [uiFilters, setUiFilters] = useState<SalesUrlFilters>(view.filters);
 
   useEffect(() => {
     setUiFilters(view.filters);
@@ -89,7 +89,7 @@ export function SalesDashboard({ view, options }: { view: SalesView; options: Sa
   );
 
   const navigate = useCallback(
-    (f: SalesFilters) => {
+    (f: SalesUrlFilters) => {
       setUiFilters(f); // reflect the chip immediately, request afterwards
       const qs = toQuery(f);
 

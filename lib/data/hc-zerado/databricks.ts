@@ -9,6 +9,7 @@
 
 import { num } from "../_shared";
 import { CIDADE, FERIADO, MONTHS, SOURCE, ATIVO, q } from "./source";
+import { scopePredicate, type ScopeFilter } from "../scope-sql";
 import { hcWhere, vendasExpr, vendasWhere } from "./filters";
 import {
   applyGroupCross,
@@ -479,6 +480,10 @@ export async function databricksHcDesempenho(f: HcFilters, view: MatrizView): Pr
  * Working days in the whole month the range ends in — the denominator the
  * monthly projection extrapolates to. Counted from the source's own holiday
  * flag, replacing the hard-coded 22 the original carried.
+ *
+ * Deliberately NOT scoped: this is a calendar, not people. September had the
+ * working days it had, and a denominator that shrank with the reader's scope
+ * would make the same person's PDU read differently to their manager.
  */
 async function diasUteisInMonth(to: string): Promise<number> {
   const rows = await q<{ d: number }>(
@@ -496,7 +501,15 @@ async function diasUteisInMonth(to: string): Promise<number> {
  * the range (~16k for a month). Cascaded in Node and cached per period, so a
  * filter click costs no query. Never reaches the browser.
  */
-export function databricksHcFilterTuples(from: string, to: string): Promise<HcFilterTuple[]> {
+export function databricksHcFilterTuples(
+  from: string,
+  to: string,
+  scope: ScopeFilter,
+): Promise<HcFilterTuple[]> {
+  // Scoped like every other query: a dropdown that offered a gerência the user
+  // cannot open would be a list of names they are not allowed to see, and
+  // picking one would return an empty screen with no explanation.
+  const sc = scopePredicate(scope, "hash_user");
   const sql = `
     SELECT DISTINCT
       TRIM(gerente) gerente,
@@ -513,7 +526,7 @@ export function databricksHcFilterTuples(from: string, to: string): Promise<HcFi
       TRIM(tipo_cidade) perfil,
       TRIM(status_experiencia) experiencia
     FROM ${SOURCE}
-    WHERE data BETWEEN DATE'${from}' AND DATE'${to}'`;
+    WHERE data BETWEEN DATE'${from}' AND DATE'${to}'${sc.where}`;
 
-  return q<HcFilterTuple>(sql, []);
+  return q<HcFilterTuple>(sql, sc.params);
 }

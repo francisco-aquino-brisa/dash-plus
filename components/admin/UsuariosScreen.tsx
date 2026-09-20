@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { AtSign, CircleCheck, CircleX } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { AtSign, CircleCheck, CircleX, Users } from "lucide-react";
 import { AdminScreen } from "./AdminScreen";
 import { AdminModal } from "./AdminModal";
 import { ConfirmDelete } from "./ConfirmDelete";
@@ -11,17 +11,29 @@ import { Chip, Panel, RowActions } from "./primitives";
 import { useAdminAction } from "./useAdminAction";
 import { textMatches } from "./filter";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { nivelChipTone, statusChipTone } from "@/lib/data/admin/derive";
-import { removeUsuario, saveUsuario, searchUsuarioCandidates } from "@/app/(app)/admin/actions";
-import type { Cargo, Nivel, Usuario } from "@/lib/data/admin/types";
+import { WARN_TONE, nivelChipTone, statusChipTone } from "@/lib/data/admin/derive";
+import {
+  previewEscopo,
+  removeUsuario,
+  saveUsuario,
+  searchUsuarioCandidates,
+  searchUsuarioPessoas,
+  type EscopoPreview,
+} from "@/app/(app)/admin/actions";
+import type { Cargo, Nivel, ScopeKind, Usuario } from "@/lib/data/admin/types";
 
 interface Draft {
   id?: number;
   nome: string;
   email: string;
+  /** Own CPF — only known on edit; on create the preview resolves it from the e-mail. */
+  cpf: string | null;
   nivelId: number | null;
   cargoId: number | null;
   ativo: boolean;
+  escopoTipo: ScopeKind;
+  escopoCpf: string | null;
+  escopoNome: string | null;
 }
 
 export function UsuariosScreen({
@@ -73,6 +85,11 @@ export function UsuariosScreen({
       render: (u) => <span style={{ color: "var(--s-t2)", fontWeight: 600 }}>{u.cargoNome ?? "—"}</span>,
     },
     {
+      key: "escopo",
+      header: "Escopo",
+      render: (u) => <EscopoCell usuario={u} />,
+    },
+    {
       key: "status",
       header: "Status",
       render: (u) => <Chip tone={statusChipTone(u.ativo)}>{u.ativo ? "Ativo" : "Inativo"}</Chip>,
@@ -93,7 +110,17 @@ export function UsuariosScreen({
 
   function openNew() {
     setError(null);
-    setDraft({ nome: "", email: "", nivelId: niveis[0]?.id ?? null, cargoId: null, ativo: true });
+    setDraft({
+      nome: "",
+      email: "",
+      cpf: null,
+      nivelId: niveis[0]?.id ?? null,
+      cargoId: null,
+      ativo: true,
+      escopoTipo: "proprio",
+      escopoCpf: null,
+      escopoNome: null,
+    });
   }
 
   function openEdit(u: Usuario) {
@@ -102,9 +129,13 @@ export function UsuariosScreen({
       id: u.id,
       nome: u.nome,
       email: u.email,
+      cpf: u.cpf,
       nivelId: u.nivelId,
       cargoId: u.cargoId,
       ativo: u.ativo,
+      escopoTipo: u.escopoTipo,
+      escopoCpf: u.escopoCpf,
+      escopoNome: u.escopoNome,
     });
   }
 
@@ -113,6 +144,15 @@ export function UsuariosScreen({
     (query: string): Promise<AsyncOption[]> =>
       searchUsuarioCandidates(query).then((rows) =>
         rows.map((r) => ({ value: r.email, label: r.nome, hint: r.email })),
+      ),
+    [],
+  );
+
+  // The delegated-scope picker draws from everyone in the hierarchy, keyed by CPF.
+  const searchPessoas = useCallback(
+    (query: string): Promise<AsyncOption[]> =>
+      searchUsuarioPessoas(query).then((rows) =>
+        rows.map((r) => ({ value: r.cpf, label: r.nome, hint: r.cargo ?? r.email ?? undefined })),
       ),
     [],
   );
@@ -129,6 +169,8 @@ export function UsuariosScreen({
           nivelId: draft.nivelId,
           cargoId: draft.cargoId,
           ativo: draft.ativo,
+          escopoTipo: draft.escopoTipo,
+          escopoCpf: draft.escopoCpf,
         }),
       () => setDraft(null),
     );
@@ -169,7 +211,7 @@ export function UsuariosScreen({
           title={draft.id ? "Editar usuário" : "Vincular usuário"}
           onSubmit={submit}
           submitLabel={draft.id ? "Salvar" : "Vincular"}
-          submitDisabled={!draft.email}
+          submitDisabled={!draft.email || (draft.escopoTipo === "gestor" && !draft.escopoCpf)}
           busy={busy}
           error={error}
         >
@@ -241,6 +283,7 @@ export function UsuariosScreen({
             placeholder="Selecionar cargo…"
             noneLabel="Sem cargo"
           />
+          <EscopoField draft={draft} onChange={setDraft} search={searchPessoas} />
           {draft.id ? (
             <StatusToggle value={draft.ativo} onChange={(ativo) => setDraft({ ...draft, ativo })} />
           ) : (
@@ -294,60 +337,207 @@ function FieldLabel({ children }: { children: ReactNode }) {
   );
 }
 
+/** Pill group used by both the status and the escopo selectors. */
+function Segmented<T extends string | boolean>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { label: string; val: T }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        padding: 3,
+        borderRadius: 10,
+        background: "var(--s-sunken)",
+        border: "1px solid var(--s-border)",
+      }}
+    >
+      {options.map((opt) => {
+        const active = opt.val === value;
+
+        return (
+          <button
+            key={opt.label}
+            type="button"
+            onClick={() => onChange(opt.val)}
+            style={{
+              padding: "6px 16px",
+              borderRadius: 8,
+              border: 0,
+              background: active ? "var(--s-card)" : "transparent",
+              color: active ? "var(--s-t1)" : "var(--s-t3)",
+              font: "inherit",
+              fontSize: 12.5,
+              fontWeight: 800,
+              cursor: "pointer",
+              boxShadow: active ? "var(--s-sh)" : undefined,
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function StatusToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div>
-      <span
-        style={{
-          display: "block",
-          fontSize: 10.5,
-          fontWeight: 700,
-          letterSpacing: ".06em",
-          textTransform: "uppercase",
-          color: "var(--s-t3)",
-          marginBottom: 6,
-        }}
-      >
-        Status
-      </span>
-      <div
-        style={{
-          display: "inline-flex",
-          padding: 3,
-          borderRadius: 10,
-          background: "var(--s-sunken)",
-          border: "1px solid var(--s-border)",
-        }}
-      >
-        {[
+      <FieldLabel>Status</FieldLabel>
+      <Segmented
+        value={value}
+        onChange={onChange}
+        options={[
           { label: "Ativo", val: true },
           { label: "Inativo", val: false },
-        ].map((opt) => {
-          const active = opt.val === value;
+        ]}
+      />
+    </div>
+  );
+}
 
-          return (
-            <button
-              key={opt.label}
-              type="button"
-              onClick={() => onChange(opt.val)}
-              style={{
-                padding: "6px 16px",
-                borderRadius: 8,
-                border: 0,
-                background: active ? "var(--s-card)" : "transparent",
-                color: active ? "var(--s-t1)" : "var(--s-t3)",
-                font: "inherit",
-                fontSize: 12.5,
-                fontWeight: 800,
-                cursor: "pointer",
-                boxShadow: active ? "var(--s-sh)" : undefined,
-              }}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
+const ESCOPO_OPTIONS: { label: string; val: ScopeKind }[] = [
+  { label: "A própria posição", val: "proprio" },
+  { label: "Vê o mesmo que", val: "gestor" },
+  { label: "Tudo", val: "todos" },
+];
+
+/** One-line summary of a user's escopo for the table. */
+function EscopoCell({ usuario }: { usuario: Usuario }) {
+  if (usuario.escopoTipo === "todos") return <Chip tone={WARN_TONE}>Tudo</Chip>;
+
+  if (usuario.escopoTipo === "gestor") {
+    return (
+      <span style={{ color: "var(--s-t2)", fontWeight: 600, fontSize: 12.5 }}>
+        Vê como: {usuario.escopoNome ?? usuario.escopoCpf ?? "—"}
+      </span>
+    );
+  }
+
+  return <span style={{ color: "var(--s-t3)", fontWeight: 600, fontSize: 12.5 }}>Própria</span>;
+}
+
+/**
+ * The data-scope field: whose view this user takes, plus a live read of what
+ * that resolves to today. The preview matters because "a própria posição" means
+ * nothing until you know whether the person answers for a node — a promotor
+ * resolves to themselves, a supervisor to a whole subtree.
+ */
+function EscopoField({
+  draft,
+  onChange,
+  search,
+}: {
+  draft: Draft;
+  onChange: (d: Draft) => void;
+  search: (query: string) => Promise<AsyncOption[]>;
+}) {
+  const [preview, setPreview] = useState<EscopoPreview | null>(null);
+  const [loading, setLoading] = useState(false);
+  const { escopoTipo, escopoCpf, cpf, email } = draft;
+
+  useEffect(() => {
+    if (escopoTipo === "todos" || (escopoTipo === "gestor" && !escopoCpf)) {
+      setPreview(null);
+
+      return;
+    }
+
+    let stale = false;
+
+    setLoading(true);
+    previewEscopo({ escopoTipo, escopoCpf, cpf, email })
+      .then((r) => {
+        if (!stale) setPreview(r);
+      })
+      .finally(() => {
+        if (!stale) setLoading(false);
+      });
+
+    return () => {
+      stale = true;
+    };
+  }, [escopoTipo, escopoCpf, cpf, email]);
+
+  return (
+    <div>
+      <FieldLabel>Escopo de dados</FieldLabel>
+      <Segmented
+        value={escopoTipo}
+        options={ESCOPO_OPTIONS}
+        onChange={(val) =>
+          onChange({
+            ...draft,
+            escopoTipo: val,
+            ...(val === "gestor" ? {} : { escopoCpf: null, escopoNome: null }),
+          })
+        }
+      />
+      {escopoTipo === "gestor" && (
+        <div style={{ marginTop: 10 }}>
+          <AsyncSelect
+            label=""
+            value={escopoCpf ? { value: escopoCpf, label: draft.escopoNome ?? escopoCpf } : null}
+            onChange={(opt) =>
+              onChange({ ...draft, escopoCpf: opt?.value ?? null, escopoNome: opt?.label ?? null })
+            }
+            search={search}
+            placeholder="Selecionar pessoa…"
+            searchPlaceholder="Buscar por nome, CPF, matrícula…"
+            emptyText="Nenhuma pessoa encontrada na hierarquia."
+          />
+        </div>
+      )}
+      <EscopoPreviewLine tipo={escopoTipo} loading={loading} preview={preview} />
+    </div>
+  );
+}
+
+function EscopoPreviewLine({
+  tipo,
+  loading,
+  preview,
+}: {
+  tipo: ScopeKind;
+  loading: boolean;
+  preview: EscopoPreview | null;
+}) {
+  const text = (() => {
+    if (tipo === "todos") return "Vê todos os dados, sem restrição de hierarquia.";
+
+    if (loading) return "Calculando…";
+
+    if (!preview) return tipo === "gestor" ? "Selecione a pessoa." : null;
+
+    if (preview.foraDaHierarquia) return "Não está na hierarquia do RH — não verá dado nenhum.";
+
+    if (preview.nos.length === 0)
+      return "Não responde por nenhuma estrutura — verá apenas os próprios dados.";
+
+    return `${preview.nos.join(" · ")} · ${preview.pessoas} ${preview.pessoas === 1 ? "pessoa" : "pessoas"}`;
+  })();
+
+  if (!text) return null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        marginTop: 8,
+        fontSize: 11.5,
+        color: "var(--s-t3)",
+      }}
+    >
+      <Users size={13} style={{ flex: "none" }} />
+      <span>{text}</span>
     </div>
   );
 }

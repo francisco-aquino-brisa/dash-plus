@@ -1,6 +1,7 @@
 import "server-only";
 
 import { DatabricksDataClient } from "@/lib/data/databricks";
+import type { ScopeKind } from "@/lib/auth/jwt";
 import { T } from "./tables";
 
 /**
@@ -117,32 +118,71 @@ export function deleteCapacidade(id: number): Promise<void> {
 
 // ── Usuários ──────────────────────────────────────────────────────────────────
 
+/**
+ * The fields a user row carries beyond its identity. Grouped because the list
+ * outgrew a readable positional signature once the scope columns arrived.
+ */
+export interface UsuarioFields {
+  nivelId: number | null;
+  cargoId: number | null;
+  /** `proprio` | `gestor` | `todos` — validated by the caller. */
+  escopoTipo: ScopeKind;
+  /** Digits only; only meaningful when `escopoTipo === "gestor"`. */
+  escopoCpf: string | null;
+}
+
 export function createUsuario(
-  nome: string,
-  email: string,
-  nivelId: number | null,
-  cargoId: number | null,
+  identity: { nome: string; email: string; cpf: string | null; matricula: string | null },
+  fields: UsuarioFields,
 ): Promise<void> {
   // `ativo` defaults to TRUE — a new user is always Ativo (no status on create).
-  return run(`INSERT INTO ${T.usuarios} (nome, email, nivel_id, cargo_id) VALUES (?, ?, ?, ?)`, [
-    nome,
-    email,
-    nivelId,
-    cargoId,
-  ]);
+  // `cpf` and `matricula` come from the hierarchy: the CPF is what binds the
+  // user to their position, so a row without it can only ever see itself.
+  return run(
+    `INSERT INTO ${T.usuarios} (nome, email, cpf, matricula, nivel_id, cargo_id, escopo_tipo, escopo_cpf)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      identity.nome,
+      identity.email,
+      identity.cpf,
+      identity.matricula,
+      fields.nivelId,
+      fields.cargoId,
+      fields.escopoTipo,
+      fields.escopoTipo === "gestor" ? fields.escopoCpf : null,
+    ],
+  );
 }
 
 export function updateUsuario(
   id: number,
-  nome: string,
-  email: string,
-  nivelId: number | null,
-  cargoId: number | null,
-  ativo: boolean,
+  identity: { nome: string; email: string },
+  fields: UsuarioFields & { ativo: boolean },
 ): Promise<void> {
   return run(
-    `UPDATE ${T.usuarios} SET nome = ?, email = ?, nivel_id = ?, cargo_id = ?, ativo = ?, atualizado_em = CURRENT_TIMESTAMP() WHERE id = ?`,
-    [nome, email, nivelId, cargoId, ativo, id],
+    `UPDATE ${T.usuarios}
+        SET nome = ?, email = ?, nivel_id = ?, cargo_id = ?, ativo = ?,
+            escopo_tipo = ?, escopo_cpf = ?, atualizado_em = CURRENT_TIMESTAMP()
+      WHERE id = ?`,
+    [
+      identity.nome,
+      identity.email,
+      fields.nivelId,
+      fields.cargoId,
+      fields.ativo,
+      fields.escopoTipo,
+      fields.escopoTipo === "gestor" ? fields.escopoCpf : null,
+      id,
+    ],
+  );
+}
+
+/** Backfill the CPF of a row created before it was stored (see [[hierarquia]]). */
+export function setUsuarioCpf(id: number, cpf: string, matricula: string | null): Promise<void> {
+  return run(
+    `UPDATE ${T.usuarios} SET cpf = ?, matricula = coalesce(matricula, ?), atualizado_em = CURRENT_TIMESTAMP()
+      WHERE id = ? AND coalesce(cpf, '') = ''`,
+    [cpf, matricula, id],
   );
 }
 

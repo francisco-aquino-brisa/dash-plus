@@ -2,12 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/session";
-import { normalizeCapabilityLabel } from "@/lib/data/admin/derive";
+import { describeScope } from "@/lib/auth/scope";
+import { nivelRhLabel, normalizeCapabilityLabel } from "@/lib/data/admin/derive";
 import {
   findHierarquiaCandidate,
+  findHierarquiaPessoa,
+  findHierarquiaPessoaByEmail,
   readUsuarioIdentity,
   searchHierarquiaCandidates,
+  searchHierarquiaPessoas,
   type HierarquiaCandidate,
+  type HierarquiaPessoa,
 } from "@/lib/data/admin/hierarquia";
 import type { ActionResult } from "@/lib/data/admin/types";
 import * as write from "@/lib/data/admin/write";
@@ -175,6 +180,85 @@ export async function searchUsuarioCandidates(query: string): Promise<Hierarquia
   return searchHierarquiaCandidates(query ?? "");
 }
 
+/**
+ * Search people for the "vê o mesmo que" picker (admin-only). Unlike the
+ * candidate search this includes people already registered — the person you
+ * delegate to is usually a manager who is already a user.
+ */
+export async function searchUsuarioPessoas(query: string): Promise<HierarquiaPessoa[]> {
+  const session = await getSession();
+
+  if (!session?.isAdmin) return [];
+
+  return searchHierarquiaPessoas(query ?? "");
+}
+
+/**
+ * Resolve the escopo the client asked for into what is safe to store.
+ *
+ * The delegated CPF is re-validated against the hierarchy here, never trusted
+ * from the client: pointing a user at a CPF that is not in the view would grant
+ * a scope nobody can audit. Anything unrecognized collapses to `proprio`, the
+ * closed end — an escopo must never widen by accident.
+ */
+async function resolveEscopo(
+  escopoTipo: unknown,
+  escopoCpf: unknown,
+): Promise<{ fields: write.UsuarioFields["escopoTipo"]; cpf: string | null } | { error: string }> {
+  if (escopoTipo === "todos") return { fields: "todos", cpf: null };
+
+  if (escopoTipo !== "gestor") return { fields: "proprio", cpf: null };
+
+  const pessoa = await findHierarquiaPessoa(typeof escopoCpf === "string" ? escopoCpf : "");
+
+  if (!pessoa) {
+    return { error: "Selecione uma pessoa válida da hierarquia para o escopo delegado." };
+  }
+
+  return { fields: "gestor", cpf: pessoa.cpf };
+}
+
+export interface EscopoPreview {
+  /** Node labels, e.g. `["supervisão CIDADE - CAMOCIM/CE"]`. Empty ⇒ only itself. */
+  nos: string[];
+  pessoas: number;
+  /** The CPF is not in `vw_hierarquia` (CLT-only) — the scope resolves to nothing. */
+  foraDaHierarquia: boolean;
+}
+
+/**
+ * What the chosen escopo resolves to right now, shown under the field so the
+ * admin sees the consequence before saving. `proprio` resolves the person being
+ * edited (by CPF on edit, by the picked e-mail on create).
+ */
+export async function previewEscopo(input: {
+  escopoTipo?: string;
+  escopoCpf?: string | null;
+  /** The user's own CPF (edit) — falls back to `email` on create. */
+  cpf?: string | null;
+  email?: string | null;
+}): Promise<EscopoPreview | null> {
+  const session = await getSession();
+
+  if (!session?.isAdmin || input.escopoTipo === "todos") return null;
+
+  let cpf = input.escopoTipo === "gestor" ? (input.escopoCpf ?? "") : (input.cpf ?? "");
+
+  if (!cpf && input.escopoTipo !== "gestor" && input.email) {
+    cpf = (await findHierarquiaPessoaByEmail(input.email))?.cpf ?? "";
+  }
+
+  if (!cpf) return { nos: [], pessoas: 0, foraDaHierarquia: true };
+
+  const { nodes, people, inHierarchy } = await describeScope(cpf);
+
+  return {
+    nos: nodes.map((n) => `${nivelRhLabel(n.nivel)} ${n.nome}`),
+    pessoas: people,
+    foraDaHierarquia: !inHierarchy,
+  };
+}
+
 export async function saveUsuario(input: {
   id?: number;
   /** Selected candidate e-mail (create only) — re-validated against the hierarchy. */
@@ -182,36 +266,37 @@ export async function saveUsuario(input: {
   nivelId: number | null;
   cargoId: number | null;
   ativo?: boolean;
+  escopoTipo?: string;
+  /** CPF of the person whose view is delegated — only read when `escopoTipo === "gestor"`. */
+  escopoCpf?: string | null;
 }): Promise<ActionResult> {
-  if (input.id) {
-    // Edit: only nível/cargo/status change. Nome/e-mail come from the stored row,
-    // never the client, so a forged payload cannot rewrite another user's identity.
-    const denied = await guard();
-
-    if (denied) return denied;
-
-    const identity = await readUsuarioIdentity(input.id);
-
-    if (!identity) return { ok: false, error: "Usuário não encontrado." };
-
-    return mutate(() =>
-      write.updateUsuario(
-        input.id!,
-        identity.nome,
-        identity.email,
-        input.nivelId,
-        input.cargoId,
-        input.ativo ?? true,
-      ),
-    );
-  }
-
-  // Create: bind a person selected from the hierarchy. The e-mail is resolved back
-  // to its canonical identity server-side (must exist there and not be registered).
   const denied = await guard();
 
   if (denied) return denied;
 
+  const escopo = await resolveEscopo(input.escopoTipo, input.escopoCpf);
+
+  if ("error" in escopo) return { ok: false, error: escopo.error };
+
+  const fields = {
+    nivelId: input.nivelId,
+    cargoId: input.cargoId,
+    escopoTipo: escopo.fields,
+    escopoCpf: escopo.cpf,
+  };
+
+  if (input.id) {
+    // Edit: only nível/cargo/status/escopo change. Nome/e-mail come from the stored
+    // row, never the client, so a forged payload cannot rewrite another identity.
+    const identity = await readUsuarioIdentity(input.id);
+
+    if (!identity) return { ok: false, error: "Usuário não encontrado." };
+
+    return mutate(() => write.updateUsuario(input.id!, identity, { ...fields, ativo: input.ativo ?? true }));
+  }
+
+  // Create: bind a person selected from the hierarchy. The e-mail is resolved back
+  // to its canonical identity server-side (must exist there and not be registered).
   const candidate = await findHierarquiaCandidate(input.email ?? "");
 
   if (!candidate) {
@@ -221,7 +306,19 @@ export async function saveUsuario(input: {
     };
   }
 
-  return mutate(() => write.createUsuario(candidate.nome, candidate.email, input.nivelId, input.cargoId));
+  return mutate(() =>
+    write.createUsuario(
+      {
+        nome: candidate.nome,
+        email: candidate.email,
+        // Digits only: the CPF is the scope key, and it is stored from the start
+        // so the user resolves to their own position on first login.
+        cpf: (candidate.cpf ?? "").replace(/\D/g, "") || null,
+        matricula: candidate.matricula,
+      },
+      fields,
+    ),
+  );
 }
 
 export async function removeUsuario(id: number): Promise<ActionResult> {

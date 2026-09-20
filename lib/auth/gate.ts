@@ -9,7 +9,7 @@
  */
 
 import { DatabricksDataClient } from "@/lib/data/databricks";
-import type { SessionUser } from "./jwt";
+import { isScopeKind, type SessionUser } from "./jwt";
 
 const CAT = process.env.DATABRICKS_CITIES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const SCHEMA = process.env.DATABRICKS_CITIES_SCHEMA ?? "projeto_brisa_performance";
@@ -34,8 +34,11 @@ export async function authorizeByEmail(email: string): Promise<SessionUser | nul
     nivel_id: unknown;
     nivel: unknown;
     ativo: unknown;
+    escopo_tipo: unknown;
+    escopo_cpf: unknown;
   }>(
-    `SELECT u.id, u.nome, u.cpf, u.matricula, u.nivel_id, n.nome AS nivel, u.ativo
+    `SELECT u.id, u.nome, u.cpf, u.matricula, u.nivel_id, n.nome AS nivel, u.ativo,
+            u.escopo_tipo, u.escopo_cpf
        FROM ${USERS} u
        LEFT JOIN ${NIVEIS} n ON u.nivel_id = n.id
       WHERE lower(u.email) = ? AND u.ativo = true
@@ -58,6 +61,10 @@ export async function authorizeByEmail(email: string): Promise<SessionUser | nul
     nivelId: Number(r.nivel_id ?? 0),
     nivel,
     isAdmin: nivel.toLowerCase() === "admin",
+    // A row with no escopo yet falls back to `proprio`: a user must never gain
+    // reach from a column nobody filled in.
+    escopoTipo: isScopeKind(r.escopo_tipo) ? r.escopo_tipo : "proprio",
+    escopoCpf: r.escopo_cpf == null ? null : String(r.escopo_cpf),
   };
 }
 

@@ -110,3 +110,23 @@ export function nivelChipTone(): ChipTone {
 export function statusChipTone(ativo: boolean): ChipTone {
   return ativo ? { fg: "var(--s-ok)", bg: "var(--s-ok-bg)" } : NEUTRAL_TONE;
 }
+
+/**
+ * Amber — an escopo of "Tudo" bypasses the hierarchy entirely, so it reads as
+ * something to notice in the list rather than as just another value.
+ */
+export const WARN_TONE: ChipTone = { fg: "var(--s-warn)", bg: "var(--s-warn-bg)" };
+
+/** `vw_hierarquia_rh.nivel` is a bare snake_case key; the UI shows pt-BR. */
+const NIVEL_RH_LABEL: Record<string, string> = {
+  diretoria: "Diretoria",
+  gerencia_executiva: "Gerência executiva",
+  gerencia_funcional: "Gerência funcional",
+  coordenacao: "Coordenação",
+  supervisao: "Supervisão",
+  lideranca: "Liderança",
+};
+
+export function nivelRhLabel(nivel: string): string {
+  return NIVEL_RH_LABEL[nivel.trim().toLowerCase()] ?? nivel.replace(/_/g, " ");
+}

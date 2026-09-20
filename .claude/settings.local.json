@@ -232,7 +232,12 @@
       "Bash(curl -s -o /dev/null -D - -L -c /private/tmp/claude-501/-Users-franciscopessoa-Documents-dev-brisa-dash-nosync/83c742ea-f030-4607-ae0e-089a3b327ecd/scratchpad/prodcheck/cookies.txt -H 'X-Forwarded-Proto: https' -H 'X-Forwarded-Email: francisco.aquino@timebrisa.com.br' http://127.0.0.1:8125/hc-zerado/desempenho)",
       "Bash(kill 29246 29228)",
       "Bash(sed -i '' 's#import { isStatus } from \"@/lib/data/hc-zerado/justificativas\";#import { isStatus } from \"@/lib/data/hc-zerado/catalog\";#' \"app/\\(app\\)/hc-zerado/auditar/page.tsx\")",
-      "Bash(sed -i '' 's#import { CATEGORIAS } from \"@/lib/data/hc-zerado/justificativas\";#import { CATEGORIAS } from \"@/lib/data/hc-zerado/catalog\";#' components/hc-zerado/JustificativaModal.tsx)"
+      "Bash(sed -i '' 's#import { CATEGORIAS } from \"@/lib/data/hc-zerado/justificativas\";#import { CATEGORIAS } from \"@/lib/data/hc-zerado/catalog\";#' components/hc-zerado/JustificativaModal.tsx)",
+      "Bash(node scripts/query-databricks.mjs \"DESCRIBE gdb_brisanet_comunidade_dev.projeto_brisa_performance.vw_hierarquia\")",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>{const j=JSON.parse\\(s.slice\\(s.indexOf\\('['\\) , s.lastIndexOf\\(']'\\)+1\\)\\);console.log\\(j.map\\(c=>c.col_name+' : '+c.data_type\\).join\\('\\\\n'\\)\\)}\\)\")",
+      "Bash(node scripts/query-databricks.mjs \"DESCRIBE gdb_brisanet_comunidade_dev.projeto_brisa_performance.vw_hierarquia_rh\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT count\\(*\\) AS total, count\\(DISTINCT cpf\\) AS cpfs, count\\(DISTINCT lower\\(trim\\(email\\)\\)\\) AS emails, min\\(incremento\\) AS min_inc, max\\(incremento\\) AS max_inc, count\\(DISTINCT incremento\\) AS n_inc, min\\(data_carga\\) AS min_carga, max\\(data_carga\\) AS max_carga, max\\(dt_atualizacao\\) AS max_upd FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.vw_hierarquia\")",
+      "Bash(node scripts/query-databricks.mjs \"SELECT nivel, count\\(*\\) AS n, count\\(DISTINCT id_estrutura\\) AS estruturas FROM gdb_brisanet_comunidade_dev.projeto_brisa_performance.vw_hierarquia_rh GROUP BY nivel ORDER BY n DESC LIMIT 30\")"
     ]
   }
 }

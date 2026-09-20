@@ -5,6 +5,10 @@
  * chip colour — which are derived (see ./derive.ts), never read from a column.
  */
 
+import type { ScopeKind } from "@/lib/auth/jwt";
+
+export type { ScopeKind };
+
 export interface Nivel {
   id: number;
   nome: string;
@@ -48,6 +52,8 @@ export interface Usuario {
   id: number;
   nome: string;
   email: string;
+  /** Digits only. The key that binds the user to the RH hierarchy. */
+  cpf: string | null;
   nivelId: number | null;
   nivelNome: string | null;
   cargoId: number | null;
@@ -55,6 +61,12 @@ export interface Usuario {
   ativo: boolean;
   /** Whether the user is synced with the source system (`tb_usuarios.sincronizado`). */
   sincronizado: boolean;
+  /** Whose point of view this user takes when reading data. */
+  escopoTipo: ScopeKind;
+  /** The CPF of that person — only set when `escopoTipo === "gestor"`. */
+  escopoCpf: string | null;
+  /** That person's name, resolved from the hierarchy for display. */
+  escopoNome: string | null;
 }
 
 /**

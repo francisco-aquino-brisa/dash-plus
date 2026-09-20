@@ -4,6 +4,7 @@
 // KPIs whose real source is blocked/missing carry `available: false` and render
 // as "sem acesso aos dados" (see docs/pending-data-checklist.md).
 
+import type { ScopeFilter } from "../scope-sql";
 import type { SalesIndicatorVM } from "./indicators";
 
 export type Unit = "n" | "currency" | "percent";
@@ -52,7 +53,20 @@ export interface SalesFilters {
   uf: string;
   cidade: string;
   tipo: string;
+  /**
+   * Which people this request may see — injected by the repository from the
+   * session, never parsed from the URL. `EMPTY_SCOPE` until it gets there, so a
+   * query that skipped the boundary returns nothing instead of everything.
+   */
+  scope: ScopeFilter;
 }
+
+/**
+ * The filter set as it travels in the URL — everything the client owns. The
+ * scope is deliberately not part of it: it belongs to the session, so it never
+ * crosses to the browser and can never come back from there.
+ */
+export type SalesUrlFilters = Omit<SalesFilters, "scope">;
 
 export interface SalesFilterOptions {
   periods: { key: string; label: string }[];

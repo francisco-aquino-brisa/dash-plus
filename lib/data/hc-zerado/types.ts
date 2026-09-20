@@ -5,6 +5,8 @@
 // browser and computed every block in JS; here the aggregation runs in SQL and
 // only the view-model crosses the wire (ADR 0006).
 
+import type { ScopeFilter } from "../scope-sql";
+
 /** Sale status charged by the "Status da Venda" filter. */
 export type StatusVenda = "CRIADO" | "EFETIVADO" | "INSTALADO";
 
@@ -49,6 +51,7 @@ export interface HcFilters {
   agilidade: Agilidade;
   perfilCidade: PerfilCidade;
   cross: HcCrossFilters;
+  scope: ScopeFilter;
 }
 
 /** One distinct attribute combination in the period — what the dropdowns cascade over. */

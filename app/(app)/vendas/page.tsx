@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { getSalesView, buildSalesFilterOptions } from "@/lib/data/sales/repository";
 import { SalesDashboard } from "@/components/sales/SalesDashboard";
+import { EMPTY_SCOPE } from "@/lib/data/scope-sql";
 import type { SalesFilters } from "@/lib/data/sales/types";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ function parseFilters(sp: SearchParams): SalesFilters {
     uf: get("uf"),
     cidade: get("cidade"),
     tipo: get("tipo"),
+    scope: EMPTY_SCOPE,
   };
 }
 

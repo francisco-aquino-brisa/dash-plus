@@ -1,6 +1,21 @@
 // Cities repository: the single entry point the screen uses to get data.
 // Chooses mock vs Databricks by DATA_SOURCE, and wraps the heavy fetch in the
 // global watermark-aware cache (see ADR 0002).
+//
+// NOT scoped by hierarchy, and it cannot be — this is not an oversight (see
+// docs/hierarquia-permissionamento.md). Every other module narrows rows by the
+// person behind them, and this one has no person: the subject is the city.
+// `vw_indicadores_cidades` carries no CPF at all, and the sources that do
+// (waves, 5g, churn, portabilidade) are collapsed to `revan_cidade_id` before
+// they get here — a city's base ativa is not attributable to sellers anyway.
+//
+// Narrowing it needs the OTHER axis: `id_estrutura` on `vw_organograma_cidades`,
+// so a city can be tested for containment in the reader's subtree the same way a
+// person is. That request is with the data team. Until it lands, restrict this
+// screen by NÍVEL (who may open it), not by escopo (what they see inside).
+//
+// The single global CACHE_KEY below is part of the same fact: one dataset serves
+// every reader. It has to become scope-keyed on the day this is narrowed.
 
 import { cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";

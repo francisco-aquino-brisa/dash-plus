@@ -12,6 +12,7 @@
 // first kind becomes a WHERE clause and the second a CASE inside the SUM.
 
 import { safeIsoDate } from "../_shared";
+import { EMPTY_SCOPE, scopePredicate } from "../scope-sql";
 import { clampRange, defaultHcRange } from "./dates";
 import type { Agilidade, Experiencia, HcFilters, PerfilCidade, StatusVenda } from "./types";
 
@@ -69,6 +70,7 @@ export function parseHcFilters(sp: SearchParams): HcFilters {
       cidade: one(sp, "cf_cidade"),
       servico: one(sp, "cf_servico"),
     },
+    scope: EMPTY_SCOPE,
   };
 }
 
@@ -177,6 +179,7 @@ export function hcWhere(
   skipCross: Array<keyof HcFilters["cross"]> = [],
 ): string {
   const cl: string[] = [];
+  const scope = scopePredicate(f.scope, "hash_user");
   const multiFilter: Array<[string, string[]]> = [
     ["gerente", f.gerente],
     ["coordenacao", f.coordenacao],
@@ -220,7 +223,9 @@ export function hcWhere(
     }
   }
 
-  return cl.length ? ` AND ${cl.join(" AND ")}` : "";
+  params.push(...scope.params);
+
+  return (cl.length ? ` AND ${cl.join(" AND ")}` : "") + scope.where;
 }
 
 /**

@@ -26,6 +26,16 @@ const store: Map<string, Entry> = g.__brisaCache ?? (g.__brisaCache = new Map())
  * Return the cached value for `key` if its watermark matches and it is within
  * the TTL ceiling; otherwise run `producer`, store and return it.
  */
+/**
+ * Part of every cache key. Constant in production; in dev it is re-evaluated on
+ * each recompile, so editing an aggregation invalidates what the previous
+ * version of it cached. The in-process cache survives a hot reload, so without
+ * this an edited query keeps serving the old numbers until the source watermark
+ * moves — which, for a source that advances hourly, means the change looks like
+ * it did nothing. (`HC_ADAPTER_BUILD` is the HC module's own copy of this.)
+ */
+export const ADAPTER_BUILD = process.env.NODE_ENV === "production" ? "prod" : String(Date.now());
+
 export async function cachedByWatermark<T>(
   key: string,
   watermark: string,

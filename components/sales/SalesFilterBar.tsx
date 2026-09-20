@@ -8,7 +8,7 @@ import { CalendarDays } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { ChipFilter, FilterClearButton } from "@/components/ui/chip-filter";
 import { formatDateRange, fromIso, toIso } from "@/lib/date";
-import type { SalesFilters, SalesFilterOptions } from "@/lib/data/sales/types";
+import type { SalesUrlFilters, SalesFilterOptions } from "@/lib/data/sales/types";
 
 /**
  * Vendas · Canais filter bar (DESIGN_SYSTEM "Estrutura comum" + SCREENS §2).
@@ -17,7 +17,7 @@ import type { SalesFilters, SalesFilterOptions } from "@/lib/data/sales/types";
  * dias / Ano) plus a "Personalizado" range popover, over a row of 40px
  * chip-selects (Serviço · Gerente · Canal · Nicho · UF · Cidade · Tipo cidade)
  * and "Limpar (n)". State lives in the URL (the page recomputes the view-model
- * server-side per filter, ADR 0002); this only emits the next `SalesFilters`.
+ * server-side per filter, ADR 0002); this only emits the next `SalesUrlFilters`.
  */
 const ALL = "Todos";
 
@@ -33,15 +33,15 @@ export function SalesFilterBar({
   onChange,
   onReset,
 }: {
-  filters: SalesFilters;
+  filters: SalesUrlFilters;
   options: SalesFilterOptions;
-  onChange: (next: SalesFilters) => void;
+  onChange: (next: SalesUrlFilters) => void;
   onReset: () => void;
 }) {
-  const set = (patch: Partial<SalesFilters>) => onChange({ ...filters, ...patch });
+  const set = (patch: Partial<SalesUrlFilters>) => onChange({ ...filters, ...patch });
   // "Todos" sentinel ↔ "" (the data layer's "no filter") for the chip-selects.
-  const pick = (key: keyof SalesFilters, v: string) =>
-    set({ [key]: v === ALL ? "" : v } as Partial<SalesFilters>);
+  const pick = (key: keyof SalesUrlFilters, v: string) =>
+    set({ [key]: v === ALL ? "" : v } as Partial<SalesUrlFilters>);
 
   const custom = filters.period === "custom";
   const cidadeOptions = filters.uf ? (options.cidadesByUf[filters.uf] ?? []) : options.cidades;

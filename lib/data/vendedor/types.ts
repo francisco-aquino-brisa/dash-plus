@@ -170,6 +170,40 @@ export interface VendedorView {
   watermark: string;
 }
 
+/**
+ * The "nothing to show" view. `profile: null` is what the screen already renders
+ * for a matrícula that is not in the competência, and an out-of-scope seller
+ * renders exactly the same — deliberately: a distinct "você não pode ver esta
+ * pessoa" would confirm that the seller exists.
+ */
+export function emptyVendedorView(
+  filters: VendedorFilters,
+  competencia: { label: string; ano: number; mes: number; hojeDia: number | null },
+  watermark: string,
+  source: VendedorView["source"] = "databricks",
+): VendedorView {
+  return {
+    source,
+    filters,
+    competenciaLabel: competencia.label,
+    profile: null,
+    servicos: [],
+    diasZerados: {
+      ano: competencia.ano,
+      mes: competencia.mes,
+      hoje: competencia.hojeDia,
+      resumo: [],
+      zeradosPorServico: {},
+      comVendaPorServico: {},
+    },
+    ranking: { available: false, metrica: "", escopos: [] },
+    mix: [],
+    pendencias: [],
+    pendenciasAvailable: false,
+    watermark,
+  };
+}
+
 export interface VendedorOption {
   matricula: number;
   nome: string;

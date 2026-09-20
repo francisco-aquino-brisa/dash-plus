@@ -8,11 +8,13 @@
 // matricula is a validated integer and dates are app-generated ISO → safe to
 // inline (same convention as the produtividade adapter).
 
+import { anchorPredicate, type ScopeAnchor, type ScopeFilter } from "../scope-sql";
 import { getDataClient } from "../client";
 import { num } from "../_shared";
 import { resolveCompetencia } from "./dates";
 import { fetchPendencias, fetchVendedorIndicadores } from "./indicadores";
 import {
+  emptyVendedorView,
   type DiasZeradosView,
   type IndicadorVM,
   type RankingView,
@@ -28,6 +30,16 @@ import {
 const CAT = process.env.DATABRICKS_SALES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const SCHEMA = process.env.DATABRICKS_SALES_SCHEMA ?? "diego_barros_inteligencia_comercial_e_mercado";
 const DH = `\`${CAT}\`.\`${SCHEMA}\`.\`desempenho_hc\``;
+
+/**
+ * How `desempenho_hc` identifies the person, for the data scope. Declared once
+ * so the picker and any future query on this source cannot disagree.
+ *
+ * The CPF, not `hash_user_jwas`: that column is MD5 while `vw_hierarquia.hash_cpf`
+ * is SHA-1, so joining them matches nothing at all and the picker would come back
+ * empty for every manager. Verified set/26: `CPF` matches 47.174 of 48.081 rows.
+ */
+const DH_ANCHOR: ScopeAnchor = { column: "CPF", on: "cpf" };
 
 const q = <T = Record<string, unknown>>(sql: string) => getDataClient().query<T>(sql);
 const str = (v: unknown): string => (v == null || v === "" ? "" : String(v));
@@ -282,26 +294,7 @@ export async function databricksVendedorView(filters: VendedorFilters): Promise<
   const mat = parseInt(filters.matricula, 10);
   const watermark = await databricksVendedorWatermark();
 
-  const empty: VendedorView = {
-    source: "databricks",
-    filters,
-    competenciaLabel: period.label,
-    profile: null,
-    servicos: [],
-    diasZerados: {
-      ano: period.ano,
-      mes: period.mes,
-      hoje: period.hojeDia,
-      resumo: [],
-      zeradosPorServico: {},
-      comVendaPorServico: {},
-    },
-    ranking: { available: false, metrica: "", escopos: [] },
-    mix: [],
-    pendencias: [],
-    pendenciasAvailable: false,
-    watermark,
-  };
+  const empty = emptyVendedorView(filters, period, watermark);
 
   if (!Number.isFinite(mat)) return empty;
 
@@ -362,11 +355,13 @@ export async function databricksVendedorFilterOptions(_ym: string): Promise<Part
 export async function databricksVendedorSearch(
   ym: string,
   query: string,
+  scope: ScopeFilter,
   limit = 100,
 ): Promise<VendedorOption[]> {
   const period = resolveCompetencia(ym);
   const n = Math.min(100, Math.max(1, Math.floor(limit) || 100));
   const term = query.trim().toLowerCase();
+  const sc = anchorPredicate(scope, DH_ANCHOR);
   const params: unknown[] = [];
   let filter = "";
 
@@ -381,9 +376,9 @@ export async function databricksVendedorSearch(
     const rows = await getDataClient().query<Record<string, unknown>>(
       `SELECT MATRICULA, MAX(NOME) nome, MAX(cidade_atuacao_jwas) cidade
          FROM ${DH}
-        WHERE data BETWEEN DATE'${period.from}' AND DATE'${period.to}' AND NOME IS NOT NULL${filter}
+        WHERE data BETWEEN DATE'${period.from}' AND DATE'${period.to}' AND NOME IS NOT NULL${filter}${sc.where}
         GROUP BY MATRICULA ORDER BY nome LIMIT ${n}`,
-      params,
+      [...params, ...sc.params],
     );
 
     return rows.map((r) => ({

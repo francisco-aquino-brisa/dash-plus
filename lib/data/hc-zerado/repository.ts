@@ -4,8 +4,10 @@
 // screens are a port of an app that only ever read the real view, so mock mode
 // renders an explicit notice instead of invented headcount.
 
+import { currentScope } from "@/lib/auth/scope";
 import { cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";
+import { scopeToken } from "../scope-sql";
 import { hcFiltersToQuery } from "./filters";
 import type {
   HcAuditarView,
@@ -36,8 +38,23 @@ export class HcMockUnsupportedError extends Error {
   }
 }
 
-function cacheKey(build: string, f: HcFilters, view: MatrizView): string {
-  return `hc:${HC_CACHE_VERSION}:${build}:desempenho:${view}:${hcFiltersToQuery(f)}`;
+/**
+ * Attach the session's data scope to a filter set.
+ *
+ * This is the only place it is set. `parseHcFilters` leaves `EMPTY_SCOPE` behind
+ * on purpose, so a screen that reaches the source without coming through here
+ * renders empty — visibly wrong — instead of showing the whole company.
+ */
+async function scoped(f: HcFilters): Promise<HcFilters> {
+  return { ...f, scope: await currentScope() };
+}
+
+/**
+ * Every cached value is scoped, so the scope is part of its identity: without
+ * this, the first user to load a screen would warm the cache for everyone else.
+ */
+function key(build: string, f: HcFilters, ...parts: string[]): string {
+  return [`hc:${HC_CACHE_VERSION}`, build, ...parts, scopeToken(f.scope), hcFiltersToQuery(f)].join(":");
 }
 
 export async function getHcDesempenho(f: HcFilters, view: MatrizView): Promise<HcDesempenhoView> {
@@ -47,8 +64,10 @@ export async function getHcDesempenho(f: HcFilters, view: MatrizView): Promise<H
   const { databricksHcDesempenho } = await import("./databricks");
   const watermark = await databricksHcWatermark();
 
-  return cachedByWatermark<HcDesempenhoView>(cacheKey(HC_ADAPTER_BUILD, f, view), watermark, () =>
-    databricksHcDesempenho(f, view),
+  const sf = await scoped(f);
+
+  return cachedByWatermark<HcDesempenhoView>(key(HC_ADAPTER_BUILD, sf, "desempenho", view), watermark, () =>
+    databricksHcDesempenho(sf, view),
   );
 }
 
@@ -121,10 +140,11 @@ export async function getHcFilterOptions(f: HcFilters): Promise<HcFilterOptions>
   try {
     const watermark = await databricksHcWatermark();
     // Keyed by period only — the cascade is pure, so a filter click reuses these.
+    const scope = await currentScope();
     const tuples = await cachedByWatermark<HcFilterTuple[]>(
-      `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:tuplas:${f.from}:${f.to}`,
+      `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:tuplas:${scopeToken(scope)}:${f.from}:${f.to}`,
       watermark,
-      () => databricksHcFilterTuples(f.from, f.to),
+      () => databricksHcFilterTuples(f.from, f.to, scope),
     );
 
     return cascade(tuples, f);
@@ -148,10 +168,12 @@ export async function getHcProdutividade(
   const { databricksHcProdutividade } = await import("./produtividade");
   const watermark = await databricksHcWatermark();
 
+  const sf = await scoped(f);
+
   return cachedByWatermark<HcProdutividadeView>(
-    `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:produtividade:${grouping}:${hcFiltersToQuery(f)}`,
+    key(HC_ADAPTER_BUILD, sf, "produtividade", grouping),
     watermark,
-    () => databricksHcProdutividade(f, grouping),
+    () => databricksHcProdutividade(sf, grouping),
   );
 }
 
@@ -162,10 +184,10 @@ export async function getHcZerados(f: HcFilters, grouping: ProdutividadeGrouping
   const { databricksHcZerados } = await import("./produtividade");
   const watermark = await databricksHcWatermark();
 
-  return cachedByWatermark<HcZeradosView>(
-    `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:zerados:${grouping}:${hcFiltersToQuery(f)}`,
-    watermark,
-    () => databricksHcZerados(f, grouping),
+  const sf = await scoped(f);
+
+  return cachedByWatermark<HcZeradosView>(key(HC_ADAPTER_BUILD, sf, "zerados", grouping), watermark, () =>
+    databricksHcZerados(sf, grouping),
   );
 }
 
@@ -177,10 +199,10 @@ export async function getHcMatriz(f: HcFilters, grouping: OciosidadeGrouping): P
   const { databricksHcMatriz } = await import("./matriz");
   const watermark = await databricksHcWatermark();
 
-  return cachedByWatermark<HcMatrizView>(
-    `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:matriz:${grouping}:${hcFiltersToQuery(f)}`,
-    watermark,
-    () => databricksHcMatriz(f, grouping),
+  const sf = await scoped(f);
+
+  return cachedByWatermark<HcMatrizView>(key(HC_ADAPTER_BUILD, sf, "matriz", grouping), watermark, () =>
+    databricksHcMatriz(sf, grouping),
   );
 }
 
@@ -201,10 +223,11 @@ export async function getHcJustificar(f: HcFilters): Promise<HcJustificarView> {
   const [watermark, regras] = await Promise.all([databricksHcWatermark(), fetchRegras()]);
   // The rules decide who is zeroed, so they belong in the key: editing them has
   // to re-run the scan even though the source has not moved.
-  const key = `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:zerados-dia:${regrasKey(regras)}:${hcFiltersToQuery(f)}`;
+  const sf = await scoped(f);
+  const cacheKey = key(HC_ADAPTER_BUILD, sf, "zerados-dia", regrasKey(regras));
   const [rows, justificativas] = await Promise.all([
-    cachedByWatermark<ZeroedRow[]>(key, watermark, () => fetchDiasZerados(f, regras)),
-    fetchJustificativas(f.from, f.to),
+    cachedByWatermark<ZeroedRow[]>(cacheKey, watermark, () => fetchDiasZerados(sf, regras)),
+    fetchJustificativas(sf.from, sf.to, sf.scope),
   ]);
 
   return buildJustificar(regras, rows, justificativas);
@@ -218,16 +241,17 @@ export async function getHcAuditar(f: HcFilters): Promise<HcAuditarView> {
   const watermark = await databricksHcWatermark();
   // Keyed by period only: the directory is deliberately filter-free so an
   // unknown matrícula stays visible (see `fetchPessoas`).
+  const sf = await scoped(f);
   const [justificativas, pessoas] = await Promise.all([
-    fetchJustificativas(f.from, f.to),
+    fetchJustificativas(sf.from, sf.to, sf.scope),
     cachedByWatermark<PessoaMeta[]>(
-      `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:pessoas:${f.from}:${f.to}`,
+      `hc:${HC_CACHE_VERSION}:${HC_ADAPTER_BUILD}:pessoas:${scopeToken(sf.scope)}:${sf.from}:${sf.to}`,
       watermark,
-      () => fetchPessoas(f.from, f.to),
+      () => fetchPessoas(sf.from, sf.to, sf.scope),
     ),
   ]);
 
-  return buildAuditar(f, justificativas, pessoas);
+  return buildAuditar(sf, justificativas, pessoas);
 }
 
 function regrasKey(r: HcRegras): string {

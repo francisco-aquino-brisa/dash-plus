@@ -13,6 +13,7 @@
 // app-generated ISO strings (safe to inline); dimension filter values are
 // parameterized. Each block source is isolated (failure → its cards degrade).
 
+import { anchorPredicate, type ScopeAnchor, type ScopeFilter } from "../scope-sql";
 import { getDataClient } from "../client";
 import { num, pct } from "../_shared";
 import { formatMonth } from "../../format";
@@ -38,6 +39,20 @@ import {
 const CAT = process.env.DATABRICKS_SALES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const DBX = `\`${CAT}\`.\`${process.env.DATABRICKS_SALES_SCHEMA ?? "diego_barros_inteligencia_comercial_e_mercado"}\``;
 const DH = `${DBX}.\`desempenho_hc\``;
+
+/**
+ * How each source identifies the person, for the data scope. Declared next to
+ * the table rather than at the query, so adding a source forces the question
+ * "who is the person in this table?" to be answered once, visibly.
+ *
+ * Always the CPF, never a hash. `vw_hierarquia.hash_cpf` is SHA-1 (40 chars)
+ * and every commercial source hashes with MD5 (32) — including this one's
+ * `hash_user_jwas` — so a hash join silently matches NOTHING and the screen
+ * renders zeros that look like a quiet month. Only `tb_producao_hc_zero_venda`
+ * shares the SHA-1 convention. Verified set/26: `CPF` matches 47.174 of 48.081
+ * rows here; `hash_user_jwas` matched 0.
+ */
+const DH_ANCHOR: ScopeAnchor = { column: "CPF", on: "cpf" };
 
 // Official, channel-grained sources for the selectable blocks (see indicators.ts
 // and docs/data-map.md). All read-only; every formula validated vs the warehouse.
@@ -68,7 +83,11 @@ const PORTAB_T = `(
     MAX(CANAL_GERAL) AS canal,
     MAX(nicho) AS nicho,
     MAX(cidade_venda) AS cidade_venda,
-    MAX(CASE WHEN upper(trim(STATUS)) = 'PORTADO' THEN 1 ELSE 0 END) AS portado
+    MAX(CASE WHEN upper(trim(STATUS)) = 'PORTADO' THEN 1 ELSE 0 END) AS portado,
+    -- Projetado para o escopo poder filtrar depois da pré-agregação. MAX não é
+    -- desempate: um pedido tem exatamente um CPF de vendedor (0 de 1.298.337
+    -- com mais de um), porque o CPF é resolvido por pedido na própria view.
+    MAX(cpf_vendedor) AS cpf_vendedor
   FROM ${PBP}.\`vw_portabilidade_5g\`
   WHERE N_do_pedido IS NOT NULL
     AND coalesce(cidade_venda, '') <> ''
@@ -83,6 +102,9 @@ function dimWhereDH(
   opts: { skipCanal?: boolean; skipNicho?: boolean } = {},
 ): string {
   const cl: string[] = [];
+  // Every `desempenho_hc` query goes through here, so the scope rides along
+  // with the dimensions — there is nothing to remember at the call sites.
+  const sc = anchorPredicate(f.scope, DH_ANCHOR);
 
   if (f.gerente) {
     cl.push("GERENTE_CANAL = ?");
@@ -114,7 +136,9 @@ function dimWhereDH(
     params.push(f.tipo);
   }
 
-  return cl.length ? ` AND ${cl.join(" AND ")}` : "";
+  params.push(...sc.params);
+
+  return (cl.length ? ` AND ${cl.join(" AND ")}` : "") + sc.where;
 }
 
 export async function databricksSalesWatermark(): Promise<string> {
@@ -263,6 +287,8 @@ interface SourceSpec {
   table: string;
   /** Source-level WHERE (besides the 12-month window); '' when none. */
   scope: string;
+  /** Which column carries the person, for the data scope (see `ScopeAnchor`). */
+  anchor: ScopeAnchor;
   /** Expression yielding the month key (yyyy-MM). */
   monthExpr: string;
   /** 12-month window predicate. */
@@ -278,6 +304,9 @@ const BLOCK_SOURCES: Record<SalesSource, SourceSpec> = {
   // waves cobre TODOS os filtros (canal/gerente/nicho/tipo/cidade/uf).
   waves: {
     table: WAVES,
+    // 84.462 de 133.135 linhas casam a hierarquia (set/26); o resto é venda de
+    // integração sem CPF, ou CPF fora da view CLT-only — pendência do RH.
+    anchor: { column: "cpf_vendedor", on: "cpf" },
     scope: "corporativo = 'NAO'", // servico é acrescido dinamicamente (INTERNET/FWA + filtro)
     monthExpr: INC_MONTH,
     window: INC_WINDOW,
@@ -293,6 +322,7 @@ const BLOCK_SOURCES: Record<SalesSource, SourceSpec> = {
   // churn_bl: só canal/gerente/nicho (não tem tipo/cidade/uf confiáveis).
   churn_bl: {
     table: CHURN_BL_T,
+    anchor: { column: "cpf", on: "cpf" },
     scope: "servico IN ('INTERNET', 'FWA')",
     monthExpr: INC_MONTH,
     window: INC_WINDOW,
@@ -302,6 +332,8 @@ const BLOCK_SOURCES: Record<SalesSource, SourceSpec> = {
   // ignoramos canal/gerente/tipo, escopamos por nicho/cidade/uf.
   cinco_g: {
     table: CINCO_G_T,
+    // `cpf` nesta view é do CLIENTE (62 de 53.318 casam); o vendedor é o combo.
+    anchor: { column: "cpf_vendedor_combo", on: "cpf" },
     scope: "",
     monthExpr: INC_MONTH,
     window: INC_WINDOW,
@@ -310,6 +342,7 @@ const BLOCK_SOURCES: Record<SalesSource, SourceSpec> = {
   // churn_5g: só gerente casa com o dropdown; canal tem vocabulário próprio.
   churn_5g: {
     table: CHURN_5G_T,
+    anchor: { column: "cpf_vendedor", on: "cpf" },
     scope: "",
     monthExpr: "date_format(data_churn, 'yyyy-MM')",
     window: `data_churn >= ${q13}`,
@@ -319,6 +352,10 @@ const BLOCK_SOURCES: Record<SalesSource, SourceSpec> = {
   // gerente/tipo na fonte; canal (CANAL_GERAL) e nicho seguem o vocabulário waves.
   portab: {
     table: PORTAB_T,
+    // `cpf_vendedor` e `CANAL_GERAL` passaram a existir na view em 20/09/2026
+    // (docs/hierarquia-ddl-views.sql). Antes disso a fonte inteira falhava, por
+    // causa do CANAL_GERAL ausente, e não havia CPF para escopar.
+    anchor: { column: "cpf_vendedor", on: "cpf" },
     scope: "",
     monthExpr: "ym",
     window: "ym IS NOT NULL",
@@ -344,6 +381,7 @@ async function sourceMonthly(
   const spec = BLOCK_SOURCES[source];
   const params: unknown[] = [];
   const where = [spec.window];
+  const sc = anchorPredicate(filters.scope, spec.anchor);
 
   if (spec.scope) where.push(spec.scope);
 
@@ -359,7 +397,10 @@ async function sourceMonthly(
   }
 
   const cols = defs.map((d) => `${d.valueExpr} AS \`${d.id}\``).join(", ");
-  const sql = `SELECT ${spec.monthExpr} ym, ${cols} FROM ${spec.table} WHERE ${where.join(" AND ")} GROUP BY 1 ORDER BY 1`;
+  // `sc.where` already starts with " AND", so it is appended to the joined list.
+  const sql = `SELECT ${spec.monthExpr} ym, ${cols} FROM ${spec.table} WHERE ${where.join(" AND ")}${sc.where} GROUP BY 1 ORDER BY 1`;
+
+  params.push(...sc.params);
 
   try {
     const rows = await getDataClient().query<Record<string, unknown>>(sql, params);
@@ -387,6 +428,12 @@ async function funnelMetas(
   block: SalesBlock,
 ): Promise<Map<string, Map<string, number>>> {
   const out = new Map<string, Map<string, number>>();
+
+  // `vw_meta_geral_canais` carries a channel target, not a person — there is no
+  // way to narrow it to a manager's slice. A SUM of the whole channel next to a
+  // scoped realizado would read as "you are 8% of your target", so the meta line
+  // degrades to absent instead, the same way it does when the view is missing.
+  if (!filters.scope.all) return out;
 
   try {
     const servicos = block === "banda-larga" ? ["FTTH", "FWA"] : ["5G"];
@@ -423,7 +470,13 @@ async function funnelMetas(
   return out;
 }
 
-/** Ticket-oferta metas (tipo GERAL) from metas_canais_ticket_oferta. */
+/**
+ * Ticket-oferta metas (tipo GERAL) from metas_canais_ticket_oferta.
+ *
+ * Unscoped on purpose, unlike `funnelMetas`: this is a target *rate* (the AVG of
+ * a GERAL line), not a volume. A rate target is the same number whoever reads
+ * it, so it survives a subset — a volume does not.
+ */
 async function ticketOfertaMetas(block: SalesBlock): Promise<Map<string, number>> {
   const out = new Map<string, number>();
 
@@ -539,11 +592,16 @@ export async function databricksSalesView(filters: SalesFilters): Promise<SalesV
   };
 }
 
-export async function databricksSalesFilterOptions(): Promise<Partial<SalesFilterOptions>> {
+export async function databricksSalesFilterOptions(scope: ScopeFilter): Promise<Partial<SalesFilterOptions>> {
+  // Same scope as the data: a dropdown offering a gerência the reader cannot see
+  // is a list of names they are not entitled to, and picking one returns empty.
+  const sc = anchorPredicate(scope, DH_ANCHOR);
+
   const distinct = async (col: string): Promise<string[]> => {
     try {
       const rows = await getDataClient().query<Record<string, unknown>>(
-        `SELECT DISTINCT ${col} v FROM ${DH} WHERE ${col} IS NOT NULL AND ${col} <> '' ORDER BY 1 LIMIT 100`,
+        `SELECT DISTINCT ${col} v FROM ${DH} WHERE ${col} IS NOT NULL AND ${col} <> ''${sc.where} ORDER BY 1 LIMIT 100`,
+        sc.params,
       );
 
       return rows.map((r) => String(r.v)).filter(Boolean);
@@ -556,8 +614,9 @@ export async function databricksSalesFilterOptions(): Promise<Partial<SalesFilte
     try {
       const rows = await getDataClient().query<{ uf: unknown; c: unknown }>(
         `SELECT DISTINCT UF uf, cidade_atuacao_jwas c FROM ${DH}
-         WHERE UF IS NOT NULL AND cidade_atuacao_jwas IS NOT NULL AND cidade_atuacao_jwas <> ''
+         WHERE UF IS NOT NULL AND cidade_atuacao_jwas IS NOT NULL AND cidade_atuacao_jwas <> ''${sc.where}
          ORDER BY 1, 2 LIMIT 3000`,
+        sc.params,
       );
       const map: Record<string, string[]> = {};
 

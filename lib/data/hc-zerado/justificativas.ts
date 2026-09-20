@@ -7,6 +7,7 @@
 // the row-level predicates (who is in scope); the sale side comes from the rules.
 
 import { T } from "../admin/tables";
+import { scopePredicate, type ScopeFilter } from "../scope-sql";
 import { isStatus } from "./catalog";
 import { hcWhere } from "./filters";
 import { ATIVO, CIDADE, FERIADO, JUSTIFICATIVAS, REGRAS, SOURCE, q } from "./source";
@@ -231,7 +232,12 @@ export function dayKey(matricula: string, data: string): string {
  * `autor_id`/`avaliador_id` resolve to names through `tb_usuarios`; both are null
  * for every row written before the app started filling them (the origin never did).
  */
-export async function fetchJustificativas(from: string, to: string): Promise<Justificativa[]> {
+export async function fetchJustificativas(
+  from: string,
+  to: string,
+  scope: ScopeFilter,
+): Promise<Justificativa[]> {
+  const sc = scopePredicate(scope, "j.matricula", "matricula");
   const rows = await q<Record<string, unknown>>(
     `SELECT CAST(j.matricula AS STRING) matricula,
             CAST(j.data_ocorrencia AS STRING) data_ocorrencia,
@@ -242,10 +248,10 @@ export async function fetchJustificativas(from: string, to: string): Promise<Jus
        FROM ${JUSTIFICATIVAS} j
        LEFT JOIN ${T.usuarios} autor ON autor.id = j.autor_id
        LEFT JOIN ${T.usuarios} avaliador ON avaliador.id = j.avaliador_id
-      WHERE j.data_ocorrencia BETWEEN DATE'${from}' AND DATE'${to}'
+      WHERE j.data_ocorrencia BETWEEN DATE'${from}' AND DATE'${to}'${sc.where}
       ORDER BY j.data_ocorrencia DESC
       LIMIT 5000`,
-    [],
+    sc.params,
   );
 
   return rows.map((r) => {
@@ -280,7 +286,9 @@ export function indexByDay(rows: Justificativa[]): Map<string, Justificativa> {
  * period stay visible instead of vanishing (the origin's `hasMeta` guard). Keeping
  * the query filter-free also makes it cacheable by period alone.
  */
-export function fetchPessoas(from: string, to: string): Promise<PessoaMeta[]> {
+export function fetchPessoas(from: string, to: string, scope: ScopeFilter): Promise<PessoaMeta[]> {
+  const sc = scopePredicate(scope, "hash_user");
+
   return q<PessoaMeta>(
     `SELECT CAST(matricula AS STRING) matricula,
             MAX(TRIM(consultor)) consultor,
@@ -293,9 +301,9 @@ export function fetchPessoas(from: string, to: string): Promise<PessoaMeta[]> {
             MAX(TRIM(canal)) canal,
             MAX(TRIM(nicho)) nicho
        FROM ${SOURCE}
-      WHERE data BETWEEN DATE'${from}' AND DATE'${to}' AND matricula IS NOT NULL
+      WHERE data BETWEEN DATE'${from}' AND DATE'${to}' AND matricula IS NOT NULL${sc.where}
       GROUP BY matricula`,
-    [],
+    sc.params,
   );
 }
 
