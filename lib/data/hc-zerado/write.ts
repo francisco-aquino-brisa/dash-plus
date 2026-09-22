@@ -107,6 +107,51 @@ export async function upsertJustificativa(input: JustificativaInput): Promise<vo
 }
 
 /**
+ * Apply only the gestor's verdict to a justification that already exists.
+ *
+ * The counterpart of `upsertJustificativa` for someone who holds
+ * `editar_hc_zerado_devolutiva_gestor` but not the colaborador's capability: it
+ * cannot create a row and never touches `categoria`/`motivo`, so the text stays
+ * whatever the colaborador wrote. Returns false when there is no row to answer.
+ */
+export async function avaliarJustificativa(input: {
+  matricula: string;
+  dataOcorrencia: string;
+  status: string;
+  observacaoLider: string | null;
+  avaliado: boolean;
+  usuarioId: number | null;
+}): Promise<boolean> {
+  const rows = (await run(
+    `SELECT count(*) AS n FROM ${JUSTIFICATIVAS}
+      WHERE matricula = CAST(? AS INT) AND data_ocorrencia = CAST(? AS DATE)`,
+    [input.matricula, input.dataOcorrencia],
+  )) as { n: unknown }[];
+
+  if (Number(rows[0]?.n ?? 0) === 0) return false;
+
+  await run(
+    `UPDATE ${JUSTIFICATIVAS} SET
+       status = ?,
+       observacao_lider = ?,
+       avaliador_id = ?,
+       avaliado_em = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP() END,
+       atualizado_em = CURRENT_TIMESTAMP()
+     WHERE matricula = CAST(? AS INT) AND data_ocorrencia = CAST(? AS DATE)`,
+    [
+      input.status,
+      input.observacaoLider,
+      input.avaliado ? input.usuarioId : null,
+      input.avaliado ? 1 : 0,
+      input.matricula,
+      input.dataOcorrencia,
+    ],
+  );
+
+  return true;
+}
+
+/**
  * Remove one person's justification for one day.
  *
  * The origin had no delete at all: a justification written for the wrong day

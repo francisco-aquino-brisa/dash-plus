@@ -49,8 +49,7 @@ user data the UI needs: `{ email, nome, cpf, nivelId, nivel, isAdmin }`, where
 
 ```
 tb_niveis          { id, nome, descricao, … }        -- nome='admin' is the seeded level
-tb_cargos          { id, nome, descricao, … }        -- nome='Administrador' is the seeded cargo
-tb_usuarios        { id, cpf, matricula, nome, email, nivel_id→tb_niveis, cargo_id→tb_cargos, ativo, … }
+tb_usuarios        { id, cpf, matricula, nome, email, nivel_id→tb_niveis, ativo, … }
 tb_paginas         { id, nome, icone, rota, … }
 tb_permissoes      { id, label(snake_case), descricao, pagina_id→tb_paginas, … }
 tb_permissoes_nivel{ permissao_id→tb_permissoes, nivel_id→tb_niveis }
@@ -71,6 +70,11 @@ scoping. `cpf` is retained only as a join key to other warehouse tables.
   identity instead.
 - **Lakebase/Postgres was never provisioned;** the `tb_*` Delta tables were. Using
   them avoids a second datastore for a small, low-write policy set.
+
+> **Revisado (ADR 0007 / set-2026):** `tb_cargos` foi removido — o cargo passa a
+> vir da hierarquia do RH (`vw_hierarquia`), não de uma tabela app-owned. O
+> `padrao` que marca um nível como não editável migra do nome hardcoded para uma
+> coluna em `tb_niveis` (DDL em [docs/ddl](../ddl/)).
 
 ## Consequences
 

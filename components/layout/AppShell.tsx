@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition, type CSSProperties } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Activity,
   ArrowLeft,
-  Briefcase,
   ChevronRight,
   ChevronsUpDown,
   ClipboardCheck,
@@ -34,6 +33,8 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SetNavPendingContext } from "@/lib/ui/nav-pending";
+import { usePermissions } from "@/lib/auth/client";
+import { normalizeRoute } from "@/lib/auth/routes";
 import { HC_FILTER_PARAMS } from "@/lib/data/hc-zerado/filters";
 
 interface ShellUser {
@@ -65,7 +66,6 @@ const NAV: NavItem[] = [
 const ADMIN_NAV: NavItem[] = [
   { title: "Usuários", short: "Usuários", href: "/admin/usuarios", icon: Users },
   { title: "Níveis de acesso", short: "Níveis", href: "/admin/niveis", icon: ShieldCheck },
-  { title: "Cargos", short: "Cargos", href: "/admin/cargos", icon: Briefcase },
   { title: "Páginas", short: "Páginas", href: "/admin/paginas", icon: Files },
   { title: "Permissões", short: "Permiss.", href: "/admin/capacidades", icon: KeyRound },
   { title: "Permissões por nível", short: "Matriz", href: "/admin/permissoes", icon: LayoutGrid },
@@ -111,6 +111,8 @@ const HC_ZERADO_NAV: NavItem[] = [
     icon: Eye,
   },
 ];
+
+const HC_ZERADO_ROOT = "/hc-zerado";
 
 const COLLAPSE_KEY = "brisa-sidebar-collapsed";
 const THEME_KEY = "brisa-dash-theme";
@@ -243,7 +245,34 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   const inAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
   const inHcZerado = pathname === "/hc-zerado" || pathname.startsWith("/hc-zerado/");
   const inSubArea = inAdmin || inHcZerado;
-  const navItems = inHcZerado ? HC_ZERADO_NAV : inAdmin ? ADMIN_NAV : NAV;
+
+  // Driven by the same `rotas` claim as the page gate, so the menu can never
+  // offer a link that bounces. ADMIN_NAV is exempt — not in the page catalog.
+  const { rotas, isAdmin: bypass } = usePermissions();
+  const canOpen = useCallback(
+    (href: string) => {
+      if (bypass) return true;
+
+      const target = normalizeRoute(href);
+
+      return rotas.some((r) => normalizeRoute(r) === target);
+    },
+    [rotas, bypass],
+  );
+  const hcNav = useMemo(() => HC_ZERADO_NAV.filter((item) => canOpen(item.href)), [canOpen]);
+  const rootNav = useMemo(
+    () =>
+      NAV.flatMap((item) => {
+        if (!item.href.startsWith(HC_ZERADO_ROOT)) return canOpen(item.href) ? [item] : [];
+
+        return hcNav.length > 0 ? [{ ...item, href: hcNav[0].href }] : [];
+      }),
+    [canOpen, hcNav],
+  );
+  const navItems = inHcZerado ? hcNav : inAdmin ? ADMIN_NAV : rootNav;
+  // Someone whose only pages live inside HC Zerado has nowhere to go back to.
+  const homeHref = rootNav[0]?.href ?? "/dashboard";
+  const canLeaveSubArea = inAdmin || !homeHref.startsWith(HC_ZERADO_ROOT);
   const navHeading = "Navegação";
   const activeTitle = navItems.find((n) => pathname === n.href || pathname.startsWith(`${n.href}/`))?.title;
 
@@ -639,10 +668,10 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
 
               {/* Footer (fixed) */}
               <div style={{ flex: "none", display: "flex", flexDirection: "column", gap: 10 }}>
-                {inSubArea ? (
+                {inSubArea && canLeaveSubArea ? (
                   <Link
-                    href="/dashboard"
-                    onClick={navTo("/dashboard")}
+                    href={homeHref}
+                    onClick={navTo(homeHref)}
                     title="Voltar aos dashboards"
                     className="bd-ghost"
                     style={{
@@ -1082,10 +1111,10 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
                     Espaço reservado para os próximos dashboards.
                   </div>
                 )}
-                {inSubArea ? (
+                {inSubArea && canLeaveSubArea ? (
                   <Link
-                    href="/dashboard"
-                    onClick={navTo("/dashboard")}
+                    href={homeHref}
+                    onClick={navTo(homeHref)}
                     style={{
                       display: "flex",
                       alignItems: "center",

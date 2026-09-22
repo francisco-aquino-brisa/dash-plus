@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function PaginasPage() {
   await requireAdmin();
 
-  const { paginas } = await readAdminData();
+  const { paginas } = await readAdminData(["paginas"]);
 
   return <PaginasScreen paginas={paginas} />;
 }

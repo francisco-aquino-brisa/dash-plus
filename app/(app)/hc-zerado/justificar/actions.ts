@@ -2,10 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/session";
+import { hasCap } from "@/lib/auth/permissions";
+import { CAP } from "@/lib/auth/capabilities";
 import { resolveUserId } from "@/lib/auth/gate";
 import { safeIsoDate } from "@/lib/data/_shared";
 import { isCategoria, isStatus } from "@/lib/data/hc-zerado/catalog";
-import { deleteJustificativa, updateRegras, upsertJustificativa } from "@/lib/data/hc-zerado/write";
+import {
+  avaliarJustificativa,
+  deleteJustificativa,
+  updateRegras,
+  upsertJustificativa,
+} from "@/lib/data/hc-zerado/write";
 import type { ActionResult } from "@/lib/data/admin/types";
 
 /**
@@ -87,6 +94,15 @@ export async function salvarJustificativa(input: JustificativaFormInput): Promis
 
   if (!session) return { ok: false, error: "Sessão expirada. Recarregue a página." };
 
+  // The form posts both halves whoever is saving, so the capabilities — not the
+  // payload — decide which half is actually written (ADR 0007).
+  const podeColaborador = hasCap(session, CAP.HC_JUSTIFICATIVA_COLABORADOR);
+  const podeGestor = hasCap(session, CAP.HC_DEVOLUTIVA_GESTOR);
+
+  if (!podeColaborador && !podeGestor) {
+    return { ok: false, error: "Você não tem permissão para editar esta justificativa." };
+  }
+
   const mat = matricula(input.matricula);
 
   if (!mat) return { ok: false, error: "Matrícula inválida." };
@@ -95,27 +111,11 @@ export async function salvarJustificativa(input: JustificativaFormInput): Promis
 
   if (!data) return { ok: false, error: "Data da ocorrência inválida." };
 
-  const categoria = input.categoria.trim();
-
-  if (!isCategoria(categoria)) {
-    return { ok: false, error: "Selecione uma categoria da lista." };
-  }
-
-  const motivo = input.motivo.trim();
-
-  if (motivo.length < MOTIVO_MIN) {
-    return { ok: false, error: `Descreva o motivo com pelo menos ${MOTIVO_MIN} caracteres.` };
-  }
-
-  if (motivo.length > MOTIVO_MAX) {
-    return { ok: false, error: `O motivo passa de ${MOTIVO_MAX} caracteres.` };
-  }
-
-  const status = input.status.trim();
+  const status = podeGestor ? input.status.trim() : "Em Análise";
 
   if (!isStatus(status)) return { ok: false, error: "Status da ocorrência inválido." };
 
-  const observacao = input.observacaoLider.trim();
+  const observacao = podeGestor ? input.observacaoLider.trim() : "";
 
   if (observacao.length > OBSERVACAO_MAX) {
     return { ok: false, error: `A observação passa de ${OBSERVACAO_MAX} caracteres.` };
@@ -124,8 +124,44 @@ export async function salvarJustificativa(input: JustificativaFormInput): Promis
   // A verdict is "the leader touched the panel": a status other than the default,
   // or a note. Without one the row goes back to Em Análise with no reviewer.
   const avaliado = status !== "Em Análise" || observacao.length > 0;
+  const usuarioId = await autorId(session);
 
   try {
+    if (!podeColaborador) {
+      const answered = await avaliarJustificativa({
+        matricula: mat,
+        dataOcorrencia: data,
+        status,
+        observacaoLider: observacao || null,
+        avaliado,
+        usuarioId,
+      });
+
+      if (!answered) {
+        return { ok: false, error: "Não há justificativa registrada neste dia para avaliar." };
+      }
+
+      revalidate();
+
+      return { ok: true };
+    }
+
+    const categoria = input.categoria.trim();
+
+    if (!isCategoria(categoria)) {
+      return { ok: false, error: "Selecione uma categoria da lista." };
+    }
+
+    const motivo = input.motivo.trim();
+
+    if (motivo.length < MOTIVO_MIN) {
+      return { ok: false, error: `Descreva o motivo com pelo menos ${MOTIVO_MIN} caracteres.` };
+    }
+
+    if (motivo.length > MOTIVO_MAX) {
+      return { ok: false, error: `O motivo passa de ${MOTIVO_MAX} caracteres.` };
+    }
+
     await upsertJustificativa({
       matricula: mat,
       dataOcorrencia: data,
@@ -134,7 +170,7 @@ export async function salvarJustificativa(input: JustificativaFormInput): Promis
       status,
       observacaoLider: observacao || null,
       avaliado,
-      usuarioId: await autorId(session),
+      usuarioId,
     });
 
     revalidate();
@@ -161,6 +197,10 @@ export async function excluirJustificativa(
   const session = await getSession();
 
   if (!session) return { ok: false, error: "Sessão expirada. Recarregue a página." };
+
+  if (!hasCap(session, CAP.HC_JUSTIFICATIVA_COLABORADOR)) {
+    return { ok: false, error: "Você não tem permissão para excluir esta justificativa." };
+  }
 
   const mat = matricula(matriculaRaw);
 

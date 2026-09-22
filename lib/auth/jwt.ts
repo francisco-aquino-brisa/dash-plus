@@ -11,6 +11,13 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 export const SESSION_COOKIE = "brisa_session";
 
 /**
+ * Bump whenever a claim the app depends on is added: an older cookie then
+ * verifies as invalid and is re-minted, instead of reading as "this user was
+ * granted nothing". A stale token must never look like a denial.
+ */
+export const SESSION_VERSION = 3;
+
+/**
  * `tb_usuarios.escopo_tipo` — whose point of view a user takes when reading
  * data. Kept in pt-BR because it is a stored value, not an identifier.
  */
@@ -34,6 +41,21 @@ export interface SessionUser {
   escopoTipo: ScopeKind;
   /** `tb_usuarios.escopo_cpf` — only set when `escopoTipo === "gestor"`. */
   escopoCpf: string | null;
+  /** `tb_permissoes.label`s granted to this nível. Empty for admins, who bypass. */
+  caps: string[];
+  /** Pages with at least one granted capability, ordered by `tb_paginas.id`. */
+  rotas: string[];
+  /**
+   * Every registered `tb_paginas.rota`. Needed to tell "not in the catalog, so
+   * open" from "in it and not granted" — the one thing `rotas` cannot say. Held
+   * here so the page gate costs no query, at the cost of a page registered after
+   * this cookie was minted staying ungated until the user re-enters.
+   */
+  catalogo: string[];
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
 function getSecret(): Uint8Array {
@@ -57,7 +79,7 @@ function getTtlSeconds(): number {
 export async function signSession(user: SessionUser): Promise<string> {
   const ttl = getTtlSeconds();
 
-  return new SignJWT({ ...user } as unknown as JWTPayload)
+  return new SignJWT({ ...user, v: SESSION_VERSION } as unknown as JWTPayload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(Math.floor(Date.now() / 1000) + ttl)
@@ -74,6 +96,8 @@ export async function verifySession(token: string | undefined): Promise<SessionU
 
   try {
     const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] });
+
+    if (payload.v !== SESSION_VERSION) return null;
 
     if (
       typeof payload.email === "string" &&
@@ -97,6 +121,9 @@ export async function verifySession(token: string | undefined): Promise<SessionU
         isAdmin: payload.isAdmin,
         escopoTipo: isScopeKind(payload.escopoTipo) ? payload.escopoTipo : "proprio",
         escopoCpf: typeof payload.escopoCpf === "string" ? payload.escopoCpf : null,
+        caps: toStringArray(payload.caps),
+        rotas: toStringArray(payload.rotas),
+        catalogo: toStringArray(payload.catalogo),
       };
     }
 

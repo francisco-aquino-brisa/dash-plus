@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { LogIn, Mail } from "lucide-react";
 import { getForwardedEmail } from "@/lib/auth/identity";
+import { BootstrapButton } from "@/components/auth/BootstrapButton";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +11,9 @@ export const metadata = {
 /**
  * Re-entry screen shown after "Sair" clears the session (ADR 0005). There is no
  * password: the platform forwards the identity, so the email is shown locked and
- * a single "Entrar" re-mints the session via /bootstrap. Standalone (no shell) —
- * this is the logged-out state, allowed through the middleware.
+ * a single "Entrar" re-mints the session via /bootstrap, which lands the user on
+ * the first screen their nível holds. Standalone (no shell) — this is the
+ * logged-out state, allowed through the middleware.
  */
 export default function EntrarPage() {
   const email = getForwardedEmail() ?? "";
@@ -46,14 +47,13 @@ export default function EntrarPage() {
           <p className="mt-1.5 text-[11px] text-t3">Este e-mail é fixo — vem da sua conta na plataforma.</p>
         </div>
 
-        <Link
-          href="/bootstrap?next=/dashboard"
+        <BootstrapButton
+          icon={<LogIn className="h-4 w-4" />}
+          label="Entrar"
+          pendingLabel="Entrando…"
           className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-[11px] text-sm font-extrabold text-white no-underline"
           style={{ background: "var(--s-brand)" }}
-        >
-          <LogIn className="h-4 w-4" />
-          Entrar
-        </Link>
+        />
       </div>
     </div>
   );

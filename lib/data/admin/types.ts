@@ -19,16 +19,6 @@ export interface Nivel {
   capCount: number;
 }
 
-export interface Cargo {
-  id: number;
-  nome: string;
-  descricao: string | null;
-  /** From the `padrao` column: true for seeded default cargos (padrao = 1). */
-  locked: boolean;
-  /** People assigned to this cargo. */
-  pessoas: number;
-}
-
 export interface Pagina {
   id: number;
   nome: string;
@@ -56,8 +46,6 @@ export interface Usuario {
   cpf: string | null;
   nivelId: number | null;
   nivelNome: string | null;
-  cargoId: number | null;
-  cargoNome: string | null;
   ativo: boolean;
   /** Whether the user is synced with the source system (`tb_usuarios.sincronizado`). */
   sincronizado: boolean;
@@ -86,7 +74,6 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 /** Everything the admin area reads, assembled once server-side. */
 export interface AdminData {
   niveis: Nivel[];
-  cargos: Cargo[];
   paginas: Pagina[];
   capacidades: Capacidade[];
   usuarios: Usuario[];

@@ -1,22 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySession, SESSION_COOKIE } from "@/lib/auth/jwt";
+import { firstAccessibleRoute, isAdminRoute } from "@/lib/auth/routes";
 
 /**
- * Edge gate (ADR 0005). There is no login form: identity is resolved by the
- * Node-only `/bootstrap` route, which mints the session cookie. The middleware
- * only verifies that cookie (jose is Edge-safe; it cannot query Databricks).
+ * Edge gate (ADR 0005 / 0007). There is no login form: `/bootstrap` (Node) mints
+ * the cookie; this only verifies it, since jose is Edge-safe but Databricks is
+ * not reachable from here.
  *
- * - No/invalid session → send to `/bootstrap?next=…` (which resolves + mints).
- * - Valid session + `/admin/*` but not admin → bounce to /dashboard.
- * - `/` → /dashboard.
+ * The per-page gate runs in `app/(app)/layout.tsx` instead: deciding it needs the
+ * page catalog, and "outside the catalog stays open" is a distinction the Edge
+ * cannot make without a query. `x-pathname` is forwarded so that layout knows
+ * which page was asked for.
  *
- * Redirects here keep the absolute `new URL(path, req.url)` form even though
- * `req.url` carries the internal bind address in production (`https://0.0.0.0:8000`,
- * see lib/redirect.ts): Next relativizes a middleware `Location` before it leaves
- * the server, and a relative one would make it throw `Invalid URL`. Route handlers
- * are the opposite case — they must use `redirectToPath`.
- */
-export async function middleware(req: NextRequest) {
+ * Redirects keep the absolute `new URL(path, req.url)` form: Next relativizes a
+ * middleware `Location`, and a relative one makes it throw `Invalid URL`. Route
+ * handlers are the opposite case and must use `redirectToPath` (lib/redirect.ts).
+ */ export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
   // Entry point, access-denied, logout and the re-entry screen always pass
@@ -34,7 +33,7 @@ export async function middleware(req: NextRequest) {
   const session = await verifySession(token);
 
   if (!session) {
-    const next = pathname === "/" ? "/dashboard" : `${pathname}${search}`;
+    const next = pathname === "/" ? "/" : `${pathname}${search}`;
     const url = new URL("/bootstrap", req.url);
 
     url.searchParams.set("next", next);
@@ -43,17 +42,20 @@ export async function middleware(req: NextRequest) {
   }
 
   if (pathname === "/") {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return NextResponse.redirect(new URL(firstAccessibleRoute(session), req.url));
   }
 
   // Admin area is gated by the isAdmin claim — no query needed.
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    if (!session.isAdmin) {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
-    }
+  if (isAdminRoute(pathname) && !session.isAdmin) {
+    return NextResponse.redirect(new URL(firstAccessibleRoute(session), req.url));
   }
 
-  return NextResponse.next();
+  // Next does not pass the path to layouts, and that is where the page gate runs.
+  const headers = new Headers(req.headers);
+
+  headers.set("x-pathname", pathname);
+
+  return NextResponse.next({ request: { headers } });
 }
 
 export const config = {

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function UsuariosPage() {
   await requireAdmin();
 
-  const { usuarios, niveis, cargos } = await readAdminData();
+  const { usuarios, niveis } = await readAdminData(["usuarios", "niveis"]);
 
-  return <UsuariosScreen usuarios={usuarios} niveis={niveis} cargos={cargos} />;
+  return <UsuariosScreen usuarios={usuarios} niveis={niveis} />;
 }

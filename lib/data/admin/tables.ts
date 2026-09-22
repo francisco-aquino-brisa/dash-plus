@@ -11,7 +11,6 @@ const id = (table: string) => `\`${CAT}\`.\`${SCHEMA}\`.\`${table}\``;
 
 export const T = {
   niveis: id("tb_niveis"),
-  cargos: id("tb_cargos"),
   paginas: id("tb_paginas"),
   permissoes: id("tb_permissoes"),
   permissoesNivel: id("tb_permissoes_nivel"),

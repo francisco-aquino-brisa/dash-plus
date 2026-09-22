@@ -59,31 +59,12 @@ export function deriveEmail(nome: string): string {
 }
 
 /**
- * A nível is `locked` when it is a seeded default that must not be edited or
- * deleted (shows a "Padrão" badge instead of actions). There is no `locked`
- * column on `tb_niveis`; it is derived from the name — the `admin` and `vendedor`
- * levels are locked (ADR 0005 — `admin` is the seeded level). Cargos, by contrast,
- * carry a real `padrao` column and derive `locked` from it in the read layer.
- */
-export function isLockedNivel(nome: string): boolean {
-  const n = deburr(nome).trim();
-
-  return n === "admin" || n === "vendedor";
-}
-
-/**
  * The `admin` level alone is FULLY locked in the permission matrix: it holds every
  * capability and cannot be toggled. `vendedor` is record-locked (no rename/delete)
- * but its capabilities ARE editable — so the matrix uses this, not `isLockedNivel`.
+ * but its capabilities ARE editable — so the matrix uses this, not `padrao`.
  */
 export function isAdminNivel(nome: string): boolean {
   return deburr(nome).trim() === "admin";
-}
-
-export function isLockedCargo(nome: string): boolean {
-  const n = deburr(nome).trim();
-
-  return n === "administrador" || n === "admin";
 }
 
 export interface ChipTone {

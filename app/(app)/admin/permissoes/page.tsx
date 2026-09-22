@@ -7,7 +7,12 @@ export const dynamic = "force-dynamic";
 export default async function PermissoesPage() {
   await requireAdmin();
 
-  const { niveis, paginas, capacidades, perms } = await readAdminData();
+  const { niveis, paginas, capacidades, perms } = await readAdminData([
+    "niveis",
+    "paginas",
+    "capacidades",
+    "perms",
+  ]);
 
   return <PermissoesMatrix niveis={niveis} paginas={paginas} capacidades={capacidades} perms={perms} />;
 }

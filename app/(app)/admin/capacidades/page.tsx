@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function CapacidadesPage() {
   await requireAdmin();
 
-  const { capacidades, paginas } = await readAdminData();
+  const { capacidades, paginas } = await readAdminData(["capacidades", "paginas"]);
 
   return <CapacidadesScreen capacidades={capacidades} paginas={paginas} />;
 }

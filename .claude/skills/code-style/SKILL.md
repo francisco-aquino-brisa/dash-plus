@@ -154,9 +154,12 @@ if (f.gerente) (clauses.push("gerente = ?"), params.push(f.gerente));
 
 ## Comments
 
-Match the surrounding density. Explain the **why** (business rule, warehouse
-quirk, ADR reference), not the obvious what. Keep the short, pointed comments this
-codebase favors.
+**The default is no comment** — CLAUDE.md ("Comments — the default is NO
+comment") governs, and it wins over any density you see around you: this codebase
+is over-commented and is being cleaned up. Write one only when a competent reader
+would otherwise get the code wrong — a business rule, a warehouse quirk, a
+workaround, a decision that looks wrong without its ADR. Never comment to narrate
+an edit, and delete the comments your edit made false.
 
 ## Cross-refs
 

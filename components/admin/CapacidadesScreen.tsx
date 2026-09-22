@@ -11,6 +11,7 @@ import { useAdminAction } from "./useAdminAction";
 import { textMatches } from "./filter";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { normalizeCapabilityLabelInput } from "@/lib/data/admin/derive";
+import { isCodeCap } from "@/lib/auth/capabilities";
 import { removeCapacidade, saveCapacidade } from "@/app/(app)/admin/actions";
 import type { Capacidade, Pagina } from "@/lib/data/admin/types";
 
@@ -39,6 +40,8 @@ export function CapacidadesScreen({
   );
 
   const pageOptions = paginas.map((p) => ({ id: p.id, label: p.nome, hint: p.rota ?? undefined }));
+  // As stored, not as typed — the warning must survive editing the identifier.
+  const lockedLabel = draft?.id != null ? (capacidades.find((c) => c.id === draft.id)?.label ?? null) : null;
   const iconByPage = new Map(paginas.map((p) => [p.id, p.icone]));
 
   const columns: Column<Capacidade>[] = [
@@ -46,14 +49,20 @@ export function CapacidadesScreen({
       key: "label",
       header: "Permissão",
       render: (c) => (
-        <span
-          style={{
-            fontFamily: "var(--font-mono, ui-monospace, monospace)",
-            fontWeight: 700,
-            color: "var(--s-t1)",
-          }}
-        >
-          {c.label}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span
+            style={{
+              fontFamily: "var(--font-mono, ui-monospace, monospace)",
+              fontWeight: 700,
+              color: "var(--s-t1)",
+              overflowWrap: "anywhere",
+            }}
+          >
+            {c.label}
+          </span>
+          {isCodeCap(c.label) && (
+            <Chip tone={{ fg: "var(--s-brand)", bg: "var(--s-brand-weak)" }}>usada no código</Chip>
+          )}
         </span>
       ),
     },
@@ -120,7 +129,7 @@ export function CapacidadesScreen({
   return (
     <AdminScreen
       title="Permissões"
-      subtitle="Ações permitidas dentro de cada página"
+      subtitle="Ações permitidas dentro de cada página · uma página aparece no menu quando o nível tem ao menos uma permissão dela"
       search={{ value: query, onChange: setQuery, placeholder: "Buscar permissão…" }}
       action={{ label: "Nova permissão", onClick: openNew }}
     >
@@ -155,6 +164,23 @@ export function CapacidadesScreen({
             mono
             autoFocus
           />
+          {draft.id != null && isCodeCap(lockedLabel ?? "") && (
+            <p
+              style={{
+                margin: "-4px 0 0",
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: "var(--s-warn, var(--s-t2))",
+              }}
+            >
+              O código checa esta permissão pelo identificador{" "}
+              <strong style={{ fontFamily: "var(--font-mono, ui-monospace, monospace)" }}>
+                {lockedLabel}
+              </strong>
+              . Renomear desliga a restrição que ela aplica — altere só a descrição, ou avise o time de
+              desenvolvimento.
+            </p>
+          )}
           <TextAreaField
             label="Descrição"
             value={draft.descricao}

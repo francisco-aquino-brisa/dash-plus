@@ -105,7 +105,7 @@ export function PermissoesMatrix({
   return (
     <AdminScreen
       title="Permissões por nível"
-      subtitle="Marque o que cada nível pode fazer"
+      subtitle="Marque o que cada nível pode fazer · a mudança vale no próximo acesso do usuário"
       search={{ value: query, onChange: setQuery, placeholder: "Buscar permissão…" }}
     >
       {/* Level chips */}
@@ -198,7 +198,13 @@ export function PermissoesMatrix({
                 </span>
                 <span
                   className="font-display"
-                  style={{ fontSize: 15, fontWeight: 800, color: "var(--s-t1)" }}
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 800,
+                    color: "var(--s-t1)",
+                    minWidth: 0,
+                    overflowWrap: "anywhere",
+                  }}
                 >
                   {g.nome}
                 </span>
@@ -260,13 +266,21 @@ export function PermissoesMatrix({
                             fontSize: 12.5,
                             fontWeight: 800,
                             color: on ? "var(--s-brand)" : "var(--s-t1)",
+                            // snake_case identifiers have no break opportunity.
+                            overflowWrap: "anywhere",
                           }}
                         >
                           {c.label}
                         </span>
                         {c.descricao && (
                           <span
-                            style={{ display: "block", fontSize: 11.5, color: "var(--s-t3)", marginTop: 1 }}
+                            style={{
+                              display: "block",
+                              fontSize: 11.5,
+                              color: "var(--s-t3)",
+                              marginTop: 1,
+                              overflowWrap: "anywhere",
+                            }}
                           >
                             {c.descricao}
                           </span>

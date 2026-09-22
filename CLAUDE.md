@@ -32,6 +32,25 @@ see the `databricks-readonly` skill.
 Keep every query bounded (`LIMIT`, small `max_rows`, filter by competência) — the
 warehouse is metered and cost matters.
 
+## Permissionamento — o gate é por página e por capacidade
+
+Uma tela aparece no menu e pode ser aberta quando o nível do usuário tem **ao
+menos uma permissão daquela página** (`tb_permissoes.pagina_id` → `tb_paginas.rota`).
+Já `/admin/*` é gateado só pelo claim `isAdmin`, nunca pelo catálogo, e uma rota
+que não está em `tb_paginas` fica liberada. Os grants viajam no cookie de sessão
+(`caps`/`rotas`, resolvidos no `/bootstrap`), então valem a partir do próximo
+acesso do usuário. Ver [ADR 0007](./docs/adr/0007-page-and-capability-permissions.md).
+
+Para gatear um card/botão/campo: a sustentação cria a permissão em
+`/admin/capacidades`, você adiciona o label **exato** em `lib/auth/capabilities.ts`
+e usa `<Can cap={CAP.X}>` (cliente) ou `await can(CAP.X)` (servidor). O label é
+identificador, não legenda — renomear desliga o gate em silêncio.
+
+**Esconder o controle não é a checagem.** Toda server action gateada chama
+`can()` por conta própria, e um card cujos _dados_ são restritos não pode ser
+renderizado no servidor. Rotas `/api/*` usam `requirePageSession(rota)` ou
+`requireCap(label)` (`lib/auth/api.ts`) — o middleware não cobre `/api`.
+
 ## Visual verification (browser)
 
 Before claiming a UI change works or describing what a page renders, check whether
@@ -92,6 +111,30 @@ the `getUTC*` form.
 
 **Client components are the exception**: there the browser's zone is the user's,
 so `lib/date.ts` (`toIso`/`fromIso`) is correct as-is and must stay local.
+
+## Comments — the default is NO comment
+
+This codebase is over-commented and is being cleaned up. Do not add to the pile,
+and never "match the surrounding density" — that is the habit that produced it.
+
+Before writing any comment, ask: **would a competent reader get this wrong
+without it?** If not, do not write it. The bar is a real trap — a business rule
+that is not visible in the code, a warehouse quirk, a workaround whose removal
+would break something, a decision that looks wrong until you know why (link the
+ADR). Those earn their space and stay useful for years.
+
+Never write a comment because you are **editing** the code. A comment describes
+the code as it stands, not the change that produced it — the diff and `git blame`
+already record that. Delete these on sight, including your own:
+
+- restating what the line plainly does
+- narrating the edit ("agora usa X", "trocado para Y", "antes era Z")
+- explaining standard language/framework behaviour
+- section banners and decorative separators
+- a docblock on a function whose name and signature already say it
+
+When you touch a function, **delete the comments your edit made false** — a stale
+comment is worse than none.
 
 ## Formatting & linting
 

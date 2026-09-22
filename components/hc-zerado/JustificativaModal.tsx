@@ -15,6 +15,8 @@ import { Segmented } from "@/components/ui/segmented";
 import { DangerButton, PrimaryButton, SecondaryButton } from "@/components/admin/primitives";
 import { SERVICO_LABEL, STATUS_TONE, initials, ptBr } from "./ui";
 import { CATEGORIAS } from "@/lib/data/hc-zerado/catalog";
+import { useCan } from "@/lib/auth/client";
+import { CAP } from "@/lib/auth/capabilities";
 import type { DiaZerado, JustificativaStatus, PessoaZerada } from "@/lib/data/hc-zerado/types";
 
 const MOTIVO_MIN = 15;
@@ -63,6 +65,8 @@ export function JustificativaModal({
     status: "Em Análise",
     observacaoLider: "",
   });
+  const podeColaborador = useCan(CAP.HC_JUSTIFICATIVA_COLABORADOR);
+  const podeGestor = useCan(CAP.HC_DEVOLUTIVA_GESTOR);
   const [touched, setTouched] = useState(false);
   // Deleting is not undoable, so the button asks once before it does anything.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -84,11 +88,15 @@ export function JustificativaModal({
   if (!pessoa || !dia) return null;
 
   const motivo = draft.motivo.trim();
-  const issue = !draft.categoria
-    ? "Selecione uma categoria."
-    : motivo.length < MOTIVO_MIN
-      ? `Descreva o motivo com pelo menos ${MOTIVO_MIN} caracteres.`
-      : null;
+  const issue = !podeColaborador
+    ? dia.justificativa
+      ? null
+      : "Não há justificativa registrada neste dia para avaliar."
+    : !draft.categoria
+      ? "Selecione uma categoria."
+      : motivo.length < MOTIVO_MIN
+        ? `Descreva o motivo com pelo menos ${MOTIVO_MIN} caracteres.`
+        : null;
 
   const submit = () => {
     setTouched(true);
@@ -171,6 +179,7 @@ export function JustificativaModal({
                   <button
                     key={c}
                     type="button"
+                    disabled={!podeColaborador}
                     onClick={() => patch({ categoria: c })}
                     style={{
                       height: 28,
@@ -182,7 +191,8 @@ export function JustificativaModal({
                       font: "inherit",
                       fontSize: 11.5,
                       fontWeight: on ? 800 : 600,
-                      cursor: "pointer",
+                      cursor: podeColaborador ? "pointer" : "default",
+                      opacity: !podeColaborador && !on ? 0.45 : 1,
                       transition: ".14s",
                     }}
                   >
@@ -202,10 +212,15 @@ export function JustificativaModal({
             <textarea
               value={draft.motivo}
               onChange={(e) => patch({ motivo: e.target.value })}
+              readOnly={!podeColaborador}
               maxLength={MOTIVO_MAX}
               rows={4}
-              placeholder="Descreva por que a pessoa não registrou venda neste dia."
-              style={textarea}
+              placeholder={
+                podeColaborador
+                  ? "Descreva por que a pessoa não registrou venda neste dia."
+                  : "Sem justificativa registrada."
+              }
+              style={podeColaborador ? textarea : readOnlyTextarea}
             />
           </Field>
 
@@ -227,12 +242,16 @@ export function JustificativaModal({
             </span>
 
             <Field label="Status da ocorrência">
-              <Segmented
-                options={STATUS_OPTIONS}
-                value={draft.status}
-                onChange={(status) => patch({ status })}
-                ariaLabel="Status da ocorrência"
-              />
+              {podeGestor ? (
+                <Segmented
+                  options={STATUS_OPTIONS}
+                  value={draft.status}
+                  onChange={(status) => patch({ status })}
+                  ariaLabel="Status da ocorrência"
+                />
+              ) : (
+                <span style={readOnlyValue}>{draft.status}</span>
+              )}
             </Field>
 
             <Field
@@ -242,15 +261,18 @@ export function JustificativaModal({
               <textarea
                 value={draft.observacaoLider}
                 onChange={(e) => patch({ observacaoLider: e.target.value })}
+                readOnly={!podeGestor}
                 maxLength={OBSERVACAO_MAX}
                 rows={3}
-                placeholder="Opcional — o parecer que a pessoa vai ler."
-                style={textarea}
+                placeholder={
+                  podeGestor ? "Opcional — o parecer que a pessoa vai ler." : "Sem parecer do gestor."
+                }
+                style={podeGestor ? textarea : readOnlyTextarea}
               />
             </Field>
           </div>
 
-          {dia.justificativa && (
+          {dia.justificativa && podeColaborador && (
             <p
               style={{
                 margin: 0,
@@ -301,6 +323,7 @@ export function JustificativaModal({
           }}
         >
           {dia.justificativa &&
+            podeColaborador &&
             (confirmingDelete ? (
               <span
                 style={{
@@ -479,4 +502,25 @@ const textarea: React.CSSProperties = {
   fontSize: 12.5,
   lineHeight: 1.5,
   resize: "vertical",
+};
+
+const readOnlyTextarea: React.CSSProperties = {
+  ...textarea,
+  background: "var(--s-sunken)",
+  color: "var(--s-t2)",
+  cursor: "default",
+  resize: "none",
+};
+
+const readOnlyValue: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  height: 32,
+  padding: "0 12px",
+  borderRadius: 999,
+  border: "1px solid var(--s-border)",
+  background: "var(--s-sunken)",
+  color: "var(--s-t2)",
+  fontSize: 12,
+  fontWeight: 800,
 };

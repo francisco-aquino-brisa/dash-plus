@@ -20,7 +20,7 @@ import {
   searchUsuarioPessoas,
   type EscopoPreview,
 } from "@/app/(app)/admin/actions";
-import type { Cargo, Nivel, ScopeKind, Usuario } from "@/lib/data/admin/types";
+import type { Nivel, ScopeKind, Usuario } from "@/lib/data/admin/types";
 
 interface Draft {
   id?: number;
@@ -29,34 +29,24 @@ interface Draft {
   /** Own CPF — only known on edit; on create the preview resolves it from the e-mail. */
   cpf: string | null;
   nivelId: number | null;
-  cargoId: number | null;
   ativo: boolean;
   escopoTipo: ScopeKind;
   escopoCpf: string | null;
   escopoNome: string | null;
 }
 
-export function UsuariosScreen({
-  usuarios,
-  niveis,
-  cargos,
-}: {
-  usuarios: Usuario[];
-  niveis: Nivel[];
-  cargos: Cargo[];
-}) {
+export function UsuariosScreen({ usuarios, niveis }: { usuarios: Usuario[]; niveis: Nivel[] }) {
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [target, setTarget] = useState<Usuario | null>(null);
   const { busy, error, setError, run } = useAdminAction();
 
   const rows = useMemo(
-    () => usuarios.filter((u) => textMatches(query, u.nome, u.email, u.nivelNome, u.cargoNome)),
+    () => usuarios.filter((u) => textMatches(query, u.nome, u.email, u.nivelNome)),
     [usuarios, query],
   );
 
   const nivelOptions = niveis.map((n) => ({ id: n.id, label: n.nome }));
-  const cargoOptions = cargos.map((c) => ({ id: c.id, label: c.nome }));
 
   const columns: Column<Usuario>[] = [
     {
@@ -78,11 +68,6 @@ export function UsuariosScreen({
         ) : (
           <span style={{ color: "var(--s-t3)" }}>—</span>
         ),
-    },
-    {
-      key: "cargo",
-      header: "Cargo",
-      render: (u) => <span style={{ color: "var(--s-t2)", fontWeight: 600 }}>{u.cargoNome ?? "—"}</span>,
     },
     {
       key: "escopo",
@@ -115,7 +100,6 @@ export function UsuariosScreen({
       email: "",
       cpf: null,
       nivelId: niveis[0]?.id ?? null,
-      cargoId: null,
       ativo: true,
       escopoTipo: "proprio",
       escopoCpf: null,
@@ -131,7 +115,6 @@ export function UsuariosScreen({
       email: u.email,
       cpf: u.cpf,
       nivelId: u.nivelId,
-      cargoId: u.cargoId,
       ativo: u.ativo,
       escopoTipo: u.escopoTipo,
       escopoCpf: u.escopoCpf,
@@ -167,7 +150,6 @@ export function UsuariosScreen({
           // On create, the selected candidate e-mail; on edit, the server keeps the stored identity.
           email: draft.id ? undefined : draft.email,
           nivelId: draft.nivelId,
-          cargoId: draft.cargoId,
           ativo: draft.ativo,
           escopoTipo: draft.escopoTipo,
           escopoCpf: draft.escopoCpf,
@@ -188,7 +170,7 @@ export function UsuariosScreen({
   return (
     <AdminScreen
       title="Usuários"
-      subtitle="Vincule cada pessoa a um nível de acesso e a um cargo"
+      subtitle="Vincule cada pessoa a um nível de acesso"
       search={{ value: query, onChange: setQuery, placeholder: "Buscar por nome, e-mail…" }}
       action={{ label: "Vincular usuário", onClick: openNew }}
     >
@@ -274,14 +256,6 @@ export function UsuariosScreen({
             options={nivelOptions}
             onChange={(nivelId) => setDraft({ ...draft, nivelId })}
             placeholder="Selecionar nível…"
-          />
-          <AdminSelect
-            label="Cargo"
-            value={draft.cargoId}
-            options={cargoOptions}
-            onChange={(cargoId) => setDraft({ ...draft, cargoId })}
-            placeholder="Selecionar cargo…"
-            noneLabel="Sem cargo"
           />
           <EscopoField draft={draft} onChange={setDraft} search={searchPessoas} />
           {draft.id ? (

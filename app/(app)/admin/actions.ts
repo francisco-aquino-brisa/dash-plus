@@ -30,7 +30,6 @@ import * as write from "@/lib/data/admin/write";
 const ADMIN_PATHS = [
   "/admin/usuarios",
   "/admin/niveis",
-  "/admin/cargos",
   "/admin/paginas",
   "/admin/capacidades",
   "/admin/permissoes",
@@ -44,19 +43,27 @@ async function guard(): Promise<ActionResult | null> {
   return null;
 }
 
-function revalidateAdmin(): void {
-  for (const p of ADMIN_PATHS) revalidatePath(p);
-}
-
-/** Wrap a mutation with the admin guard, error normalization and revalidation. */
-async function mutate(op: () => Promise<void>): Promise<ActionResult> {
+/**
+ * Wrap a mutation with the admin guard, error normalization and revalidation.
+ *
+ * `paths` narrows what gets revalidated. It matters for latency, not just
+ * tidiness: revalidating the route the caller is ON makes Next re-render it into
+ * the action's response, and an admin screen's reads are serialized Databricks
+ * round-trips. A screen that already holds the new state optimistically should
+ * leave itself out.
+ */
+async function mutate(
+  op: () => Promise<void>,
+  paths: readonly string[] = ADMIN_PATHS,
+): Promise<ActionResult> {
   const denied = await guard();
 
   if (denied) return denied;
 
   try {
     await op();
-    revalidateAdmin();
+
+    for (const p of paths) revalidatePath(p);
 
     return { ok: true };
   } catch (err) {
@@ -96,28 +103,6 @@ export async function saveNivel(input: {
 
 export async function removeNivel(id: number): Promise<ActionResult> {
   return mutate(() => write.deleteNivel(id));
-}
-
-// ── Cargos ──────────────────────────────────────────────────────────────────
-
-export async function saveCargo(input: {
-  id?: number;
-  nome: string;
-  descricao: string;
-}): Promise<ActionResult> {
-  const nome = clean(input.nome);
-
-  if (!nome) return { ok: false, error: "Informe o nome do cargo." };
-
-  return mutate(() =>
-    input.id
-      ? write.updateCargo(input.id, nome, orNull(input.descricao))
-      : write.createCargo(nome, orNull(input.descricao)),
-  );
-}
-
-export async function removeCargo(id: number): Promise<ActionResult> {
-  return mutate(() => write.deleteCargo(id));
 }
 
 // ── Páginas ─────────────────────────────────────────────────────────────────
@@ -264,7 +249,6 @@ export async function saveUsuario(input: {
   /** Selected candidate e-mail (create only) — re-validated against the hierarchy. */
   email?: string;
   nivelId: number | null;
-  cargoId: number | null;
   ativo?: boolean;
   escopoTipo?: string;
   /** CPF of the person whose view is delegated — only read when `escopoTipo === "gestor"`. */
@@ -280,13 +264,12 @@ export async function saveUsuario(input: {
 
   const fields = {
     nivelId: input.nivelId,
-    cargoId: input.cargoId,
     escopoTipo: escopo.fields,
     escopoCpf: escopo.cpf,
   };
 
   if (input.id) {
-    // Edit: only nível/cargo/status/escopo change. Nome/e-mail come from the stored
+    // Edit: only nível/status/escopo change. Nome/e-mail come from the stored
     // row, never the client, so a forged payload cannot rewrite another identity.
     const identity = await readUsuarioIdentity(input.id);
 
@@ -328,5 +311,7 @@ export async function removeUsuario(id: number): Promise<ActionResult> {
 // ── Matriz de permissões ──────────────────────────────────────────────────────
 
 export async function togglePerm(nivelId: number, capId: number, granted: boolean): Promise<ActionResult> {
-  return mutate(() => write.setPerm(nivelId, capId, granted));
+  // Not /admin/permissoes: the matrix commits its own state, and revalidating it
+  // would re-read the whole screen into this response for nothing.
+  return mutate(() => write.setPerm(nivelId, capId, granted), ["/admin/niveis"]);
 }

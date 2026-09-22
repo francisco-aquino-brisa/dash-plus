@@ -3,6 +3,7 @@ import { getForwardedEmail } from "@/lib/auth/identity";
 import { authorizeByEmail } from "@/lib/auth/gate";
 import { signSession, SESSION_COOKIE, getSessionTtlSeconds } from "@/lib/auth/jwt";
 import { redirectToPath } from "@/lib/redirect";
+import { firstAccessibleRoute } from "@/lib/auth/routes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,12 +15,20 @@ export const dynamic = "force-dynamic";
  * forwarded email, gates it against `tb_usuarios`, and on success mints the
  * session cookie and redirects to `next`. On failure sends to /sem-acesso.
  * The middleware routes here whenever the cookie is missing/expired.
+ *
+ * `next` is only a request: a user sent here on the way to a screen their nível
+ * does not reach lands on the closest one they do (the page gate in
+ * `app/(app)/layout.tsx` still has the final say, since only it knows whether
+ * the route is in the catalog at all). With no `next`, entry resolves to the
+ * user's first page rather than to a hardcoded dashboard.
  */
 export async function GET(req: NextRequest) {
   const nextParam = req.nextUrl.searchParams.get("next");
   // Only allow same-origin relative paths (guards against open redirects).
-  const target =
-    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/dashboard";
+  const requested =
+    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") && nextParam !== "/"
+      ? nextParam
+      : "";
 
   const email = getForwardedEmail();
 
@@ -53,7 +62,7 @@ export async function GET(req: NextRequest) {
     return redirectToPath("/sem-acesso?erro=sessao");
   }
 
-  const res = redirectToPath(target);
+  const res = redirectToPath(requested || firstAccessibleRoute(user));
 
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,

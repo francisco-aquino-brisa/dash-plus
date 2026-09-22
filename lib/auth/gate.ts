@@ -10,11 +10,56 @@
 
 import { DatabricksDataClient } from "@/lib/data/databricks";
 import { isScopeKind, type SessionUser } from "./jwt";
+import { normalizeRoute } from "./routes";
 
 const CAT = process.env.DATABRICKS_CITIES_CATALOG ?? "gdb_brisanet_comunidade_dev";
 const SCHEMA = process.env.DATABRICKS_CITIES_SCHEMA ?? "projeto_brisa_performance";
 const USERS = `\`${CAT}\`.\`${SCHEMA}\`.\`tb_usuarios\``;
 const NIVEIS = `\`${CAT}\`.\`${SCHEMA}\`.\`tb_niveis\``;
+const PERMISSOES = `\`${CAT}\`.\`${SCHEMA}\`.\`tb_permissoes\``;
+const PERMISSOES_NIVEL = `\`${CAT}\`.\`${SCHEMA}\`.\`tb_permissoes_nivel\``;
+const PAGINAS = `\`${CAT}\`.\`${SCHEMA}\`.\`tb_paginas\``;
+
+async function readCatalogo(): Promise<string[]> {
+  const rows = await new DatabricksDataClient().query<{ rota: unknown }>(
+    `SELECT rota FROM ${PAGINAS} WHERE rota IS NOT NULL ORDER BY id`,
+  );
+
+  return rows.map((r) => normalizeRoute(r.rota)).filter(Boolean);
+}
+
+/**
+ * A page is open when the nível holds ANY capability on it — the same rule that
+ * shows it in the menu. Resolved once here so no request pays for it.
+ */
+async function readNivelGrants(nivelId: number): Promise<{ caps: string[]; rotas: string[] }> {
+  if (!Number.isFinite(nivelId) || nivelId <= 0) return { caps: [], rotas: [] };
+
+  const rows = await new DatabricksDataClient().query<{ label: unknown; rota: unknown }>(
+    `SELECT perm.label, pag.rota
+       FROM ${PERMISSOES_NIVEL} pn
+       JOIN ${PERMISSOES} perm ON perm.id = pn.permissao_id
+       LEFT JOIN ${PAGINAS} pag ON pag.id = perm.pagina_id
+      WHERE pn.nivel_id = ?
+      ORDER BY pag.id, perm.id`,
+    [nivelId],
+  );
+
+  const caps: string[] = [];
+  const rotas: string[] = [];
+
+  for (const r of rows) {
+    const label = String(r.label ?? "").trim();
+    const rota = normalizeRoute(r.rota);
+
+    if (label && !caps.includes(label)) caps.push(label);
+
+    // `pagina_id` null grants an action, not a screen.
+    if (rota && !rotas.includes(rota)) rotas.push(rota);
+  }
+
+  return { caps, rotas };
+}
 
 /**
  * Authorize a user by email against `tb_usuarios`. Returns the session user
@@ -51,6 +96,12 @@ export async function authorizeByEmail(email: string): Promise<SessionUser | nul
   if (!r || r.ativo !== true) return null;
 
   const nivel = String(r.nivel ?? "");
+  const isAdmin = nivel.toLowerCase() === "admin";
+  // Admins bypass every check; the seeded `admin` nível holds no grant at all.
+  const [{ caps, rotas }, catalogo] = await Promise.all([
+    isAdmin ? { caps: [], rotas: [] } : readNivelGrants(Number(r.nivel_id ?? 0)),
+    isAdmin ? [] : readCatalogo(),
+  ]);
 
   return {
     email: normalized,
@@ -60,11 +111,14 @@ export async function authorizeByEmail(email: string): Promise<SessionUser | nul
     matricula: r.matricula == null ? null : String(r.matricula),
     nivelId: Number(r.nivel_id ?? 0),
     nivel,
-    isAdmin: nivel.toLowerCase() === "admin",
+    isAdmin,
     // A row with no escopo yet falls back to `proprio`: a user must never gain
     // reach from a column nobody filled in.
     escopoTipo: isScopeKind(r.escopo_tipo) ? r.escopo_tipo : "proprio",
     escopoCpf: r.escopo_cpf == null ? null : String(r.escopo_cpf),
+    caps,
+    rotas,
+    catalogo,
   };
 }
 
