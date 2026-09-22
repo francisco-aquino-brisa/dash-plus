@@ -16,6 +16,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   LogOut,
+  MapPin,
   Moon,
   MoreHorizontal,
   Network,
@@ -69,6 +70,7 @@ const ADMIN_NAV: NavItem[] = [
   { title: "Páginas", short: "Páginas", href: "/admin/paginas", icon: Files },
   { title: "Permissões", short: "Permiss.", href: "/admin/capacidades", icon: KeyRound },
   { title: "Permissões por nível", short: "Matriz", href: "/admin/permissoes", icon: LayoutGrid },
+  { title: "Cidades por supervisão", short: "Cidades", href: "/admin/cidades", icon: MapPin },
   { title: "Indicadores", short: "Indic.", href: "/admin/indicadores", icon: Activity },
 ];
 

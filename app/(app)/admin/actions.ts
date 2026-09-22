@@ -14,6 +14,7 @@ import {
   type HierarquiaCandidate,
   type HierarquiaPessoa,
 } from "@/lib/data/admin/hierarquia";
+import { filterCidadesValidas, filterSupervisoesValidas } from "@/lib/data/admin/supervisao-cidades";
 import type { ActionResult } from "@/lib/data/admin/types";
 import * as write from "@/lib/data/admin/write";
 
@@ -29,6 +30,7 @@ import * as write from "@/lib/data/admin/write";
 
 const ADMIN_PATHS = [
   "/admin/usuarios",
+  "/admin/cidades",
   "/admin/niveis",
   "/admin/paginas",
   "/admin/capacidades",
@@ -314,4 +316,64 @@ export async function togglePerm(nivelId: number, capId: number, granted: boolea
   // Not /admin/permissoes: the matrix commits its own state, and revalidating it
   // would re-read the whole screen into this response for nothing.
   return mutate(() => write.setPerm(nivelId, capId, granted), ["/admin/niveis"]);
+}
+
+// ── Cidades por supervisão ───────────────────────────────────────────────────
+
+/**
+ * Apply a batch of (supervisão, cidade) moves — the unit both modes of the
+ * screen produce, since binding a city to a supervisão and binding a
+ * supervisão to a city are the same row.
+ *
+ * Both sides are re-resolved server-side (nodes against the current RH load,
+ * cities against the current organograma) because this is a data-scope grant:
+ * a forged payload would otherwise widen what a whole branch can read.
+ */
+export async function salvarVinculos(
+  alteracoes: { codigoLocal: string; cidadeId: number; vincular: boolean }[],
+): Promise<ActionResult> {
+  const denied = await guard();
+
+  if (denied) return denied;
+
+  const limpas = alteracoes
+    .map((a) => ({ ...a, codigoLocal: clean(a.codigoLocal) }))
+    .filter((a) => a.codigoLocal && Number.isInteger(a.cidadeId));
+
+  if (limpas.length === 0) return { ok: false, error: "Nenhuma alteração para salvar." };
+
+  const nos = [...new Set(limpas.map((a) => a.codigoLocal))];
+  const cidades = [...new Set(limpas.map((a) => a.cidadeId))];
+  const [nosValidos, cidadesValidas] = await Promise.all([
+    filterSupervisoesValidas(nos),
+    filterCidadesValidas(cidades),
+  ]);
+
+  if (nosValidos.length !== nos.length) {
+    return { ok: false, error: "Alguma supervisão não está na carga atual do RH." };
+  }
+
+  if (cidadesValidas.length !== cidades.length) {
+    return { ok: false, error: "Alguma cidade não existe no organograma atual." };
+  }
+
+  const pares = (vincular: boolean) =>
+    limpas
+      .filter((a) => a.vincular === vincular)
+      .map((a) => ({ codigoLocal: a.codigoLocal, cidadeId: a.cidadeId }));
+  const session = await getSession();
+
+  return mutate(async () => {
+    await write.unlinkParesCidades(pares(false));
+    await write.linkParesCidades(pares(true), session?.email ?? null);
+  });
+}
+
+/** Clear a binding left behind by an extinct supervisão, freeing its cities. */
+export async function limparVinculoOrfao(codigoLocal: string): Promise<ActionResult> {
+  const key = clean(codigoLocal);
+
+  if (!key) return { ok: false, error: "Vínculo não informado." };
+
+  return mutate(() => write.clearCidades(key));
 }

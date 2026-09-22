@@ -219,3 +219,49 @@ export async function setPerm(nivelId: number, capId: number, granted: boolean):
     [nivelId, capId],
   );
 }
+
+// ── Cidades por supervisão (tb_supervisao_cidades) ───────────────────────────
+
+/** Drop every binding of a node — used to clear an orphan left by an extinct supervisão. */
+export function clearCidades(codigoLocal: string): Promise<void> {
+  return run(`DELETE FROM ${T.supervisaoCidades} WHERE codigo_local = ?`, [codigoLocal]);
+}
+
+/**
+ * Bind (node, city) pairs in one commit — the screen saves a batch of moves at
+ * once, and the name-based seed writes 174 of them.
+ *
+ * MERGE rather than INSERT for the same reason as `setPerm`: Delta enforces no
+ * uniqueness, so a double submit would duplicate the pair. A city may answer to
+ * more than one node (the RH itself splits Fortaleza, Caucaia, Paulo Afonso… in
+ * two), so only the exact pair is deduplicated.
+ */
+export async function linkParesCidades(
+  pares: readonly { codigoLocal: string; cidadeId: number }[],
+  criadoPor: string | null,
+): Promise<void> {
+  if (pares.length === 0) return;
+
+  const values = pares.map(() => "(?, ?, ?)").join(", ");
+  const params = pares.flatMap((p) => [p.codigoLocal, p.cidadeId, criadoPor]);
+
+  await run(
+    `MERGE INTO ${T.supervisaoCidades} t
+     USING (SELECT * FROM (VALUES ${values}) AS v(codigo_local, revan_cidade_id, criado_por)) s
+        ON t.codigo_local = s.codigo_local AND t.revan_cidade_id = s.revan_cidade_id
+      WHEN NOT MATCHED THEN INSERT (codigo_local, revan_cidade_id, criado_por)
+           VALUES (s.codigo_local, s.revan_cidade_id, s.criado_por)`,
+    params,
+  );
+}
+
+export async function unlinkParesCidades(
+  pares: readonly { codigoLocal: string; cidadeId: number }[],
+): Promise<void> {
+  if (pares.length === 0) return;
+
+  const conds = pares.map(() => "(codigo_local = ? AND revan_cidade_id = ?)").join(" OR ");
+  const params = pares.flatMap((p) => [p.codigoLocal, p.cidadeId]);
+
+  await run(`DELETE FROM ${T.supervisaoCidades} WHERE ${conds}`, params);
+}

@@ -17,20 +17,20 @@ adicionando `revan_cidade_id` (PK numérica de cidade, dimensão
 gambiarra de join por nome de cidade (`cityKey`). O código já foi repontado.
 **Este mapa vale sobre a prosa antiga abaixo.**
 
-| Antes                                                          | Depois (`projeto_brisa_performance`) | + colunas                                    |
-| -------------------------------------------------------------- | ------------------------------------ | -------------------------------------------- |
-| `projeto_brisa_performance.indicadores_cidades`                | `vw_indicadores_cidades`             | `revan_cidade_id`                            |
-| `projeto_brisa_performance.indicadores_cidades_5g`             | `vw_indicadores_cidades_5g`          | `revan_cidade_id`                            |
-| `projeto_brisa_performance.metas_cidades`                      | `vw_metas_cidades`                   | `revan_cidade_id`                            |
-| `projeto_brisa_performance.metas_vendedores_canais`            | `vw_metas_vendedores_canais`         | —                                            |
-| `projeto_brisa_performance.meta_geral_canais`                  | `vw_meta_geral_canais`               | —                                            |
-| `projeto_brisa_performance.hierarquia`                         | `vw_hierarquia`                      | `email, situacao, hash_cpf, revan_cidade_id` |
-| `inteligencia_comercial_e_mercado.waves_consolidado_orcamento` | `vw_vendas_waves`                    | `revan_cidade_id`                            |
-| `inteligencia_comercial_e_mercado.consolidado_5g_pedido`       | `vw_vendas_5g`                       | `revan_cidade_id, revan_cidade_vendedor_id`  |
-| `inteligencia_comercial_e_mercado.waves_churnsafra_consultor`  | `vw_churn_4m_vendedor_bl`            | `revan_cidade_id, cpf`                       |
-| `inteligencia_comercial_e_mercado.churn_vendedor_5g`           | `vw_churn_4m_vendedor_5g`            | `revan_cidade_id, revan_cidade_vendedor_id`  |
-| `inteligencia_comercial_e_mercado.portabilidade`               | `vw_portabilidade_5g`                | `revan_cidade_id, revan_cidade_vendedor_id`  |
-| `inteligencia_comercial_e_mercado.organograma_cidades`         | `vw_organograma_cidades`             | `revan_cidade_id`                            |
+| Antes                                                          | Depois (`projeto_brisa_performance`) | + colunas                                             |
+| -------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------- |
+| `projeto_brisa_performance.indicadores_cidades`                | `vw_indicadores_cidades`             | `revan_cidade_id`                                     |
+| `projeto_brisa_performance.indicadores_cidades_5g`             | `vw_indicadores_cidades_5g`          | `revan_cidade_id`                                     |
+| `projeto_brisa_performance.metas_cidades`                      | `vw_metas_cidades`                   | `revan_cidade_id`                                     |
+| `projeto_brisa_performance.metas_vendedores_canais`            | `vw_metas_vendedores_canais`         | —                                                     |
+| `projeto_brisa_performance.meta_geral_canais`                  | `vw_meta_geral_canais`               | —                                                     |
+| `projeto_brisa_performance.hierarquia`                         | `vw_hierarquia`                      | `email, situacao, hash_cpf, revan_cidade_vendedor_id` |
+| `inteligencia_comercial_e_mercado.waves_consolidado_orcamento` | `vw_vendas_waves`                    | `revan_cidade_id`                                     |
+| `inteligencia_comercial_e_mercado.consolidado_5g_pedido`       | `vw_vendas_5g`                       | `revan_cidade_id, revan_cidade_vendedor_id`           |
+| `inteligencia_comercial_e_mercado.waves_churnsafra_consultor`  | `vw_churn_4m_vendedor_bl`            | `revan_cidade_id, cpf`                                |
+| `inteligencia_comercial_e_mercado.churn_vendedor_5g`           | `vw_churn_4m_vendedor_5g`            | `revan_cidade_id, revan_cidade_vendedor_id`           |
+| `inteligencia_comercial_e_mercado.portabilidade`               | `vw_portabilidade_5g`                | `revan_cidade_id, revan_cidade_vendedor_id`           |
+| `inteligencia_comercial_e_mercado.organograma_cidades`         | `vw_organograma_cidades`             | `revan_cidade_id`                                     |
 
 **Não renomeados (ficam onde estavam):** `desempenho_hc`
 (`diego_barros_inteligencia_comercial_e_mercado`) e
@@ -39,6 +39,16 @@ gambiarra de join por nome de cidade (`cityKey`). O código já foi repontado.
 **Removidos de `projeto_brisa_performance`:** `tb_usuarios_app`, `usuarios_app`,
 `setores`, `niveis`, `grants`, `capabilities`, `cadastro_usuario`. Auth usa
 `tb_usuarios` + `tb_niveis` (ADR 0005) — não afetado.
+
+**Tabela nova do app (2026-09):** `tb_supervisao_cidades` — vínculo
+supervisão↔cidade (`codigo_local` de `vw_hierarquia_rh` × `revan_cidade_id`),
+escrita só pelo /admin, base do escopo de cidade (ADR 0008). DDL em
+[`ddl/tb_supervisao_cidades.sql`](ddl/tb_supervisao_cidades.sql).
+
+**Armadilha em `vw_organograma_cidades`:** a coluna `data` é STRING `dd/MM/yyyy`,
+então `max(data)` é **lexicográfico** e devolve um dezembro (01/12/2025 em vez de
+01/09/2026). Toda leitura tem que fazer `to_date(data, 'dd/MM/yyyy')` antes de
+comparar — com o parse, a carga atual tem 403 cidades (a errada tinha 350).
 
 **Bug de origem em `vw_vendas_waves` (corrigir na view):** a definição casta
 colunas numéricas string→BIGINT/DOUBLE direto (`bigint(orcamento_id)` etc.), mas

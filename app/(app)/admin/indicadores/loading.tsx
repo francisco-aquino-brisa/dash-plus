@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function IndicadoresLoading() {
   return (
     <div style={{ padding: "clamp(18px, 4vw, 34px)" }}>
-      <div style={{ maxWidth: 1120, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ maxWidth: 1600, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <Skeleton className="h-3 w-28" />
           <Skeleton className="h-8 w-48" />

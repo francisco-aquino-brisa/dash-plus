@@ -79,3 +79,35 @@ export interface AdminData {
   usuarios: Usuario[];
   perms: string[]; // serialized PermMatrix keys (Set is not serializable to a client)
 }
+
+// ── Cidades por supervisão (ADR 0008) ────────────────────────────────────────
+
+export interface CidadeOpcao {
+  /** `public_base_cidade.revan_cidade_id`, as carried by the organograma. */
+  id: number;
+  nome: string;
+  gerencia: string;
+  coordenacao: string;
+}
+
+export interface Supervisao {
+  /** `vw_hierarquia_rh.codigo_local` — the binding key, stable across re-parents. */
+  codigoLocal: string;
+  idEstrutura: string;
+  nome: string;
+  responsavel: string | null;
+  email: string | null;
+  cidadeIds: number[];
+}
+
+/** A binding whose node left the RH load: inert, and its cities are free again. */
+export interface VinculoOrfao {
+  codigoLocal: string;
+  cidadeIds: number[];
+}
+
+export interface SupervisaoCidadesData {
+  supervisoes: Supervisao[];
+  cidades: CidadeOpcao[];
+  orfaos: VinculoOrfao[];
+}

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
-import { getCityDataset, buildFilterOptions } from "@/lib/data/cities/repository";
+import { currentCityScope } from "@/lib/auth/city-scope";
+import { getScopedCityDataset, buildFilterOptions } from "@/lib/data/cities/repository";
 import { buildDashboardView } from "@/lib/data/cities/compute";
 import { getCacheConfig } from "@/lib/data/config";
 import { isDatabricks } from "@/lib/data/client";
@@ -34,7 +35,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
 
   if (!session) redirect("/bootstrap?next=/dashboard");
 
-  const dataset = await getCityDataset();
+  const [dataset, scope] = await Promise.all([getScopedCityDataset(), currentCityScope()]);
+
+  if (!scope.all && dataset.records.length === 0) return <SemCidades />;
+
   const options = buildFilterOptions(dataset);
   const filters = parseFilters(searchParams, dataset.months);
   const view = buildDashboardView(dataset.records, dataset.metaRecords, dataset.months, filters);
@@ -48,5 +52,30 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       isMock={!isDatabricks()}
       watermark={dataset.watermark}
     />
+  );
+}
+
+function SemCidades() {
+  return (
+    <div style={{ display: "grid", placeItems: "center", minHeight: "60vh", padding: 24 }}>
+      <div
+        style={{
+          maxWidth: 460,
+          textAlign: "center",
+          padding: "28px 26px",
+          borderRadius: 16,
+          border: "1px solid var(--s-border)",
+          background: "var(--s-card)",
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "var(--s-t1)" }}>
+          Nenhuma cidade atribuída
+        </h2>
+        <p style={{ margin: "10px 0 0", fontSize: 13, lineHeight: 1.6, color: "var(--s-t3)" }}>
+          Você ainda não responde por nenhuma cidade, e a supervisão acima de você também não tem cidades
+          vinculadas. Peça à administração para fazer o vínculo em Administração › Cidades por supervisão.
+        </p>
+      </div>
+    </div>
   );
 }

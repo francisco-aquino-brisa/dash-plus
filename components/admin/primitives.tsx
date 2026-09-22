@@ -325,7 +325,7 @@ export function SearchInput({
         placeholder={placeholder}
         style={{
           width: "100%",
-          height: 44,
+          height: 40,
           padding: "0 14px 0 38px",
           borderRadius: 12,
           border: "1px solid var(--s-border)",

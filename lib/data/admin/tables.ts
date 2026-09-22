@@ -14,5 +14,6 @@ export const T = {
   paginas: id("tb_paginas"),
   permissoes: id("tb_permissoes"),
   permissoesNivel: id("tb_permissoes_nivel"),
+  supervisaoCidades: id("tb_supervisao_cidades"),
   usuarios: id("tb_usuarios"),
 } as const;

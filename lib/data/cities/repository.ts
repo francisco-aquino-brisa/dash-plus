@@ -2,21 +2,16 @@
 // Chooses mock vs Databricks by DATA_SOURCE, and wraps the heavy fetch in the
 // global watermark-aware cache (see ADR 0002).
 //
-// NOT scoped by hierarchy, and it cannot be — this is not an oversight (see
-// docs/hierarquia-permissionamento.md). Every other module narrows rows by the
-// person behind them, and this one has no person: the subject is the city.
-// `vw_indicadores_cidades` carries no CPF at all, and the sources that do
-// (waves, 5g, churn, portabilidade) are collapsed to `revan_cidade_id` before
-// they get here — a city's base ativa is not attributable to sellers anyway.
+// Scoped by CITY, not by person: this dataset has no CPF to narrow on (see
+// ADR 0008). `getScopedCityDataset` is what screens must call — `getCityDataset`
+// returns every city and exists so the cache stays shared.
 //
-// Narrowing it needs the OTHER axis: `id_estrutura` on `vw_organograma_cidades`,
-// so a city can be tested for containment in the reader's subtree the same way a
-// person is. That request is with the data team. Until it lands, restrict this
-// screen by NÍVEL (who may open it), not by escopo (what they see inside).
-//
-// The single global CACHE_KEY below is part of the same fact: one dataset serves
-// every reader. It has to become scope-keyed on the day this is narrowed.
+// The narrowing runs in memory, AFTER the cache read, which is why the single
+// global CACHE_KEY below is still correct: one dataset is fetched and cached for
+// everyone, and each reader gets their slice of it. Keying the cache by scope
+// would refetch ~93k rows per distinct scope for no gain.
 
+import { currentCityScope, type CityScope } from "@/lib/auth/city-scope";
 import { cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";
 import { mockCityDataset } from "./mock";
@@ -55,6 +50,28 @@ export async function getCityDataset(): Promise<CityDataset> {
 
     return mockCityDataset();
   });
+}
+
+export function applyCityScope(dataset: CityDataset, scope: CityScope): CityDataset {
+  if (scope.all) return dataset;
+
+  const records = dataset.records.filter((r) => scope.cities.has(Number(r.revan_cidade_id)));
+  // metas key on the source `id_cidade`, not on revan — carry over only the
+  // ones whose city survived, or the KPI denominators keep the hidden cities.
+  const kept = new Set(records.map((r) => r.id_cidade_src));
+
+  return {
+    ...dataset,
+    records,
+    metaRecords: dataset.metaRecords.filter((m) => kept.has(m.id_cidade)),
+  };
+}
+
+/** The dataset narrowed to the cities the current reader answers for. */
+export async function getScopedCityDataset(): Promise<CityDataset> {
+  const [dataset, scope] = await Promise.all([getCityDataset(), currentCityScope()]);
+
+  return applyCityScope(dataset, scope);
 }
 
 /** Distinct filter option lists derived from the dataset. */

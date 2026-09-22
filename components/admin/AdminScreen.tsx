@@ -35,7 +35,7 @@ export function AdminScreen({
 
   return (
     <div style={{ padding: "clamp(18px, 4vw, 34px)", animation: "bdIn .3s ease both" }}>
-      <div style={{ maxWidth: 1120, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ maxWidth: 1600, margin: "0 auto", display: "flex", flexDirection: "column", gap: 18 }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -98,7 +98,7 @@ export function AdminScreen({
             )}
             {extra}
             {action && (
-              <PrimaryButton onClick={action.onClick} style={{ height: 44 }}>
+              <PrimaryButton onClick={action.onClick}>
                 <Plus size={16} />
                 {action.label}
               </PrimaryButton>
