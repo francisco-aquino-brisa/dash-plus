@@ -41,9 +41,11 @@ gambiarra de join por nome de cidade (`cityKey`). O código já foi repontado.
 `tb_usuarios` + `tb_niveis` (ADR 0005) — não afetado.
 
 **Tabela nova do app (2026-09):** `tb_supervisao_cidades` — vínculo
-supervisão↔cidade (`codigo_local` de `vw_hierarquia_rh` × `revan_cidade_id`),
-escrita só pelo /admin, base do escopo de cidade (ADR 0008). DDL em
-[`ddl/tb_supervisao_cidades.sql`](ddl/tb_supervisao_cidades.sql).
+nó↔cidade (`codigo_local` de `vw_hierarquia_rh` × `revan_cidade_id`) em dois
+níveis (coordenação recebe o conjunto, supervisões abaixo dividem), escrita só
+pelo /admin, base do escopo de cidade ([ADR 0008](adr/0008-city-scope-by-estrutura.md)).
+Colunas: `id` (IDENTITY), `codigo_local`, `revan_cidade_id`, `criado_por`,
+`criado_em`, `atualizado_em`.
 
 **Armadilha em `vw_organograma_cidades`:** a coluna `data` é STRING `dd/MM/yyyy`,
 então `max(data)` é **lexicográfico** e devolve um dezembro (01/12/2025 em vez de

@@ -14,7 +14,12 @@ import {
   type HierarquiaCandidate,
   type HierarquiaPessoa,
 } from "@/lib/data/admin/hierarquia";
-import { filterCidadesValidas, filterSupervisoesValidas } from "@/lib/data/admin/supervisao-cidades";
+import {
+  filterCidadesValidas,
+  readCidadesDosNos,
+  readSupervisoesDaCoordenacao,
+  resolveNos,
+} from "@/lib/data/admin/estrutura-cidades";
 import type { ActionResult } from "@/lib/data/admin/types";
 import * as write from "@/lib/data/admin/write";
 
@@ -321,13 +326,14 @@ export async function togglePerm(nivelId: number, capId: number, granted: boolea
 // ── Cidades por supervisão ───────────────────────────────────────────────────
 
 /**
- * Apply a batch of (supervisão, cidade) moves — the unit both modes of the
- * screen produce, since binding a city to a supervisão and binding a
- * supervisão to a city are the same row.
+ * Apply a batch of (nó, cidade) moves — the unit every pivot of the screen
+ * produces, since binding a city to a supervisão and binding a supervisão to a
+ * city are the same row.
  *
- * Both sides are re-resolved server-side (nodes against the current RH load,
- * cities against the current organograma) because this is a data-scope grant:
- * a forged payload would otherwise widen what a whole branch can read.
+ * Everything is re-resolved server-side (nodes against the current RH load,
+ * cities against the current organograma, the pool against what is stored)
+ * because this is a data-scope grant: a forged payload would otherwise widen
+ * what a whole branch can read.
  */
 export async function salvarVinculos(
   alteracoes: { codigoLocal: string; cidadeId: number; vincular: boolean }[],
@@ -336,40 +342,96 @@ export async function salvarVinculos(
 
   if (denied) return denied;
 
-  const limpas = alteracoes
+  const moves = alteracoes
     .map((a) => ({ ...a, codigoLocal: clean(a.codigoLocal) }))
     .filter((a) => a.codigoLocal && Number.isInteger(a.cidadeId));
 
-  if (limpas.length === 0) return { ok: false, error: "Nenhuma alteração para salvar." };
+  if (moves.length === 0) return { ok: false, error: "Nenhuma alteração para salvar." };
 
-  const nos = [...new Set(limpas.map((a) => a.codigoLocal))];
-  const cidades = [...new Set(limpas.map((a) => a.cidadeId))];
-  const [nosValidos, cidadesValidas] = await Promise.all([
-    filterSupervisoesValidas(nos),
-    filterCidadesValidas(cidades),
-  ]);
+  const codigos = [...new Set(moves.map((a) => a.codigoLocal))];
+  const cidades = [...new Set(moves.map((a) => a.cidadeId))];
+  const [nos, cidadesValidas] = await Promise.all([resolveNos(codigos), filterCidadesValidas(cidades)]);
 
-  if (nosValidos.length !== nos.length) {
-    return { ok: false, error: "Alguma supervisão não está na carga atual do RH." };
+  if (nos.size !== codigos.length) {
+    return { ok: false, error: "Alguma coordenação ou supervisão não está na carga atual do RH." };
   }
 
   if (cidadesValidas.length !== cidades.length) {
     return { ok: false, error: "Alguma cidade não existe no organograma atual." };
   }
 
-  const pares = (vincular: boolean) =>
-    limpas
+  // The pool a supervisão draws from is the coordenação's state AFTER this same
+  // batch: adding a city to the coordenação and handing it to a supervisão in
+  // one save is legitimate, and checking against the stored pool would reject it.
+  const coordenacoes = [
+    ...new Set(
+      moves.map((a) => {
+        const no = nos.get(a.codigoLocal)!;
+
+        return no.nivel === "coordenacao" ? no.codigoLocal : (no.paiCodigoLocal ?? "");
+      }),
+    ),
+  ].filter(Boolean);
+  const stored = await readCidadesDosNos(coordenacoes);
+
+  const poolOf = (codigo: string) => {
+    const pool = new Set(stored.get(codigo) ?? []);
+
+    for (const a of moves) {
+      if (a.codigoLocal !== codigo) continue;
+
+      if (a.vincular) pool.add(a.cidadeId);
+      else pool.delete(a.cidadeId);
+    }
+
+    return pool;
+  };
+
+  for (const a of moves) {
+    const no = nos.get(a.codigoLocal)!;
+
+    if (!a.vincular || no.nivel !== "supervisao") continue;
+
+    if (!poolOf(no.paiCodigoLocal ?? "").has(a.cidadeId)) {
+      return { ok: false, error: "Só dá para atribuir à supervisão uma cidade que está na coordenação." };
+    }
+  }
+
+  // Dropping a city from a coordenação drops it from the supervisões below too:
+  // the screen confirms the count, but the cascade itself is recomputed here.
+  const dropped = moves.filter((a) => !a.vincular && nos.get(a.codigoLocal)?.nivel === "coordenacao");
+  const filhas = await readSupervisoesDaCoordenacao([...new Set(dropped.map((a) => a.codigoLocal))]);
+  const cascade = dropped.flatMap((a) =>
+    (filhas.get(a.codigoLocal) ?? []).map((codigoLocal) => ({ codigoLocal, cidadeId: a.cidadeId })),
+  );
+  const pairs = (vincular: boolean) =>
+    moves
       .filter((a) => a.vincular === vincular)
       .map((a) => ({ codigoLocal: a.codigoLocal, cidadeId: a.cidadeId }));
+  const toRemove = dedupePairs([...pairs(false), ...cascade]);
   const session = await getSession();
 
   return mutate(async () => {
-    await write.unlinkParesCidades(pares(false));
-    await write.linkParesCidades(pares(true), session?.email ?? null);
+    await write.unlinkParesCidades(toRemove);
+    await write.linkParesCidades(pairs(true), session?.email ?? null);
   });
 }
 
-/** Clear a binding left behind by an extinct supervisão, freeing its cities. */
+function dedupePairs(pares: { codigoLocal: string; cidadeId: number }[]) {
+  const seen = new Set<string>();
+
+  return pares.filter((p) => {
+    const key = `${p.codigoLocal}|${p.cidadeId}`;
+
+    if (seen.has(key)) return false;
+
+    seen.add(key);
+
+    return true;
+  });
+}
+
+/** Clear a binding left behind by a node that is no longer bindable. */
 export async function limparVinculoOrfao(codigoLocal: string): Promise<ActionResult> {
   const key = clean(codigoLocal);
 

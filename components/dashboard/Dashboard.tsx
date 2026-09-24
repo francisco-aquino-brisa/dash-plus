@@ -25,6 +25,8 @@ interface Props {
   cache: { autoRefresh: boolean; pollSeconds: number };
   isMock: boolean;
   watermark: string;
+  /** Null for a reader who sees every city — then there is nothing to say. */
+  escopo: { total: number; nomes: string[] } | null;
 }
 
 function toQuery(f: Filters): string {
@@ -45,7 +47,7 @@ function toQuery(f: Filters): string {
   return p.toString();
 }
 
-export function Dashboard({ view, options, cache, watermark }: Props) {
+export function Dashboard({ view, options, cache, watermark, escopo }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { filters, kpis, growth, negatives, quartis, history, coverage, churn5g, desativados } = view;
@@ -197,6 +199,17 @@ export function Dashboard({ view, options, cache, watermark }: Props) {
           </h1>
           <p style={{ fontSize: 13, color: "var(--s-t3)", marginTop: 4 }}>
             Meta × realizado de banda larga por cidade, com drill por gerência, coordenação e cidade.
+            {escopo && (
+              <span
+                // Deliberately quiet: it answers "por que meu total é menor que
+                // o da empresa?" for whoever goes looking, without turning the
+                // reader's own scope into a headline.
+                title={`Seu escopo: ${escopo.nomes.join(", ")}`}
+                style={{ marginLeft: 6, color: "var(--s-t3)", opacity: 0.65, cursor: "help" }}
+              >
+                · {escopo.total} cidade(s) no seu escopo
+              </span>
+            )}
           </p>
         </div>
         <button

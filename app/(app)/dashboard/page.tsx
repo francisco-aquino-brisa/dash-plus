@@ -40,6 +40,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   if (!scope.all && dataset.records.length === 0) return <SemCidades />;
 
   const options = buildFilterOptions(dataset);
+  const escopo = scope.all ? null : resumirEscopo(dataset);
   const filters = parseFilters(searchParams, dataset.months);
   const view = buildDashboardView(dataset.records, dataset.metaRecords, dataset.months, filters);
   const cfg = getCacheConfig();
@@ -51,8 +52,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       cache={{ autoRefresh: cfg.autoRefresh, pollSeconds: cfg.pollSeconds }}
       isMock={!isDatabricks()}
       watermark={dataset.watermark}
+      escopo={escopo}
     />
   );
+}
+
+/** The reader's slice, for the discreet hint next to the subtitle. */
+function resumirEscopo(dataset: { records: { cidade: string }[] }) {
+  const nomes = [...new Set(dataset.records.map((r) => r.cidade).filter(Boolean))].sort();
+
+  return { total: nomes.length, nomes };
 }
 
 function SemCidades() {
@@ -72,8 +81,8 @@ function SemCidades() {
           Nenhuma cidade atribuída
         </h2>
         <p style={{ margin: "10px 0 0", fontSize: 13, lineHeight: 1.6, color: "var(--s-t3)" }}>
-          Você ainda não responde por nenhuma cidade, e a supervisão acima de você também não tem cidades
-          vinculadas. Peça à administração para fazer o vínculo em Administração › Cidades por supervisão.
+          Você ainda não responde por nenhuma cidade. Fale com a administração do dashboard para liberar o seu
+          acesso.
         </p>
       </div>
     </div>

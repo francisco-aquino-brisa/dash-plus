@@ -15,6 +15,8 @@ import {
 import "@xyflow/react/dist/style.css";
 import { LocateFixed, Network } from "lucide-react";
 import { AsyncSelect, type AsyncOption } from "@/components/admin/AsyncSelect";
+import { Segmented } from "@/components/ui/segmented";
+import { CidadesPanel } from "./CidadesPanel";
 import { summarizeGroupLabel } from "@/lib/data/organograma/compute";
 import type { OrgChartResult, OrgPessoaLeaf, OrgTreeNode } from "@/lib/data/organograma/types";
 import { loadOrgChartForCpf, searchOrgPessoas } from "@/app/(app)/organograma/actions";
@@ -32,6 +34,13 @@ interface OpenGroup {
   pessoas: OrgPessoaLeaf[];
 }
 
+type Aba = "pessoas" | "cidades";
+
+const ABAS = [
+  { value: "pessoas" as const, label: "Pessoas" },
+  { value: "cidades" as const, label: "Cidades" },
+];
+
 export function OrgChartScreen({
   initial,
   canSearch,
@@ -46,6 +55,7 @@ export function OrgChartScreen({
     () => new Set(initial?.subtrees.map((t) => t.path) ?? []),
   );
   const [openGroup, setOpenGroup] = useState<OpenGroup | null>(null);
+  const [aba, setAba] = useState<Aba>("pessoas");
   const [selected, setSelected] = useState<AsyncOption | null>(null);
   // Manual drag positions, keyed by node id — layered on top of the dagre
   // layout so dragging a box survives an unrelated expand/collapse elsewhere
@@ -218,6 +228,10 @@ export function OrgChartScreen({
           </div>
         </div>
 
+        <div style={{ marginTop: 14 }}>
+          <Segmented options={ABAS} value={aba} onChange={setAba} ariaLabel="Conteúdo do organograma" />
+        </div>
+
         {canSearch && (
           <div style={{ marginTop: 14, maxWidth: 320 }}>
             <AsyncSelect
@@ -234,6 +248,8 @@ export function OrgChartScreen({
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {!chart ? (
           <EmptyState canSearch={canSearch} loading={loading} />
+        ) : aba === "cidades" ? (
+          <CidadesPanel chart={chart} />
         ) : (
           <ReactFlowProvider>
             <ReactFlow

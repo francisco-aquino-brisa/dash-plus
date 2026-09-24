@@ -226,5 +226,7 @@ export function buildOrgChart(snapshot: HierarquiaSnapshot, cpfInput: string): O
     },
     ancestors: buildAncestorChain(snapshot.nodes, ancestorStart),
     subtrees,
+    // Filled by the repository, which is the half that can reach the bindings.
+    cidades: {},
   };
 }

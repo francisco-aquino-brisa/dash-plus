@@ -89,10 +89,18 @@ export interface OrgChartSelf {
   isManager: boolean;
 }
 
+/** A city bound to a structure node (ADR 0008). */
+export interface OrgCidade {
+  id: number;
+  nome: string;
+}
+
 export interface OrgChartResult {
   self: OrgChartSelf;
   /** Immediate manager first, root last. */
   ancestors: OrgAncestor[];
   /** One root per node the person manages — usually 0 or 1, up to 4. */
   subtrees: OrgTreeNode[];
+  /** Cities per `id_estrutura`, for the nodes visible in this chart only. */
+  cidades: Record<string, OrgCidade[]>;
 }

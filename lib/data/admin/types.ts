@@ -80,7 +80,7 @@ export interface AdminData {
   perms: string[]; // serialized PermMatrix keys (Set is not serializable to a client)
 }
 
-// ── Cidades por supervisão (ADR 0008) ────────────────────────────────────────
+// ── Cidades por estrutura (ADR 0008) ─────────────────────────────────────────
 
 export interface CidadeOpcao {
   /** `public_base_cidade.revan_cidade_id`, as carried by the organograma. */
@@ -90,7 +90,8 @@ export interface CidadeOpcao {
   coordenacao: string;
 }
 
-export interface Supervisao {
+/** A node that can hold cities: a coordenação, or a supervisão under one. */
+export interface EstruturaNo {
   /** `vw_hierarquia_rh.codigo_local` — the binding key, stable across re-parents. */
   codigoLocal: string;
   idEstrutura: string;
@@ -100,14 +101,22 @@ export interface Supervisao {
   cidadeIds: number[];
 }
 
-/** A binding whose node left the RH load: inert, and its cities are free again. */
+export interface SupervisaoNo extends EstruturaNo {
+  /** The coordenação above — the pool this supervisão may draw from. */
+  coordenacaoCodigoLocal: string;
+  coordenacaoNome: string;
+}
+
+/** A binding whose node is no longer bindable: inert, and its cities are free again. */
 export interface VinculoOrfao {
   codigoLocal: string;
   cidadeIds: number[];
 }
 
-export interface SupervisaoCidadesData {
-  supervisoes: Supervisao[];
+export interface EstruturaCidadesData {
+  coordenacoes: EstruturaNo[];
+  /** Only the 281 supervisões that hang under a coordenação; the other 18 are out. */
+  supervisoes: SupervisaoNo[];
   cidades: CidadeOpcao[];
   orfaos: VinculoOrfao[];
 }
