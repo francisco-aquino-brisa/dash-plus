@@ -10,9 +10,11 @@ import { dirname, join } from "node:path";
 import { FilePersistence } from "../lib/data/databricks-oauth-cache.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
 function loadEnv() {
   try {
     const txt = readFileSync(join(__dirname, "..", ".env.local"), "utf8");
+
     for (const line of txt.split("\n")) {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
 
@@ -22,6 +24,7 @@ function loadEnv() {
     }
   } catch {}
 }
+
 loadEnv();
 
 const host = process.env.DATABRICKS_HOST;
@@ -55,10 +58,8 @@ const CANDIDATE_TABLES = [
   `${CAT}.inteligencia_comercial_e_mercado.waves_consolidado_orcamento`,
   `${CAT}.inteligencia_comercial_e_mercado.indicadores_b2c`,
   `${CAT}.inteligencia_comercial_e_mercado.base_5g_ativa_churn`,
-  `${CAT}.inteligencia_comercial_e_mercado.organograma_cidades`,
   `${CAT}.inteligencia_comercial_e_mercado.consolidado_5g_pedido`,
   `${CAT}.diego_barros_inteligencia_comercial_e_mercado.hc_folha`,
-  `${CAT}.diego_barros_inteligencia_comercial_e_mercado.organograma_cidades`,
   `gdb_brisanet_comercial.gestao_clientes.relatorio_chamados_fidelizacoes`,
 ];
 
@@ -66,16 +67,19 @@ async function main() {
   const mod = await import("@databricks/sql");
   const DBSQLClient = mod.DBSQLClient ?? mod.default?.DBSQLClient ?? mod.default;
   const client = new DBSQLClient();
+
   await client.connect(connectionOptions());
   const session = await client.openSession();
 
   const q = async (sql) => {
     const op = await session.executeStatement(sql, { runAsync: true });
     const rows = await op.fetchAll();
+
     await op.close();
 
     return rows;
   };
+
   const tryQ = async (label, sql) => {
     try {
       const rows = await q(sql);
@@ -97,6 +101,7 @@ async function main() {
   if (argvTables.length) {
     try {
       console.log("===== DESCRIBE (argv tables) =====");
+
       for (const full of argvTables) {
         const [c, s, t] = full.split(".");
         const d = await tryQ(full, `DESCRIBE TABLE \`${c}\`.\`${s}\`.\`${t}\``);
@@ -109,8 +114,10 @@ async function main() {
         const cols = d.rows
           .filter((r) => r.col_name && !String(r.col_name).startsWith("#") && r.col_name !== "")
           .map((r) => `${r.col_name}:${r.data_type}`);
+
         console.log(`\n## ${full}  (${cols.length} cols)\n  ${cols.join(", ")}`);
       }
+
       console.log("\n✅ done (read-only).");
     } finally {
       await session.close();
@@ -123,6 +130,7 @@ async function main() {
   try {
     console.log("===== CATALOGS =====");
     const cats = await tryQ("catalogs", "SHOW CATALOGS");
+
     console.log(
       cats.ok ? cats.rows.map((r) => r.catalog ?? Object.values(r)[0]).join(", ") : `ERR: ${cats.error}`,
     );
@@ -130,6 +138,7 @@ async function main() {
     for (const c of [CAT, "gdb_brisanet_comercial"]) {
       console.log(`\n===== SCHEMAS in ${c} =====`);
       const sc = await tryQ("schemas", `SHOW SCHEMAS IN \`${c}\``);
+
       console.log(
         sc.ok
           ? sc.rows.map((r) => r.databaseName ?? r.namespace ?? Object.values(r)[0]).join(", ")
@@ -144,10 +153,12 @@ async function main() {
     ]) {
       console.log(`\n===== TABLES in ${sch} =====`);
       const t = await tryQ("tables", `SHOW TABLES IN \`${sch.split(".")[0]}\`.\`${sch.split(".")[1]}\``);
+
       console.log(t.ok ? t.rows.map((r) => r.tableName ?? r.table_name).join(", ") : `ERR: ${t.error}`);
     }
 
     console.log("\n===== DESCRIBE candidate tables =====");
+
     for (const full of CANDIDATE_TABLES) {
       const [c, s, t] = full.split(".");
       const d = await tryQ(full, `DESCRIBE TABLE \`${c}\`.\`${s}\`.\`${t}\``);
@@ -160,8 +171,10 @@ async function main() {
       const cols = d.rows
         .filter((r) => r.col_name && !String(r.col_name).startsWith("#") && r.col_name !== "")
         .map((r) => `${r.col_name}:${r.data_type}`);
+
       console.log(`\n## ${full}  (${cols.length} cols)\n  ${cols.join(", ")}`);
     }
+
     console.log("\n✅ done (read-only).");
   } finally {
     await session.close();

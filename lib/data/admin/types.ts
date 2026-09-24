@@ -83,11 +83,10 @@ export interface AdminData {
 // ── Cidades por estrutura (ADR 0008) ─────────────────────────────────────────
 
 export interface CidadeOpcao {
-  /** `public_base_cidade.revan_cidade_id`, as carried by the organograma. */
+  /** `public_base_cidade.revan_cidade_id` — the key every city read joins on. */
   id: number;
+  /** "CIDADE / UF". */
   nome: string;
-  gerencia: string;
-  coordenacao: string;
 }
 
 /** A node that can hold cities: a coordenação, or a supervisão under one. */

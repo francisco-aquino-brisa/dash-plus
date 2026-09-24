@@ -320,7 +320,7 @@ export function CoverageBlock({
         )}
       </div>
       <InfoNote icon={Building2}>
-        Drill-down: use os filtros acima para descer por Gerência → Coordenação → Cidade.
+        Drill-down: use os filtros acima para descer por Gerência → Coordenação → Supervisão → Cidade.
       </InfoNote>
       <InfoNote icon={Users}>
         KPIs recalculados no servidor a cada filtro · projeção pro-rata pelo dia atual.

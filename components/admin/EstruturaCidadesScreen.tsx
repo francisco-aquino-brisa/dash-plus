@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Check, MapPin, UserRound } from "lucide-react";
-import { AdminModal } from "./AdminModal";
+import { ArrowLeft, ArrowRight, Check, MapPin, Users, UserRound } from "lucide-react";
+import { AdminModal, ModalHeader, ModalShell } from "./AdminModal";
 import { AdminScreen } from "./AdminScreen";
 import { Panel, PrimaryButton, SearchInput, SecondaryButton } from "./primitives";
 import { textMatches } from "./filter";
@@ -25,6 +25,13 @@ const MODES = [
 ];
 
 const pairKey = (codigoLocal: string, cidadeId: number | string) => `${codigoLocal}|${cidadeId}`;
+
+/** The city whose supervisões are being picked, from inside a coordenação. */
+interface Distribuicao {
+  cidadeId: number;
+  cidade: string;
+  coordenacao: EstruturaNo;
+}
 
 interface Cascade {
   codigoLocal: string;
@@ -50,6 +57,7 @@ export function EstruturaCidadesScreen({
   const [focused, setFocused] = useState<string | null>(null);
   const [onlyUnbound, setOnlyUnbound] = useState(false);
   const [cascade, setCascade] = useState<Cascade | null>(null);
+  const [distribuicao, setDistribuicao] = useState<Distribuicao | null>(null);
   const { busy, error, setError, run } = useAdminAction();
 
   /**
@@ -127,6 +135,18 @@ export function EstruturaCidadesScreen({
       cidade: cityById.get(String(cidadeId))?.nome ?? `#${cidadeId}`,
       coordenacao: nodeByCodigo.get(codigoLocal)?.nome ?? codigoLocal,
       supervisoes: afetadas,
+    });
+  }
+
+  function abrirDistribuicao(coordenacaoCodigo: string, cidadeId: number) {
+    const coordenacao = coordenacoes.find((c) => c.codigoLocal === coordenacaoCodigo);
+
+    if (!coordenacao) return;
+
+    setDistribuicao({
+      cidadeId,
+      cidade: cityById.get(String(cidadeId))?.nome ?? `#${cidadeId}`,
+      coordenacao,
     });
   }
 
@@ -212,6 +232,7 @@ export function EstruturaCidadesScreen({
       {byCoordenacao ? (
         <CoordenacaoTab
           coordenacoes={coordenacoes}
+          supervisoes={supervisoes}
           cidades={cidades}
           citiesByNode={citiesByNode}
           nodesByCity={nodesByCity}
@@ -222,6 +243,7 @@ export function EstruturaCidadesScreen({
           focused={focused}
           onFocus={setFocused}
           onMove={moveCoordenacao}
+          onDistribuir={abrirDistribuicao}
         />
       ) : (
         <SupervisaoTab
@@ -268,14 +290,26 @@ export function EstruturaCidadesScreen({
 
       {orfaos.length > 0 && <Orphans orfaos={orfaos} busy={busy} run={run} cityById={cityById} />}
 
+      {distribuicao && (
+        <DistribuirModal
+          alvo={distribuicao}
+          supervisoes={supervisoes.filter(
+            (s) => s.coordenacaoCodigoLocal === distribuicao.coordenacao.codigoLocal,
+          )}
+          citiesByNode={citiesByNode}
+          onToggle={(codigoLocal, bind) => setDelta(codigoLocal, distribuicao.cidadeId, bind)}
+          onClose={() => setDistribuicao(null)}
+        />
+      )}
+
       {cascade && (
         <AdminModal
           open
           onClose={() => setCascade(null)}
           eyebrow={cascade.coordenacao}
-          title={`Tirar ${cascade.cidade} da coordenação?`}
+          title={`Remover ${cascade.cidade} da coordenação?`}
           onSubmit={confirmCascade}
-          submitLabel="Tirar das duas pontas"
+          submitLabel="Remover das duas pontas"
           busy={busy}
         >
           <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--s-t2)" }}>
@@ -390,6 +424,7 @@ interface TabProps {
 
 function CoordenacaoTab({
   coordenacoes,
+  supervisoes,
   cidades,
   citiesByNode,
   nodesByCity,
@@ -400,11 +435,16 @@ function CoordenacaoTab({
   focused,
   onFocus,
   onMove,
-}: TabProps & { coordenacoes: EstruturaNo[] }) {
+  onDistribuir,
+}: TabProps & {
+  coordenacoes: EstruturaNo[];
+  supervisoes: SupervisaoNo[];
+  onDistribuir: (coordenacaoCodigo: string, cidadeId: number) => void;
+}) {
   const nodeRow = (n: EstruturaNo) => ({
     key: n.codigoLocal,
-    title: n.responsavel ?? n.nome,
-    subtitle: `${n.nome} · ${citiesByNode.get(n.codigoLocal)?.size ?? 0} cidade(s)`,
+    title: n.nome,
+    subtitle: `${n.responsavel ?? "sem responsável"} · ${citiesByNode.get(n.codigoLocal)?.size ?? 0} cidade(s)`,
     search: [n.nome, n.responsavel],
     icon: <UserRound size={15} />,
   });
@@ -412,6 +452,9 @@ function CoordenacaoTab({
   if (mode === "responsavel") {
     const current = focused ? coordenacoes.find((c) => c.codigoLocal === focused) : undefined;
     const bound = current ? (citiesByNode.get(current.codigoLocal) ?? new Set<string>()) : new Set<string>();
+    const filhas = current ? supervisoes.filter((s) => s.coordenacaoCodigoLocal === current.codigoLocal) : [];
+    const comACidade = (cidadeId: number) =>
+      filhas.filter((s) => citiesByNode.get(s.codigoLocal)?.has(String(cidadeId)));
 
     return (
       <Columns>
@@ -432,8 +475,16 @@ function CoordenacaoTab({
             .map((c) => ({
               key: String(c.id),
               title: c.nome,
-              subtitle: c.coordenacao,
-              search: [c.nome, c.coordenacao],
+              subtitle: `${comACidade(c.id).length} de ${filhas.length} supervisão(ões)`,
+              search: [c.nome],
+              extra: current && (
+                <RoundButton
+                  Icon={Users}
+                  tone="neutral"
+                  label={`Supervisões com ${c.nome}`}
+                  onClick={() => onDistribuir(current.codigoLocal, c.id)}
+                />
+              ),
             }))}
           action={
             current && { direction: "right", onClick: (k) => onMove(current.codigoLocal, Number(k), false) }
@@ -452,8 +503,8 @@ function CoordenacaoTab({
                     return {
                       key: String(c.id),
                       title: c.nome,
-                      subtitle: others > 0 ? `${c.coordenacao} · já em ${others} nó(s)` : c.coordenacao,
-                      search: [c.nome, c.coordenacao],
+                      subtitle: others > 0 ? `já em ${others} nó(s)` : null,
+                      search: [c.nome],
                     };
                   })
               : []
@@ -484,8 +535,8 @@ function CoordenacaoTab({
           .map((c) => ({
             key: String(c.id),
             title: c.nome,
-            subtitle: `${c.coordenacao} · ${coordenacoes.filter((n) => nodesByCity.get(String(c.id))?.has(n.codigoLocal)).length} coordenação(ões)`,
-            search: [c.nome, c.coordenacao, c.gerencia],
+            subtitle: `${coordenacoes.filter((n) => nodesByCity.get(String(c.id))?.has(n.codigoLocal)).length} coordenação(ões)`,
+            search: [c.nome],
             icon: <MapPin size={15} />,
           }))}
         selected={focused}
@@ -524,8 +575,8 @@ function SupervisaoTab({
 }: TabProps & { supervisoes: SupervisaoNo[]; poolOf: (codigo: string) => Set<string> }) {
   const nodeRow = (s: SupervisaoNo) => ({
     key: s.codigoLocal,
-    title: s.responsavel ?? s.nome,
-    subtitle: `${s.coordenacaoNome} · ${citiesByNode.get(s.codigoLocal)?.size ?? 0} cidade(s)`,
+    title: s.nome,
+    subtitle: `${s.responsavel ?? "sem responsável"} · ${s.coordenacaoNome} · ${citiesByNode.get(s.codigoLocal)?.size ?? 0} cidade(s)`,
     search: [s.nome, s.responsavel, s.coordenacaoNome],
     icon: <UserRound size={15} />,
   });
@@ -556,8 +607,8 @@ function SupervisaoTab({
               title: c.nome,
               // A city held by the supervisão but missing from the pool above is
               // a leftover from before the coordenação level existed.
-              subtitle: pool.has(String(c.id)) ? c.coordenacao : "fora do conjunto da coordenação",
-              search: [c.nome, c.coordenacao],
+              subtitle: pool.has(String(c.id)) ? null : "fora do conjunto da coordenação",
+              search: [c.nome],
             }))}
           action={
             current && { direction: "right", onClick: (k) => onMove(current.codigoLocal, Number(k), false) }
@@ -584,8 +635,8 @@ function SupervisaoTab({
                     return {
                       key: String(c.id),
                       title: c.nome,
-                      subtitle: irmas > 0 ? `já em ${irmas} supervisão(ões)` : c.coordenacao,
-                      search: [c.nome, c.coordenacao],
+                      subtitle: irmas > 0 ? `já em ${irmas} supervisão(ões)` : null,
+                      search: [c.nome],
                     };
                   })
               : []
@@ -620,8 +671,8 @@ function SupervisaoTab({
           .map((c) => ({
             key: String(c.id),
             title: c.nome,
-            subtitle: `${c.coordenacao} · ${supervisoes.filter((s) => nodesByCity.get(String(c.id))?.has(s.codigoLocal)).length} supervisão(ões)`,
-            search: [c.nome, c.coordenacao, c.gerencia],
+            subtitle: `${supervisoes.filter((s) => nodesByCity.get(String(c.id))?.has(s.codigoLocal)).length} supervisão(ões)`,
+            search: [c.nome],
             icon: <MapPin size={15} />,
           }))}
         selected={focused}
@@ -671,6 +722,8 @@ interface Row {
   subtitle?: string | null;
   search: (string | null | undefined)[];
   icon?: ReactNode;
+  /** Secondary control, rendered just before the move arrow. */
+  extra?: ReactNode;
 }
 
 interface MoveAction {
@@ -754,6 +807,48 @@ function FilterChip({ filter }: { filter: ListFilter }) {
     >
       {filter.on && <Check size={14} />}
       {filter.label}
+    </button>
+  );
+}
+
+function ActionPill({
+  tone,
+  label,
+  onClick,
+  children,
+}: {
+  tone: "brand" | "neutral";
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  const brand = tone === "brand";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="bd-ghost"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        flexShrink: 0,
+        height: 30,
+        padding: "0 12px",
+        borderRadius: 999,
+        border: `1px solid ${brand ? "transparent" : "var(--s-border)"}`,
+        background: brand ? "var(--s-brand)" : "var(--s-card)",
+        color: brand ? "#fff" : "var(--s-t2)",
+        font: "inherit",
+        fontSize: 11.5,
+        fontWeight: 800,
+        cursor: "pointer",
+      }}
+    >
+      {brand ? <ArrowLeft size={13} /> : <ArrowRight size={13} />}
+      {children}
     </button>
   );
 }
@@ -842,41 +937,50 @@ function ItemRow({
         {content}
       </button>
     ) : (
-      <div style={style}>{content}</div>
+      <div style={style}>
+        {content}
+        {item.extra}
+      </div>
     );
   }
 
   const toRight = action.direction === "right";
   const move = {
     onClick: action.onClick,
-    Arrow: toRight ? ArrowRight : ArrowLeft,
-    label: `${toRight ? "Tirar" : "Atribuir"} ${item.title}`,
+    Icon: toRight ? ArrowRight : ArrowLeft,
+    label: `${toRight ? "Remover" : "Atribuir"} ${item.title}`,
   };
 
   return (
     <div style={style}>
-      {!toRight && <MoveButton {...move} />}
+      {!toRight && <RoundButton {...move} />}
       {content}
-      {toRight && <MoveButton {...move} />}
+      {item.extra}
+      {toRight && <RoundButton {...move} />}
     </div>
   );
 }
 
-function MoveButton({
+function RoundButton({
   onClick,
-  Arrow,
+  Icon,
   label,
+  tone = "brand",
 }: {
   onClick: () => void;
-  Arrow: typeof ArrowRight;
+  Icon: typeof ArrowRight;
   label: string;
+  tone?: "brand" | "neutral";
 }) {
+  const brand = tone === "brand";
+
   return (
     <button
       type="button"
       onClick={onClick}
       className="bd-ghost"
       aria-label={label}
+      title={label}
       style={{
         display: "grid",
         placeItems: "center",
@@ -884,14 +988,148 @@ function MoveButton({
         height: 28,
         flexShrink: 0,
         borderRadius: 999,
-        border: "1px solid var(--s-brand-line)",
-        background: "var(--s-brand-weak)",
-        color: "var(--s-brand)",
+        border: `1px solid ${brand ? "var(--s-brand-line)" : "var(--s-border)"}`,
+        background: brand ? "var(--s-brand-weak)" : "var(--s-sunken)",
+        color: brand ? "var(--s-brand)" : "var(--s-t2)",
         cursor: "pointer",
       }}
     >
-      <Arrow size={15} />
+      <Icon size={15} />
     </button>
+  );
+}
+
+/**
+ * Distributing one city from the coordenação's side: which of its supervisões
+ * answer for it. Reaching the supervisões from here is what makes the pairing
+ * obvious — the supervisão tab lists all of them at once, where telling whose
+ * they are means reading every subtitle.
+ *
+ * Toggles stage into the same delta map as the columns; the sticky bar saves.
+ */
+function DistribuirModal({
+  alvo,
+  supervisoes,
+  citiesByNode,
+  onToggle,
+  onClose,
+}: {
+  alvo: Distribuicao;
+  supervisoes: SupervisaoNo[];
+  citiesByNode: Map<string, Set<string>>;
+  onToggle: (codigoLocal: string, bind: boolean) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const temACidade = (s: SupervisaoNo) =>
+    citiesByNode.get(s.codigoLocal)?.has(String(alvo.cidadeId)) ?? false;
+  const visiveis = supervisoes.filter((s) => textMatches(query, s.nome, s.responsavel));
+  const com = visiveis.filter(temACidade);
+  const sem = visiveis.filter((s) => !temACidade(s));
+
+  return (
+    <ModalShell open onClose={onClose} maxWidth={520}>
+      <ModalHeader eyebrow={alvo.coordenacao.nome} title={alvo.cidade} onClose={onClose} />
+
+      <p style={{ margin: 0, fontSize: 12.5, color: "var(--s-t3)" }}>
+        {supervisoes.length === 0
+          ? "Esta coordenação não tem nenhuma supervisão abaixo dela."
+          : `${supervisoes.filter(temACidade).length} de ${supervisoes.length} supervisão(ões) desta coordenação respondem por esta cidade.`}
+      </p>
+
+      {supervisoes.length > 0 && (
+        <SearchInput value={query} onChange={setQuery} placeholder="Buscar supervisão ou responsável…" />
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, maxHeight: 340, overflowY: "auto" }}>
+        <GrupoSupervisoes
+          titulo="Com a cidade"
+          itens={com}
+          vazio="Nenhuma supervisão respondendo por esta cidade."
+          atribuidas
+          onToggle={onToggle}
+        />
+        <GrupoSupervisoes
+          titulo="Sem a cidade"
+          itens={sem}
+          vazio="Todas as supervisões desta coordenação já têm a cidade."
+          onToggle={onToggle}
+        />
+      </div>
+
+      <PrimaryButton onClick={onClose}>Concluir</PrimaryButton>
+    </ModalShell>
+  );
+}
+
+function GrupoSupervisoes({
+  titulo,
+  itens,
+  vazio,
+  atribuidas,
+  onToggle,
+}: {
+  titulo: string;
+  itens: SupervisaoNo[];
+  vazio: string;
+  atribuidas?: boolean;
+  onToggle: (codigoLocal: string, bind: boolean) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span
+        style={{
+          fontSize: 10.5,
+          fontWeight: 800,
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+          color: "var(--s-t3)",
+        }}
+      >
+        {titulo} ({itens.length})
+      </span>
+
+      {itens.length === 0 ? (
+        <p style={{ margin: 0, padding: "4px 2px", fontSize: 12, color: "var(--s-t3)" }}>{vazio}</p>
+      ) : (
+        itens.map((s) => (
+          <div
+            key={s.codigoLocal}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "9px 11px",
+              borderRadius: 10,
+              background: atribuidas ? "var(--s-brand-weak)" : "var(--s-sunken)",
+            }}
+          >
+            <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+              <span
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: atribuidas ? "var(--s-brand)" : "var(--s-t1)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {s.nome}
+              </span>
+              <span style={{ fontSize: 11, color: "var(--s-t3)" }}>{s.responsavel ?? "sem responsável"}</span>
+            </span>
+            <ActionPill
+              tone={atribuidas ? "neutral" : "brand"}
+              label={`${atribuidas ? "Remover de" : "Atribuir a"} ${s.nome}`}
+              onClick={() => onToggle(s.codigoLocal, !atribuidas)}
+            >
+              {atribuidas ? "Remover" : "Atribuir"}
+            </ActionPill>
+          </div>
+        ))
+      )}
+    </div>
   );
 }
 

@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { ChipFilter, FilterClearButton } from "@/components/ui/chip-filter";
 import { DateFilter } from "@/components/ui/date-filter";
-import { MultiChipFilter } from "./MultiChipFilter";
+import { MultiChipFilter } from "@/components/ui/multi-chip-filter";
 import { useReportNavPending } from "@/lib/ui/nav-pending";
 import {
   clampRange,

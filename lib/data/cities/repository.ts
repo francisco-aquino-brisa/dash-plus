@@ -15,7 +15,9 @@ import { currentCityScope, type CityScope } from "@/lib/auth/city-scope";
 import { cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";
 import { mockCityDataset } from "./mock";
-import type { CityDataset, FilterOptions } from "./types";
+import { vinculosDoMock } from "./estrutura-filtros";
+import type { VinculoEstrutura } from "./estrutura";
+import type { CityDataset } from "./types";
 
 // v2: cidade names are now slash-normalized ("CIDADE / UF") in the adapter, so
 // the cached dataset shape changed — bump the key to discard pre-normalization
@@ -24,17 +26,38 @@ import type { CityDataset, FilterOptions } from "./types";
 // again when no filter is applied — bump to discard the filtered dataset.
 // v4: migrated to the `vw_*` layer in projeto_brisa_performance and re-keyed the
 // commercial enrich joins on `revan_cidade_id` (was city-name) — new numbers.
-const CACHE_KEY = "cities:dataset:v5";
+// v6: gerência/coordenação no longer come from the cubes (organograma taxonomy);
+// they are written from `tb_supervisao_cidades`, and `supervisao` joined them.
+const CACHE_KEY = "cities:dataset:v6";
 
-/** Cheap freshness probe used by the auto-refresh flag. */
+/**
+ * Cheap freshness probe used by the auto-refresh flag, and the dataset's cache
+ * key. It carries the bindings' version too: the org labels are baked into the
+ * cached records, so an /admin save has to expire them.
+ */
 export async function getCitiesWatermark(): Promise<string> {
   if (isDatabricks()) {
     const { databricksWatermark } = await import("./databricks");
+    const { estruturaWatermark } = await import("./estrutura");
+    const [dados, estrutura] = await Promise.all([databricksWatermark(), estruturaWatermark()]);
 
-    return databricksWatermark();
+    return `${dados}|${estrutura}`;
   }
 
   return mockCityDataset().watermark;
+}
+
+/** The city↔node bindings behind the hierarchy filters (ADR 0008). */
+export async function getVinculosEstrutura(dataset: CityDataset): Promise<VinculoEstrutura[]> {
+  if (!isDatabricks()) return vinculosDoMock(dataset);
+
+  const { estruturaWatermark, readVinculosEstrutura } = await import("./estrutura");
+
+  return cachedByWatermark<VinculoEstrutura[]>(
+    "cities:estrutura:v1",
+    await estruturaWatermark(),
+    readVinculosEstrutura,
+  );
 }
 
 /** The full per-city/month dataset, cached until the source watermark advances. */
@@ -52,10 +75,8 @@ export async function getCityDataset(): Promise<CityDataset> {
   });
 }
 
-export function applyCityScope(dataset: CityDataset, scope: CityScope): CityDataset {
-  if (scope.all) return dataset;
-
-  const records = dataset.records.filter((r) => scope.cities.has(Number(r.revan_cidade_id)));
+function narrowDataset(dataset: CityDataset, keep: (revanCidadeId: string) => boolean): CityDataset {
+  const records = dataset.records.filter((r) => keep(r.revan_cidade_id));
   // metas key on the source `id_cidade`, not on revan — carry over only the
   // ones whose city survived, or the KPI denominators keep the hidden cities.
   const kept = new Set(records.map((r) => r.id_cidade_src));
@@ -67,29 +88,20 @@ export function applyCityScope(dataset: CityDataset, scope: CityScope): CityData
   };
 }
 
+export function applyCityScope(dataset: CityDataset, scope: CityScope): CityDataset {
+  if (scope.all) return dataset;
+
+  return narrowDataset(dataset, (id) => scope.cities.has(Number(id)));
+}
+
+/** The dataset cut down to a hierarchy selection (null = nothing selected). */
+export function applyEstrutura(dataset: CityDataset, cidades: Set<string> | null): CityDataset {
+  return cidades ? narrowDataset(dataset, (id) => cidades.has(id)) : dataset;
+}
+
 /** The dataset narrowed to the cities the current reader answers for. */
 export async function getScopedCityDataset(): Promise<CityDataset> {
   const [dataset, scope] = await Promise.all([getCityDataset(), currentCityScope()]);
 
   return applyCityScope(dataset, scope);
-}
-
-/** Distinct filter option lists derived from the dataset. */
-export function buildFilterOptions(dataset: CityDataset): FilterOptions {
-  // Cities with no org (gerência "-"/"NAO REGISTRADO") stay in the dataset for
-  // totals, but must not pollute the drill-down dropdowns.
-  const PLACEHOLDER = new Set(["-", "NAO REGISTRADO", "NÃO REGISTRADO"]);
-  const uniq = (xs: string[]) =>
-    Array.from(new Set(xs))
-      .filter((v) => v && v.trim() !== "" && !PLACEHOLDER.has(v.trim().toUpperCase()))
-      .sort();
-
-  return {
-    meses: dataset.months,
-    gerencias: uniq(dataset.records.map((r) => r.gerencia)),
-    coordenacoes: uniq(dataset.records.map((r) => r.coordenacao)),
-    tiposCidade: uniq(dataset.records.map((r) => r.tipo_cidade)),
-    cidades: uniq(dataset.records.map((r) => r.cidade)),
-    tecnologias: ["FTTH", "FWA", "Banda Larga", "5G"],
-  };
 }

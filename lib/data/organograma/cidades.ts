@@ -2,7 +2,7 @@ import "server-only";
 
 import { DatabricksDataClient } from "@/lib/data/databricks";
 import { T } from "@/lib/data/admin/tables";
-import { ORGANOGRAMA_ATUAL, RH_ATUAL } from "@/lib/data/estrutura-sql";
+import { BASE_CIDADE, nomeCidade, RH_ATUAL } from "@/lib/data/estrutura-sql";
 import type { OrgCidade } from "./types";
 
 /**
@@ -15,11 +15,11 @@ import type { OrgCidade } from "./types";
 export async function readCidadesPorNo(): Promise<Record<string, OrgCidade[]>> {
   try {
     const rows = await new DatabricksDataClient().query<Record<string, unknown>>(
-      `SELECT r.id_estrutura, v.revan_cidade_id AS id, c.cidade
+      `SELECT r.id_estrutura, v.revan_cidade_id AS id, ${nomeCidade("b")} AS cidade
          FROM ${T.supervisaoCidades} v
          JOIN ${RH_ATUAL} r ON r.codigo_local = v.codigo_local
-         LEFT JOIN ${ORGANOGRAMA_ATUAL} c ON c.revan_cidade_id = v.revan_cidade_id
-        ORDER BY c.cidade`,
+         LEFT JOIN ${BASE_CIDADE} b ON b.revan_cidade_id = v.revan_cidade_id
+        ORDER BY 3`,
     );
     const byPath: Record<string, OrgCidade[]> = {};
 

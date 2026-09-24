@@ -16,12 +16,14 @@ import type { NegativeRow, NegativesByLevel, QuartileLevel } from "@/lib/data/ci
 const LEVELS: { value: QuartileLevel; label: string }[] = [
   { value: "gerencia", label: "Gerência" },
   { value: "coordenacao", label: "Coordenação" },
+  { value: "supervisao", label: "Supervisão" },
   { value: "cidade", label: "Cidade" },
 ];
 
 const LEVEL_LABEL: Record<QuartileLevel, string> = {
   gerencia: "Gerência",
   coordenacao: "Coordenação",
+  supervisao: "Supervisão",
   cidade: "Cidade",
 };
 
@@ -75,6 +77,7 @@ export function NegativesTable({ negatives }: { negatives: NegativesByLevel }) {
     { key: "nome", header: LEVEL_LABEL[level], render: (r) => r.nome },
     { key: "ger", header: "Gerência", render: (r) => r.gerencia || "—" },
     { key: "coord", header: "Coord.", render: (r) => r.coordenacao || "—" },
+    { key: "sup", header: "Superv.", render: (r) => r.supervisao || "—" },
     { key: "tec", header: "Tec", render: (r) => r.tecnologia },
     { key: "meta", header: "Meta", numeric: true, render: (r) => formatNumber(r.metaCrescimento) },
     { key: "res", header: "Result.", numeric: true, render: (r) => formatNumber(r.resultadoCrescimento) },

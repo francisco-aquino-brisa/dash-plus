@@ -357,7 +357,7 @@ export async function salvarVinculos(
   }
 
   if (cidadesValidas.length !== cidades.length) {
-    return { ok: false, error: "Alguma cidade não existe no organograma atual." };
+    return { ok: false, error: "Alguma cidade não está na lista de cidades operadas." };
   }
 
   // The pool a supervisão draws from is the coordenação's state AFTER this same

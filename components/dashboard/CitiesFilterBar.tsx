@@ -2,16 +2,21 @@
 
 import { ChipFilter, FilterClearButton } from "@/components/ui/chip-filter";
 import { DateFilter } from "@/components/ui/date-filter";
+import { MultiChipFilter } from "@/components/ui/multi-chip-filter";
 import { formatMonth } from "@/lib/format";
-import type { FilterOptions, Filters } from "@/lib/data/cities/types";
+import type { DashboardFilters, FilterOptions } from "@/lib/data/cities/types";
 
 /**
  * Cities filter bar (DESIGN_SYSTEM "Estrutura comum" + §4.1/§4.2).
  *
  * Sticky card of 40px chips: Competência (date picker, month mode) + Gerência ·
- * Coordenação · Tipo cidade · Cidade · Tecnologia (chip-selects) + "Limpar (n)".
- * State lives in the URL (the page recomputes the view-model server-side per
- * filter, ADR 0002); this only emits the next `Filters`.
+ * Coordenação · Supervisão · Cidade (multi-selects, cascading) + Tipo cidade ·
+ * Tecnologia (chip-selects) + "Limpar (n)". State lives in the URL (the page
+ * recomputes the view-model server-side per filter, ADR 0002); this only emits
+ * the next `DashboardFilters`.
+ *
+ * The estrutura chips come from the app's own city bindings (ADR 0008), so a
+ * city nobody answers for yet shows up under Cidade and under no gerência.
  */
 const ALL = "Todos";
 const MN = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -41,22 +46,23 @@ export function CitiesFilterBar({
   onChange,
   onReset,
 }: {
-  filters: Filters;
+  filters: DashboardFilters;
   options: FilterOptions;
-  onChange: (next: Filters) => void;
+  onChange: (next: DashboardFilters) => void;
   onReset: () => void;
 }) {
   const latest = options.meses[options.meses.length - 1] ?? "";
-  const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch });
+  const set = (patch: Partial<DashboardFilters>) => onChange({ ...filters, ...patch });
   // "Todos" sentinel ↔ "" (the data layer's "no filter") for the chip-selects.
-  const pick = (key: keyof Filters, v: string) => set({ [key]: v === ALL ? "" : v } as Partial<Filters>);
+  const pick = (key: "tipoCidade" | "tecnologia", v: string) => set({ [key]: v === ALL ? "" : v });
 
   const dirtyCount =
     (filters.competencia !== latest ? 1 : 0) +
-    (filters.gerencia ? 1 : 0) +
-    (filters.coordenacao ? 1 : 0) +
+    (filters.gerencia.length > 0 ? 1 : 0) +
+    (filters.coordenacao.length > 0 ? 1 : 0) +
+    (filters.supervisao.length > 0 ? 1 : 0) +
+    (filters.cidade.length > 0 ? 1 : 0) +
     (filters.tipoCidade ? 1 : 0) +
-    (filters.cidade ? 1 : 0) +
     (filters.tecnologia ? 1 : 0);
 
   return (
@@ -86,19 +92,31 @@ export function CitiesFilterBar({
           initialMode="mes"
           modes={["mes"]}
         />
-        <ChipFilter
+        <MultiChipFilter
           label="Gerência"
-          value={filters.gerencia || ALL}
-          options={[ALL, ...options.gerencias]}
-          defaultValue={ALL}
-          onChange={(v) => pick("gerencia", v)}
+          values={filters.gerencia}
+          options={options.gerencias}
+          onChange={(v) => set({ gerencia: v })}
         />
-        <ChipFilter
+        <MultiChipFilter
           label="Coordenação"
-          value={filters.coordenacao || ALL}
-          options={[ALL, ...options.coordenacoes]}
-          defaultValue={ALL}
-          onChange={(v) => pick("coordenacao", v)}
+          values={filters.coordenacao}
+          options={options.coordenacoes}
+          onChange={(v) => set({ coordenacao: v })}
+        />
+        <MultiChipFilter
+          label="Supervisão"
+          values={filters.supervisao}
+          options={options.supervisoes}
+          onChange={(v) => set({ supervisao: v })}
+        />
+        <MultiChipFilter
+          label="Cidade"
+          values={filters.cidade}
+          options={options.cidades}
+          onChange={(v) => set({ cidade: v })}
+          align="end"
+          maxVisible={100}
         />
         <ChipFilter
           label="Tipo cidade"
@@ -106,15 +124,6 @@ export function CitiesFilterBar({
           options={[ALL, ...options.tiposCidade]}
           defaultValue={ALL}
           onChange={(v) => pick("tipoCidade", v)}
-        />
-        <ChipFilter
-          label="Cidade"
-          value={filters.cidade || ALL}
-          options={[ALL, ...options.cidades]}
-          defaultValue={ALL}
-          onChange={(v) => pick("cidade", v)}
-          align="end"
-          maxVisible={100}
         />
         <ChipFilter
           label="Tecnologia"

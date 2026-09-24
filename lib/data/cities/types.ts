@@ -1,12 +1,14 @@
 // Domain types for the Cities screen (Tela 1).
 //
 // Field names and taxonomies follow the REAL Databricks sources
-// (`indicadores_cidades` + `indicadores_cidades_5g` joined with
-// `organograma_cidades`), per our decision "visual = prototype, data = docs".
-// The prototype's simplified `CityRecord` (empresa, Capital/Interior) is NOT used.
+// (`indicadores_cidades` + `indicadores_cidades_5g`), per our decision
+// "visual = prototype, data = docs". The prototype's simplified `CityRecord`
+// (empresa, Capital/Interior) is NOT used.
 //
 // Business rule: "Banda Larga" = FTTH + FWA (virtual aggregate). 5G is an
 // independent base and is NEVER summed into Banda Larga.
+
+import type { FilterOption } from "@/lib/ui/filter-option";
 
 export type Tecnologia = "FTTH" | "FWA" | "5G";
 export type TecnologiaFiltro = Tecnologia | "Banda Larga";
@@ -27,9 +29,13 @@ export interface CityIndicatorRecord {
   /** "Cidade / UF". */
   cidade: string;
   uf: string;
-  // Org hierarchy (from organograma_cidades).
+  // Commercial structure: RH node names, resolved from the app's own city
+  // bindings (ADR 0008), NOT the cubes' own `gerencia`/`coordenacao` columns —
+  // those carry the organograma taxonomy, which disagrees with RH. Empty when
+  // no coordenação answers for the city yet.
   gerencia: string;
   coordenacao: string;
+  supervisao: string;
   tipo_cidade: TipoCidade;
   tecnologia: Tecnologia;
 
@@ -129,19 +135,36 @@ export interface CityDataset {
   watermark: string;
 }
 
+/** The cuts `applyFilters` can decide row by row. */
 export interface Filters {
   competencia: string;
-  gerencia: string;
-  coordenacao: string;
   tipoCidade: string;
-  cidade: string;
+  /** City display names ("CIDADE / UF"). */
+  cidade: string[];
   tecnologia: string; // "" = all; "Banda Larga" = FTTH+FWA
 }
 
+/**
+ * The hierarchy cut, carried as `codigo_local` (supervisão names repeat and 8
+ * of them contain commas, so names cannot key a URL list).
+ *
+ * This is NOT a row predicate: the binding is a city↔node table, and a city may
+ * hang off more than one node. `narrowByEstrutura` slices the dataset with it
+ * before compute runs — `applyFilters` never sees it.
+ */
+export interface EstruturaFiltro {
+  gerencia: string[];
+  coordenacao: string[];
+  supervisao: string[];
+}
+
+export type DashboardFilters = Filters & EstruturaFiltro;
+
 export interface FilterOptions {
   meses: string[];
-  gerencias: string[];
-  coordenacoes: string[];
+  gerencias: FilterOption[];
+  coordenacoes: FilterOption[];
+  supervisoes: FilterOption[];
   tiposCidade: string[];
   cidades: string[];
   tecnologias: TecnologiaFiltro[];

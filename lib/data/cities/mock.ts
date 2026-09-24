@@ -142,6 +142,7 @@ function generate(months: string[]): CityIndicatorRecord[] {
           uf: c.uf,
           gerencia: c.gerencia,
           coordenacao: c.coordenacao,
+          supervisao: `${c.coordenacao} 1`,
           tipo_cidade: c.tipo,
           tecnologia: tec,
           base_ativa: baseAtiva,

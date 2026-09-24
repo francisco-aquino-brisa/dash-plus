@@ -47,10 +47,25 @@ pelo /admin, base do escopo de cidade ([ADR 0008](adr/0008-city-scope-by-estrutu
 Colunas: `id` (IDENTITY), `codigo_local`, `revan_cidade_id`, `criado_por`,
 `criado_em`, `atualizado_em`.
 
-**Armadilha em `vw_organograma_cidades`:** a coluna `data` é STRING `dd/MM/yyyy`,
-então `max(data)` é **lexicográfico** e devolve um dezembro (01/12/2025 em vez de
-01/09/2026). Toda leitura tem que fazer `to_date(data, 'dd/MM/yyyy')` antes de
-comparar — com o parse, a carga atual tem 403 cidades (a errada tinha 350).
+**As colunas `gerencia`/`coordenacao` dos cubos não são mais usadas (2026-09).**
+Elas trazem a mesma taxonomia do organograma (31 coordenações, 1.927 cidades
+como "-"). O dashboard de Cidades agora escreve gerência/coordenação/supervisão
+nos registros a partir de `tb_supervisao_cidades` + `vw_hierarquia_rh`
+(`lib/data/cities/estrutura.ts`), e o watermark do dataset carrega a versão da
+tabela de vínculos para que uma edição no /admin expire o cache.
+
+**`vw_organograma_cidades` não é mais lida pelo app (2026-09).** A estrutura vem
+de `vw_hierarquia_rh` e o catálogo de cidades de `public_base_cidade`; a
+coordenação por cidade que essa view traz contradiz a do RH (31 nomes contra 65
+nós, 12 casando) e cobre só 403 das 924 cidades com base ativa. Se for lê-la de
+novo: a coluna `data` é STRING `dd/MM/yyyy`, então `max(data)` é
+**lexicográfico** e devolve um dezembro (01/12/2025 em vez de 01/09/2026) — tem
+que fazer `to_date(data, 'dd/MM/yyyy')` antes de comparar.
+
+**Catálogo de cidades:** `public_base_cidade` (2.339 linhas, uma por
+`revan_cidade_id`, com `nome_cidade`/`uf`). O picker do /admin usa esse catálogo
+cruzado com as cidades que os cubos movimentam nas 3 últimas competências —
+1.155 hoje (`CIDADES_OPERADAS` em `lib/data/estrutura-sql.ts`).
 
 **Bug de origem em `vw_vendas_waves` (corrigir na view):** a definição casta
 colunas numéricas string→BIGINT/DOUBLE direto (`bigint(orcamento_id)` etc.), mas

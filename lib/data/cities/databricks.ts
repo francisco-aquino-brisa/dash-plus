@@ -21,6 +21,7 @@
 
 import { getDataClient } from "../client";
 import { num } from "../_shared";
+import { readVinculosEstrutura, type VinculoEstrutura } from "./estrutura";
 import type { CityDataset, CityIndicatorRecord, CityMetaRecord, Tecnologia, TipoCidade } from "./types";
 
 const CATALOG = process.env.DATABRICKS_CITIES_CATALOG ?? "gdb_brisanet_comunidade_dev";
@@ -79,7 +80,7 @@ async function fetchCitiesFTTHFWA(): Promise<CityIndicatorRecord[]> {
   const sql = `
     SELECT
       date_format(data, 'yyyy-MM-01') AS competencia,
-      id_cidade, revan_cidade_id, cidade, gerencia, coordenacao, tipo_cidade, gestao, tecnologia,
+      id_cidade, revan_cidade_id, cidade, tipo_cidade, gestao, tecnologia,
       base_ativa, crescimento, fechados, fechado_problema_tecnico, bloqueados,
       desativado_auto, desativado_s, reativacoes_bloqueados, reativacoes_total,
       cancelamentos, cancelamentos_voluntarios, cancelamentos_involuntarios,
@@ -91,9 +92,9 @@ async function fetchCitiesFTTHFWA(): Promise<CityIndicatorRecord[]> {
     WHERE data >= ${WINDOW}
       AND upper(tecnologia) IN ('FTTH', 'FWA')
   `;
-  // NOTE: cities with no gerência ('-') and rows with an empty/'/' cidade name are
-  // kept — the official panel counts them when no filter is applied. The Gerência
-  // dropdown filters placeholders out separately (see buildFilterOptions).
+  // NOTE: rows with an empty/'/' cidade name are kept — the official panel counts
+  // them when no filter is applied. The org fields stay empty here and are filled
+  // from the app's own bindings in `aplicarEstrutura`.
   const raw = await getDataClient().query<Record<string, unknown>>(sql);
 
   return raw.map((r) => {
@@ -108,8 +109,9 @@ async function fetchCitiesFTTHFWA(): Promise<CityIndicatorRecord[]> {
       revan_cidade_id: str(r.revan_cidade_id),
       cidade,
       uf: ufFrom(cidade),
-      gerencia: str(r.gerencia),
-      coordenacao: str(r.coordenacao),
+      gerencia: "",
+      coordenacao: "",
+      supervisao: "",
       tipo_cidade: normTipo(r.tipo_cidade),
       tecnologia: tec === "FWA" ? "FWA" : "FTTH",
       base_ativa: baseAtiva,
@@ -162,15 +164,14 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
   const sql = `
     SELECT
       date_format(data, 'yyyy-MM-01') AS competencia,
-      id_cidade, revan_cidade_id, cidade, gerencia, coordenacao, tipo_cidade,
+      id_cidade, revan_cidade_id, cidade, tipo_cidade,
       base_ativa, base_ativa_anterior, crescimento, ativacao_mes, cancelamento_mes,
       cancel_com_consumo, cancel_sem_consumo, chips_combo,
       instalacoes_4_mes, cancelamentos_4_mes
     FROM ${FQ("vw_indicadores_cidades_5g")}
     WHERE data >= ${WINDOW}
   `;
-  // Cities with no gerência and rows with an empty/'/' cidade name are kept
-  // (counted when no filter is applied).
+  // Rows with an empty/'/' cidade name are kept (counted when no filter is applied).
   const raw = await getDataClient().query<Record<string, unknown>>(sql);
 
   return raw.map((r) => {
@@ -184,8 +185,9 @@ async function fetch5G(): Promise<CityIndicatorRecord[]> {
       revan_cidade_id: str(r.revan_cidade_id),
       cidade,
       uf: ufFrom(cidade),
-      gerencia: str(r.gerencia),
-      coordenacao: str(r.coordenacao),
+      gerencia: "",
+      coordenacao: "",
+      supervisao: "",
       tipo_cidade: normTipo(r.tipo_cidade),
       tecnologia: "5G",
       base_ativa: num(r.base_ativa),
@@ -558,9 +560,46 @@ export async function databricksCityDataset(): Promise<CityDataset> {
   }
 
   const records = [...ftthFwa, ...fiveG];
+
+  aplicarEstrutura(records, await readVinculosEstrutura());
+
   const months = Array.from(new Set(records.map((r) => r.competencia)))
     .filter(Boolean)
     .sort();
 
   return { records, metaRecords, months, watermark };
+}
+
+/**
+ * Write the commercial structure onto the records, in place — the labels every
+ * grouping on the screen reads.
+ *
+ * A city bound to more than one node gets the first path in name order: the
+ * intended model is one coordenação per city, and a record (city × tech × mês)
+ * has room for one label. The filters do NOT go through here — they slice by
+ * the full binding set, so a multi-bound city still answers to both nodes.
+ */
+export function aplicarEstrutura(records: CityIndicatorRecord[], vinculos: VinculoEstrutura[]): void {
+  const ordenado = [...vinculos].sort(
+    (a, b) =>
+      a.coordenacao.nome.localeCompare(b.coordenacao.nome, "pt-BR") ||
+      (a.supervisao?.nome ?? "").localeCompare(b.supervisao?.nome ?? "", "pt-BR"),
+  );
+  const porCidade = new Map<string, VinculoEstrutura>();
+
+  for (const v of ordenado) {
+    const chave = String(v.cidadeId);
+
+    if (!porCidade.has(chave)) porCidade.set(chave, v);
+  }
+
+  for (const r of records) {
+    const v = porCidade.get(r.revan_cidade_id);
+
+    if (!v) continue;
+
+    r.gerencia = v.gerencia?.nome ?? "";
+    r.coordenacao = v.coordenacao.nome;
+    r.supervisao = v.supervisao?.nome ?? "";
+  }
 }

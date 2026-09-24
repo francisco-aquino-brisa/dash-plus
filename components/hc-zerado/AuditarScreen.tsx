@@ -7,7 +7,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { DangerButton, SecondaryButton } from "@/components/admin/primitives";
 import { excluirJustificativa } from "@/app/(app)/hc-zerado/justificar/actions";
 import { HcActiveContext, HcFilterPanel } from "./HcFilterPanel";
-import { MultiChipFilter } from "./MultiChipFilter";
+import { MultiChipFilter } from "@/components/ui/multi-chip-filter";
 import { Block, SearchInput, STATUS_TONE, card, initials, nf, ptBr } from "./ui";
 import { useReportNavPending } from "@/lib/ui/nav-pending";
 import { hcFiltersToQuery, keepScreenParams } from "@/lib/data/hc-zerado/filters";

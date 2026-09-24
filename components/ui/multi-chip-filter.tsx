@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Check, Search, X } from "lucide-react";
 import { FilterChipTrigger } from "@/components/ui/chip-filter";
+import { optionLabel, optionValue, type FilterOption } from "@/lib/ui/filter-option";
 import { useIsMobile } from "@/lib/hooks/use-media-query";
 
 const AUTO_SEARCH_THRESHOLD = 7;
@@ -20,6 +21,10 @@ function norm(s: string): string {
  * Shares the exact 40px chip trigger and popover chrome; the difference is that
  * it keeps a set of values, which the HC Zerado filter panel needs — the
  * original screens let a user pick several gerências, canais or serviços at once.
+ *
+ * An option may be a plain string (value = label) or a `FilterOption`, whose
+ * `hint` becomes a second line — the Cities dashboard shows the estrutura's
+ * name with its responsável under it.
  */
 export function MultiChipFilter({
   label,
@@ -31,15 +36,20 @@ export function MultiChipFilter({
 }: {
   label: string;
   values: string[];
-  options: string[];
+  options: (string | FilterOption)[];
   onChange: (values: string[]) => void;
   align?: "start" | "end";
   maxVisible?: number;
 }) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
+  const único = values.length === 1 ? options.find((o) => optionValue(o) === values[0]) : undefined;
   const summary =
-    values.length === 0 ? "Todos" : values.length === 1 ? values[0] : `${values.length} selecionados`;
+    values.length === 0
+      ? "Todos"
+      : values.length === 1
+        ? (único && optionLabel(único)) || values[0]
+        : `${values.length} selecionados`;
 
   const toggle = (option: string) => {
     const next = new Set(values);
@@ -189,7 +199,7 @@ function OptionList({
   maxVisible,
   padded,
 }: {
-  options: string[];
+  options: (string | FilterOption)[];
   values: string[];
   onToggle: (option: string) => void;
   onAll: () => void;
@@ -201,7 +211,9 @@ function OptionList({
   const selectedValues = useMemo(() => new Set(values), [values]);
   const visible = useMemo(() => {
     const term = norm(busca.trim());
-    const filtered = term ? options.filter((o) => norm(o).includes(term)) : options;
+    const matches = (o: string | FilterOption) =>
+      norm(`${optionLabel(o)} ${typeof o === "string" ? "" : (o.hint ?? "")}`).includes(term);
+    const filtered = term ? options.filter(matches) : options;
 
     return maxVisible ? filtered.slice(0, maxVisible) : filtered;
   }, [options, busca, maxVisible]);
@@ -264,17 +276,32 @@ function OptionList({
       </button>
       <div style={{ overflowY: "auto", minHeight: 0 }}>
         {visible.map((option) => {
-          const ativo = selectedValues.has(option);
+          const value = optionValue(option);
+          const hint = typeof option === "string" ? undefined : option.hint;
+          const ativo = selectedValues.has(value);
 
           return (
             <button
-              key={option}
+              key={value}
               type="button"
-              onClick={() => onToggle(option)}
-              style={{ ...itemStyle(ativo), justifyContent: "space-between" }}
+              onClick={() => onToggle(value)}
+              style={{ ...itemStyle(ativo), justifyContent: "space-between", minHeight: hint ? 42 : 34 }}
             >
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {option}
+              <span
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {optionLabel(option)}
+                {hint && (
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--s-t3)" }}>{hint}</span>
+                )}
               </span>
               {ativo && <Check size={13} style={{ flex: "none" }} />}
             </button>

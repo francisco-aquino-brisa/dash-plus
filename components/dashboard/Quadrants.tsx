@@ -12,7 +12,7 @@ import type { QuartileLevel, QuartilesByLevel } from "@/lib/data/cities/compute"
  *
  * A single panel: the four attainment quadrants on the left, and the drill
  * recorte on the right (inside the same card). The Gerência / Coordenação /
- * Cidade segmented drives both — the quadrants show how that level's entities
+ * Supervisão / Cidade segmented drives both — the quadrants show how that level's entities
  * split across the bands, and the selected band lists its members on the right.
  */
 // Band colours follow the legacy screen: green · blue (accent) · amber · red.
@@ -26,6 +26,7 @@ const QUAD = [
 const LEVELS: { value: QuartileLevel; label: string }[] = [
   { value: "gerencia", label: "Gerência" },
   { value: "coordenacao", label: "Coordenação" },
+  { value: "supervisao", label: "Supervisão" },
   { value: "cidade", label: "Cidade" },
 ];
 
@@ -260,7 +261,9 @@ export function Quadrants({ quartis }: { quartis: QuartilesByLevel }) {
             }}
           >
             <Info size={14} style={{ flex: "none", color: "var(--s-t3)", marginTop: 1 }} />
-            <span>Selecione um quadrante e o nível para descer por Gerência → Coordenação → Cidade.</span>
+            <span>
+              Selecione um quadrante e o nível para descer por Gerência → Coordenação → Supervisão → Cidade.
+            </span>
           </div>
         </div>
       </div>

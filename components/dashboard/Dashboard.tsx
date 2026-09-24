@@ -13,7 +13,7 @@ import { DrillModal } from "@/components/dashboard/DrillModal";
 import { TimeSeriesChart } from "@/components/ui/time-series-chart";
 import type { DashboardView } from "@/lib/data/cities/compute";
 import type { IndicatorCardVM } from "@/lib/data/cities/indicator-blocks";
-import type { FilterOptions, Filters } from "@/lib/data/cities/types";
+import type { DashboardFilters, FilterOptions } from "@/lib/data/cities/types";
 import { DEFAULT_SELECTION, SELECTION_PREF_KEY } from "@/lib/data/cities/indicators";
 import { usePreference } from "@/lib/preferences/use-preference";
 import { useReportNavPending } from "@/lib/ui/nav-pending";
@@ -29,20 +29,20 @@ interface Props {
   escopo: { total: number; nomes: string[] } | null;
 }
 
-function toQuery(f: Filters): string {
+function toQuery(f: DashboardFilters): string {
   const p = new URLSearchParams();
 
-  if (f.competencia) p.set("mes", f.competencia);
+  const put = (key: string, value: string) => {
+    if (value) p.set(key, value);
+  };
 
-  if (f.gerencia) p.set("gerencia", f.gerencia);
-
-  if (f.coordenacao) p.set("coordenacao", f.coordenacao);
-
-  if (f.tipoCidade) p.set("tipo", f.tipoCidade);
-
-  if (f.cidade) p.set("cidade", f.cidade);
-
-  if (f.tecnologia) p.set("tec", f.tecnologia);
+  put("mes", f.competencia);
+  put("gerencia", f.gerencia.join(","));
+  put("coordenacao", f.coordenacao.join(","));
+  put("supervisao", f.supervisao.join(","));
+  put("tipo", f.tipoCidade);
+  put("cidade", f.cidade.join(","));
+  put("tec", f.tecnologia);
 
   return p.toString();
 }
@@ -58,7 +58,7 @@ export function Dashboard({ view, options, cache, watermark, escopo }: Props) {
   // Optimistic filters: the chips reflect the new value instantly, while the
   // server request (which recomputes the data) runs behind the transition. Sync
   // back whenever the server responds with a fresh view.
-  const [uiFilters, setUiFilters] = useState<Filters>(view.filters);
+  const [uiFilters, setUiFilters] = useState<DashboardFilters>(view.filters);
 
   useEffect(() => {
     setUiFilters(view.filters);
@@ -83,7 +83,7 @@ export function Dashboard({ view, options, cache, watermark, escopo }: Props) {
   const showG5 = tec === "" || tec === "Banda Larga" || tec === "5G";
 
   const navigate = useCallback(
-    (f: Filters) => {
+    (f: DashboardFilters) => {
       setUiFilters(f); // reflect the chip immediately, request afterwards
       const qs = toQuery(f);
 
@@ -95,10 +95,11 @@ export function Dashboard({ view, options, cache, watermark, escopo }: Props) {
   const resetFilters = useCallback(() => {
     setUiFilters({
       competencia: latest,
-      gerencia: "",
-      coordenacao: "",
+      gerencia: [],
+      coordenacao: [],
+      supervisao: [],
       tipoCidade: "",
-      cidade: "",
+      cidade: [],
       tecnologia: "",
     });
     startTransition(() => router.push("/dashboard", { scroll: false }));
@@ -198,7 +199,8 @@ export function Dashboard({ view, options, cache, watermark, escopo }: Props) {
             Performance Cidades
           </h1>
           <p style={{ fontSize: 13, color: "var(--s-t3)", marginTop: 4 }}>
-            Meta × realizado de banda larga por cidade, com drill por gerência, coordenação e cidade.
+            Meta × realizado de banda larga por cidade, com drill por gerência, coordenação, supervisão e
+            cidade.
             {escopo && (
               <span
                 // Deliberately quiet: it answers "por que meu total é menor que

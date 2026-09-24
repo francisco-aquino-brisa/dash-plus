@@ -1,7 +1,7 @@
 import "server-only";
 
 import { DatabricksDataClient } from "@/lib/data/databricks";
-import { ORGANOGRAMA_ATUAL, RH_ATUAL } from "@/lib/data/estrutura-sql";
+import { CIDADES_OPERADAS, RH_ATUAL } from "@/lib/data/estrutura-sql";
 import { T } from "./tables";
 import type { CidadeOpcao, EstruturaCidadesData, EstruturaNo, SupervisaoNo, VinculoOrfao } from "./types";
 
@@ -34,20 +34,10 @@ async function safe<T>(label: string, fallback: T, run: () => Promise<T>): Promi
 export async function readCidades(client: DatabricksDataClient): Promise<CidadeOpcao[]> {
   return safe("cidades", [], async () => {
     const rows = await client.query<Record<string, unknown>>(
-      `SELECT revan_cidade_id AS id, max(cidade) AS cidade,
-              max(gerencia) AS gerencia, max(coordenacao) AS coordenacao
-         FROM ${ORGANOGRAMA_ATUAL}
-        WHERE revan_cidade_id IS NOT NULL
-        GROUP BY revan_cidade_id
-        ORDER BY cidade`,
+      `SELECT id, nome FROM ${CIDADES_OPERADAS} ORDER BY nome`,
     );
 
-    return rows.map((r) => ({
-      id: Number(r.id),
-      nome: toStr(r.cidade),
-      gerencia: toStr(r.gerencia),
-      coordenacao: toStr(r.coordenacao),
-    }));
+    return rows.map((r) => ({ id: Number(r.id), nome: toStr(r.nome) }));
   });
 }
 
@@ -141,13 +131,13 @@ export async function readEstruturaCidades(): Promise<EstruturaCidadesData> {
   };
 }
 
-/** Which of these ids are real cities in the current organograma load. */
+/** Which of these ids the app may actually hand out. */
 export async function filterCidadesValidas(ids: number[]): Promise<number[]> {
   if (ids.length === 0) return [];
 
   const marks = ids.map(() => "?").join(", ");
   const rows = await new DatabricksDataClient().query<{ id: unknown }>(
-    `SELECT DISTINCT revan_cidade_id AS id FROM ${ORGANOGRAMA_ATUAL} WHERE revan_cidade_id IN (${marks})`,
+    `SELECT id FROM ${CIDADES_OPERADAS} WHERE id IN (${marks})`,
     ids,
   );
 

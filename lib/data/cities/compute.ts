@@ -6,14 +6,15 @@
 // Business rule: "Banda Larga" = FTTH + FWA. 5G is an independent base.
 
 import { todayUtc } from "../_shared";
-import type { CityIndicatorRecord, CityMetaRecord, Filters, Tecnologia } from "./types";
+import type { CityIndicatorRecord, CityMetaRecord, DashboardFilters, Filters, Tecnologia } from "./types";
 import { computeIndicatorBlock, type IndicatorCardVM } from "./indicator-blocks";
 
-export const DEFAULT_FILTERS: Omit<Filters, "competencia"> = {
-  gerencia: "",
-  coordenacao: "",
+export const DEFAULT_FILTERS: Omit<DashboardFilters, "competencia"> = {
+  gerencia: [],
+  coordenacao: [],
+  supervisao: [],
   tipoCidade: "",
-  cidade: "",
+  cidade: [],
   tecnologia: "",
 };
 
@@ -21,13 +22,9 @@ export function applyFilters(rows: CityIndicatorRecord[], f: Filters): CityIndic
   return rows.filter((r) => {
     if (f.competencia && r.competencia !== f.competencia) return false;
 
-    if (f.gerencia && r.gerencia !== f.gerencia) return false;
-
-    if (f.coordenacao && r.coordenacao !== f.coordenacao) return false;
-
     if (f.tipoCidade && r.tipo_cidade !== f.tipoCidade) return false;
 
-    if (f.cidade && r.cidade !== f.cidade) return false;
+    if (f.cidade.length > 0 && !f.cidade.includes(r.cidade)) return false;
 
     if (f.tecnologia) {
       if (f.tecnologia === "Banda Larga") {
@@ -304,10 +301,11 @@ export function growthByTech(
 }
 
 export interface NegativeRow {
-  /** Entity name for the active level (gerência / coordenação / cidade). */
+  /** Entity name for the active level (gerência / coordenação / supervisão / cidade). */
   nome: string;
   gerencia: string;
   coordenacao: string;
+  supervisao: string;
   tecnologia: string;
   /** Distinct cities consolidated into this row (1 at the cidade level). */
   cidades: number;
@@ -326,6 +324,7 @@ interface NegAcc {
   nome: string;
   gerencia: string;
   coordenacao: string;
+  supervisao: string;
   tecnologia: string;
   ids: Set<string>;
   metaC: number;
@@ -341,11 +340,7 @@ function negativesBy(
   level: QuartileLevel,
 ): NegativeRow[] {
   const keyOf = (x: CityIndicatorRecord) =>
-    level === "gerencia"
-      ? x.gerencia || "Não registrado"
-      : level === "coordenacao"
-        ? x.coordenacao || "Não registrado"
-        : `${x.id_cidade}-${x.tecnologia}`;
+    level === "cidade" ? `${x.id_cidade}-${x.tecnologia}` : x[level] || "Não registrado";
 
   // Previous-month (Base Ativa + Fechados) per entity — the baseline for
   // Crescimento Base (BA04): (Base Ativa + Fechados) do mês − o do mês anterior.
@@ -367,6 +362,7 @@ function negativesBy(
         nome: level === "cidade" ? x.cidade : key,
         gerencia: x.gerencia,
         coordenacao: x.coordenacao,
+        supervisao: x.supervisao,
         tecnologia: x.tecnologia,
         ids: new Set<string>(),
         metaC: 0,
@@ -398,6 +394,7 @@ function negativesBy(
       nome: a.nome,
       gerencia: a.gerencia,
       coordenacao: a.coordenacao,
+      supervisao: a.supervisao,
       tecnologia: a.tecnologia,
       cidades: a.ids.size,
       metaCrescimento: a.metaC,
@@ -413,7 +410,7 @@ function negativesBy(
   return out.sort((a, b) => a.atingCresc - b.atingCresc);
 }
 
-/** Negative entities at the three drill levels (Gerência → Coordenação → Cidade). */
+/** Negative entities at every drill level (Gerência → Coordenação → Supervisão → Cidade). */
 export function negativeCities(
   rows: CityIndicatorRecord[],
   months: string[],
@@ -426,6 +423,7 @@ export function negativeCities(
   return {
     gerencia: negativesBy(r, prev, "gerencia"),
     coordenacao: negativesBy(r, prev, "coordenacao"),
+    supervisao: negativesBy(r, prev, "supervisao"),
     cidade: negativesBy(r, prev, "cidade"),
   };
 }
@@ -450,7 +448,7 @@ export interface QuartileBucket {
 }
 
 /** The aggregation level the user can switch between in the quartile widget. */
-export type QuartileLevel = "gerencia" | "coordenacao" | "cidade";
+export type QuartileLevel = "gerencia" | "coordenacao" | "supervisao" | "cidade";
 export type QuartilesByLevel = Record<QuartileLevel, QuartileBucket[]>;
 
 /** Bucket a set of entities into the four attainment quartiles. */
@@ -520,8 +518,8 @@ function aggregateBy(
   }));
 }
 
-/** Attainment quartiles at three drill levels (Gerência → Coordenação → Cidade),
- *  over the cities that carry the official growth meta for the scope. */
+/** Attainment quartiles at every drill level (Gerência → Coordenação → Supervisão
+ *  → Cidade), over the cities that carry the official growth meta for the scope. */
 export function quartiles(
   rows: CityIndicatorRecord[],
   metaRecords: CityMetaRecord[],
@@ -536,6 +534,7 @@ export function quartiles(
   return {
     gerencia: bucketize(aggregateBy(r, metaCity, (x) => x.gerencia)),
     coordenacao: bucketize(aggregateBy(r, metaCity, (x) => x.coordenacao)),
+    supervisao: bucketize(aggregateBy(r, metaCity, (x) => x.supervisao)),
     cidade: bucketize(aggregateBy(r, metaCity, (x) => x.cidade)),
   };
 }
@@ -562,7 +561,7 @@ export function historicSeries(
 // dataset, so the client receives a few KB instead of all ~93k rows (ADR 0002).
 
 export interface DashboardView {
-  filters: Filters;
+  filters: DashboardFilters;
   months: string[];
   kpis: KpiSet;
   growth: GrowthByTech[];
@@ -595,7 +594,7 @@ export function buildDashboardView(
   rows: CityIndicatorRecord[],
   metaRecords: CityMetaRecord[],
   months: string[],
-  filters: Filters,
+  filters: DashboardFilters,
 ): DashboardView {
   // One KpiSet per month (12 passes), reused for both current KPIs and the
   // modal series — avoids recomputing per KPI.

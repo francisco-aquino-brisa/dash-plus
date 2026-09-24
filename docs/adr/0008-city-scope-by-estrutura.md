@@ -17,17 +17,21 @@ Numbers at the time of writing (verified against the warehouse):
 
 - 299 supervisão nodes, 259 of them with people below; 65 coordenações, 25
   gerências funcionais, 6 executivas, 1 diretoria, 78 lideranças.
-- 403 cities in the current `vw_organograma_cidades` load — the operated ones.
-  The dimension (`public_base_cidade`) has 2.339 and the cube repeats all of
-  them per competência, so neither is the right pool for the picker.
+- 1.155 cities in the picker: `public_base_cidade` (2.339 rows, the registry)
+  narrowed to the ones the cubes still move in the last three competências.
+  The registry alone lists cities that were never operated, and the cubes repeat
+  every registered city per competência whether it has customers or not.
 - 2.188 of 2.853 people in `vw_hierarquia` sit under a supervisão; 61 are
   gestores with supervisões below them. The remaining ~604 (inspeção
   operacional, administrativo) resolve to no city at all.
 - 281 of the 299 supervisões hang under a coordenação; the other 18 hang
   straight off a gerência funcional.
-- `vw_organograma_cidades` also carries a `coordenacao` per city, but it is not
-  reusable: 31 names there against 65 RH nodes, and only 12 match. "AGILITY"
-  (57 cities) and "NOVOS NEGOCIOS" (64) are not RH nodes at all.
+- `vw_organograma_cidades` carries its own `gerencia`/`coordenacao` per city,
+  and it answers the same question as this ADR with different numbers: 31
+  coordenação names against 65 RH nodes, only 12 matching, and "AGILITY" (57
+  cities) and "NOVOS NEGOCIOS" (64) are not RH nodes at all. It also covers only
+  403 cities, leaving 521 cities with an active base unassignable. Nothing reads
+  it any more — the registry is the city source, the RH tree is the structure.
 
 ## Decision
 
@@ -77,6 +81,28 @@ unrestricted; everyone else with an empty resolution sees the "nenhuma cidade
 atribuída" state, never the full dataset. A warehouse failure resolves the same
 way — the gate fails closed.
 
+**The Cities dashboard reads the structure from here too.** Its Gerência and
+Coordenação filters used to be the cubes' own columns, which carry the
+organograma taxonomy (31 coordenação names, 1.927 cities as "-"). They are now
+gerência → coordenação → supervisão → cidade from `tb_supervisao_cidades` over
+the RH tree, cascading in both directions like the HC Zerado panel, multi-select,
+each option showing the node's responsável under its name. The same names feed
+the Quadrantes and Negativos panels, so the screen speaks one taxonomy.
+
+Two rules keep that honest:
+
+- The filter is a **dataset narrowing**, not a row predicate — `codigo_local`
+  lives in the bindings, not in the cube rows, and a city may hang off more than
+  one node, so a multi-bound city answers to each of them
+  (`cidadesDaEstrutura` + `applyEstrutura`).
+- The **label** written onto each record is single-valued (a record is one
+  city × tecnologia × mês), so a multi-bound city is grouped under the first
+  path in name order. The intended model is one coordenação per city.
+
+An unbound city keeps its rows and its Cidade filter entry, and groups under
+"Não registrado" — which today is nearly every city, since the bindings table
+has just started being filled.
+
 ## Consequences
 
 **Rollout is ordered, and the order matters.** `tb_supervisao_cidades` exists
@@ -102,9 +128,11 @@ bindings too. Renaming it is a one-line ALTER plus the constant in
 dataset for everyone; `getScopedCityDataset` slices it in memory per request.
 Keying the cache by scope would refetch ~93k rows per distinct scope for nothing.
 
-**The picker cannot bind a city outside the organograma.** Cities absent from
-`vw_organograma_cidades` have no gerência either, so nobody owns them — they
-stay visible only to admins.
+**The picker cannot bind a city the dashboard does not measure.** The pool is
+the registry intersected with the cubes' last three competências (any base,
+sale, install or HP); the write path re-checks it. A city outside it would grant
+an empty dashboard to whoever received it, and one that goes quiet keeps its
+binding — the check runs on write, not on read.
 
 **Resolution costs two extra round-trips per request** for a restricted reader
 (the managed nodes and their own positions, then the cities), memoized per
