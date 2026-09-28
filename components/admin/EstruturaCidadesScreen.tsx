@@ -8,11 +8,13 @@ import { Panel, PrimaryButton, SearchInput, SecondaryButton } from "./primitives
 import { textMatches } from "./filter";
 import { useAdminAction } from "./useAdminAction";
 import { Segmented } from "@/components/ui/segmented";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { limparVinculoOrfao, salvarVinculos } from "@/app/(app)/admin/actions";
 import type { CidadeOpcao, EstruturaNo, SupervisaoNo, VinculoOrfao } from "@/lib/data/admin/types";
 
 type Tab = "coordenacao" | "supervisao";
 type Mode = "responsavel" | "cidade";
+type ComCidade = "todos" | "com" | "sem";
 
 const TABS = [
   { value: "coordenacao" as const, label: "Coordenação" },
@@ -22,6 +24,12 @@ const TABS = [
 const MODES = [
   { value: "responsavel" as const, label: "Por responsável" },
   { value: "cidade" as const, label: "Por cidade" },
+];
+
+const COM_CIDADE = [
+  { value: "todos" as const, label: "Todos" },
+  { value: "com" as const, label: "Com cidade" },
+  { value: "sem" as const, label: "Sem cidade" },
 ];
 
 const pairKey = (codigoLocal: string, cidadeId: number | string) => `${codigoLocal}|${cidadeId}`;
@@ -297,6 +305,7 @@ export function EstruturaCidadesScreen({
             (s) => s.coordenacaoCodigoLocal === distribuicao.coordenacao.codigoLocal,
           )}
           citiesByNode={citiesByNode}
+          cityById={cityById}
           onToggle={(codigoLocal, bind) => setDelta(codigoLocal, distribuicao.cidadeId, bind)}
           onClose={() => setDistribuicao(null)}
         />
@@ -811,6 +820,57 @@ function FilterChip({ filter }: { filter: ListFilter }) {
   );
 }
 
+/**
+ * Flags a supervisor who already answers for other cities — the thing you want
+ * to know before handing them one more. The names live in the tooltip, which
+ * rides above the modal: the shared `TooltipContent` sits at z-50 and the
+ * dialog at z-81, so without the bump it would open behind it.
+ */
+function OutrasCidadesBadge({ cidades }: { cidades: string[] }) {
+  if (cidades.length === 0) return null;
+
+  const MOSTRAR = 15;
+  const resto = cidades.length - MOSTRAR;
+  const titulo = `Já é responsável por ${cidades.length} cidade(s)`;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={titulo}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            flexShrink: 0,
+            padding: "3px 8px",
+            borderRadius: 999,
+            border: "1px solid var(--s-border)",
+            background: "var(--s-card)",
+            color: "var(--s-t3)",
+            fontSize: 11,
+            fontWeight: 800,
+            cursor: "help",
+          }}
+        >
+          <MapPin size={11} />
+          {cidades.length}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent
+        side="left"
+        className="z-[90] max-w-[260px] text-left text-xs leading-relaxed whitespace-normal"
+      >
+        <div style={{ fontWeight: 800, marginBottom: 3 }}>{titulo}</div>
+        {cidades.slice(0, MOSTRAR).join(" · ")}
+        {resto > 0 && ` … e mais ${resto}`}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function ActionPill({
   tone,
   label,
@@ -1011,21 +1071,40 @@ function DistribuirModal({
   alvo,
   supervisoes,
   citiesByNode,
+  cityById,
   onToggle,
   onClose,
 }: {
   alvo: Distribuicao;
   supervisoes: SupervisaoNo[];
   citiesByNode: Map<string, Set<string>>;
+  cityById: Map<string, CidadeOpcao>;
   onToggle: (codigoLocal: string, bind: boolean) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
+  const [recorte, setRecorte] = useState<ComCidade>("todos");
   const temACidade = (s: SupervisaoNo) =>
     citiesByNode.get(s.codigoLocal)?.has(String(alvo.cidadeId)) ?? false;
+
+  const quantasOutras = (s: SupervisaoNo) => {
+    const suas = citiesByNode.get(s.codigoLocal);
+
+    if (!suas) return 0;
+
+    return suas.has(String(alvo.cidadeId)) ? suas.size - 1 : suas.size;
+  };
+
+  const outrasCidades = (s: SupervisaoNo) =>
+    [...(citiesByNode.get(s.codigoLocal) ?? [])]
+      .filter((id) => id !== String(alvo.cidadeId))
+      .map((id) => cityById.get(id)?.nome ?? `#${id}`)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"));
   const visiveis = supervisoes.filter((s) => textMatches(query, s.nome, s.responsavel));
   const com = visiveis.filter(temACidade);
-  const sem = visiveis.filter((s) => !temACidade(s));
+  const sem = visiveis
+    .filter((s) => !temACidade(s))
+    .filter((s) => recorte === "todos" || (recorte === "com") === quantasOutras(s) > 0);
 
   return (
     <ModalShell open onClose={onClose} maxWidth={520}>
@@ -1043,16 +1122,30 @@ function DistribuirModal({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14, maxHeight: 340, overflowY: "auto" }}>
         <GrupoSupervisoes
-          titulo="Com a cidade"
+          titulo="Supervisores selecionados"
           itens={com}
-          vazio="Nenhuma supervisão respondendo por esta cidade."
+          vazio="Nenhum supervisor responde por esta cidade."
           atribuidas
           onToggle={onToggle}
         />
         <GrupoSupervisoes
-          titulo="Sem a cidade"
+          titulo="Supervisores disponíveis"
           itens={sem}
-          vazio="Todas as supervisões desta coordenação já têm a cidade."
+          vazio={
+            recorte === "todos"
+              ? "Todos os supervisores desta coordenação já têm a cidade."
+              : `Nenhum supervisor disponível ${recorte === "com" ? "com" : "sem"} outras cidades.`
+          }
+          outras={outrasCidades}
+          acao={
+            <Segmented
+              options={COM_CIDADE}
+              value={recorte}
+              onChange={setRecorte}
+              size="sm"
+              ariaLabel="Filtrar por quem já tem cidade"
+            />
+          }
           onToggle={onToggle}
         />
       </div>
@@ -1067,27 +1160,34 @@ function GrupoSupervisoes({
   itens,
   vazio,
   atribuidas,
+  outras,
+  acao,
   onToggle,
 }: {
   titulo: string;
   itens: SupervisaoNo[];
   vazio: string;
   atribuidas?: boolean;
+  outras?: (s: SupervisaoNo) => string[];
+  acao?: ReactNode;
   onToggle: (codigoLocal: string, bind: boolean) => void;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span
-        style={{
-          fontSize: 10.5,
-          fontWeight: 800,
-          letterSpacing: ".06em",
-          textTransform: "uppercase",
-          color: "var(--s-t3)",
-        }}
-      >
-        {titulo} ({itens.length})
-      </span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span
+          style={{
+            fontSize: 10.5,
+            fontWeight: 800,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            color: "var(--s-t3)",
+          }}
+        >
+          {titulo} ({itens.length})
+        </span>
+        {acao}
+      </div>
 
       {itens.length === 0 ? (
         <p style={{ margin: 0, padding: "4px 2px", fontSize: 12, color: "var(--s-t3)" }}>{vazio}</p>
@@ -1115,10 +1215,21 @@ function GrupoSupervisoes({
                   whiteSpace: "nowrap",
                 }}
               >
+                {s.responsavel ?? "sem responsável"}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "var(--s-t3)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
                 {s.nome}
               </span>
-              <span style={{ fontSize: 11, color: "var(--s-t3)" }}>{s.responsavel ?? "sem responsável"}</span>
             </span>
+            <OutrasCidadesBadge cidades={outras?.(s) ?? []} />
             <ActionPill
               tone={atribuidas ? "neutral" : "brand"}
               label={`${atribuidas ? "Remover de" : "Atribuir a"} ${s.nome}`}
