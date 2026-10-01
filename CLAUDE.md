@@ -8,6 +8,24 @@ tokens, typography, shadcn primitives) and the recurring component patterns.
 Style with tokens (never raw hex), reuse the shared primitives, and keep
 user-facing copy in pt-BR.**
 
+## Skills — load before the work they cover
+
+The project skills in `.claude/skills/` are part of these rules. Load the
+matching one **before** starting; when a skill and the surrounding code
+disagree, the skill wins — this codebase has drift, do not copy it.
+
+- `code-style` — **before writing or reviewing any code.** Formatting, naming,
+  SQL parameterization, comments, and language: **pt-BR in the UI, English in
+  identifiers/comments/docs** (warehouse column names and domain words stay
+  pt-BR).
+- `databricks-first` — before touching any table, view, column, indicator or SQL.
+- `databricks-readonly` — how to query the warehouse through `scripts/`.
+- `databricks-schema-sync` — when the real schema drifts from mock/types/docs.
+- `frontend-design` — when building or reshaping UI (with README.md).
+- `vercel-react-best-practices` — when writing React/Next.js code (perf).
+- `verify-ui` — before claiming a visual/interactive change works.
+- `databricks-mcp` is **obsolete** (the MCP was removed); use `databricks-readonly`.
+
 ## Databricks access is READ-ONLY — hard rule
 
 Databricks access goes through the **read-only scripts in `scripts/`** (they use

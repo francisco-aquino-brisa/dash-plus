@@ -1,5 +1,8 @@
 # City scope by coordenação and supervisão
 
+> The two-level binding and the exclusion of the supervisões with no
+> coordenação above are superseded by [ADR 0009](./0009-city-binding-at-any-level.md).
+
 Adds a second data-scope axis. **ADR 0004/0007** decide what a user may open;
 `lib/auth/scope.ts` narrows the rows of facts that carry a person. City cubes
 carry no person, so until now the Cidades screen was the one screen a permitted

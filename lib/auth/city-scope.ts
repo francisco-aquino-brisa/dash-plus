@@ -4,19 +4,19 @@ import "server-only";
  * Data scope — the city axis.
  *
  * The person axis (`lib/auth/scope.ts`) narrows facts that carry a CPF. City
- * cubes carry none, so they need this: `tb_supervisao_cidades` binds RH nodes to
- * cities at two levels — a coordenação holds the pool, and the supervisões under
- * it split that pool (ADR 0008).
+ * cubes carry none, so they need this: `tb_supervisao_cidades` binds RH nodes of
+ * any level but liderança to cities, each node drawing from the nearest holder
+ * above it (ADR 0008, 0009).
  *
  * Propagation, both directions, over `id_estrutura` (a materialized path):
  *
  *   • up — a gestor sees every city bound anywhere inside a subtree they answer
- *     for, which for a coordenador is their pool plus whatever the supervisões
- *     hold (a subset of it);
+ *     for: their own pool plus whatever the nodes below hold (a subset of it);
  *   • down — everyone else sees the cities of the NEAREST BINDABLE node above
- *     them, and only that node's. Not the union of the ancestors: a promotor
- *     under an empty supervisão must see nothing, never the coordenação's whole
- *     pool, which belongs to the sibling supervisões too.
+ *     them, and only that node's, even when it is empty. Not the union of the
+ *     ancestors: a promotor under an empty supervisão must see nothing, never
+ *     the pool above, which belongs to the sibling supervisões too. Liderança is
+ *     not bindable, so it never stands in the way.
  *
  * The binding set is small (a few hundred rows), so it is read whole and the
  * prefix logic runs here rather than as an OR-chain in SQL.
@@ -27,7 +27,8 @@ import { cache } from "react";
 import { isDatabricks } from "@/lib/data/client";
 import { DatabricksDataClient } from "@/lib/data/databricks";
 import { T } from "@/lib/data/admin/tables";
-import { HIERARQUIA, HIERARQUIA_RH, collapsePrefixes, cpfDigits } from "@/lib/data/scope-sql";
+import { RH_ATUAL, isBindable } from "@/lib/data/estrutura-sql";
+import { HIERARQUIA, collapsePrefixes, cpfDigits } from "@/lib/data/scope-sql";
 import { getSession } from "./session";
 import { findManagedNodes } from "./scope";
 import type { SessionUser } from "./jwt";
@@ -62,16 +63,11 @@ async function queryOwnPaths(cpf: string): Promise<string[]> {
  * its team from inheriting the coordenação's pool.
  */
 async function queryBindableNodes(): Promise<BindableNode[]> {
-  const rh = `(SELECT codigo_local, id_estrutura, id_estrutura_pai, nivel
-                 FROM ${HIERARQUIA_RH}
-                WHERE data_carga = (SELECT max(data_carga) FROM ${HIERARQUIA_RH}))`;
   const rows = await new DatabricksDataClient().query<Record<string, unknown>>(
     `SELECT n.id_estrutura, v.revan_cidade_id
-       FROM ${rh} n
+       FROM ${RH_ATUAL} n
        LEFT JOIN ${T.supervisaoCidades} v ON v.codigo_local = n.codigo_local
-       LEFT JOIN ${rh} p ON p.id_estrutura = n.id_estrutura_pai
-      WHERE n.nivel = 'coordenacao'
-         OR (n.nivel = 'supervisao' AND p.nivel = 'coordenacao')`,
+      WHERE ${isBindable("n")}`,
   );
   const byPath = new Map<string, BindableNode>();
 

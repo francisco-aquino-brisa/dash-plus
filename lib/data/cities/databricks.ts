@@ -582,7 +582,7 @@ export async function databricksCityDataset(): Promise<CityDataset> {
 export function aplicarEstrutura(records: CityIndicatorRecord[], vinculos: VinculoEstrutura[]): void {
   const ordenado = [...vinculos].sort(
     (a, b) =>
-      a.coordenacao.nome.localeCompare(b.coordenacao.nome, "pt-BR") ||
+      (a.coordenacao?.nome ?? "").localeCompare(b.coordenacao?.nome ?? "", "pt-BR") ||
       (a.supervisao?.nome ?? "").localeCompare(b.supervisao?.nome ?? "", "pt-BR"),
   );
   const porCidade = new Map<string, VinculoEstrutura>();
@@ -599,7 +599,7 @@ export function aplicarEstrutura(records: CityIndicatorRecord[], vinculos: Vincu
     if (!v) continue;
 
     r.gerencia = v.gerencia?.nome ?? "";
-    r.coordenacao = v.coordenacao.nome;
+    r.coordenacao = v.coordenacao?.nome ?? "";
     r.supervisao = v.supervisao?.nome ?? "";
   }
 }

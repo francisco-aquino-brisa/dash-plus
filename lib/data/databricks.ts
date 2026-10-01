@@ -35,7 +35,14 @@ function connection(): Promise<Connection> {
   }));
 }
 
-async function discard(): Promise<void> {
+/**
+ * Drop `failed` only if it is still the shared handle. Concurrent queries fail
+ * together when the session dies, and each one retries: without this check the
+ * second to fail would close the fresh connection the first just opened.
+ */
+async function discard(failed: Promise<Connection>): Promise<void> {
+  if (g.__brisaDbx !== failed) return;
+
   const current = g.__brisaDbx;
 
   g.__brisaDbx = undefined;
@@ -64,17 +71,19 @@ async function discard(): Promise<void> {
  */
 export class DatabricksDataClient implements DataClient {
   async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
+    const conn = connection();
+
     try {
-      return await run<T>(sql, params);
+      return await run<T>(conn, sql, params);
     } catch (err) {
       // The session can expire or the socket drop under a statement that would
       // have worked, so retry once on a fresh handle. A bad statement is not the
       // connection's fault: it neither retries nor costs everyone the handle.
       if (unrecoverable(err)) throw err;
 
-      await discard();
+      await discard(conn);
 
-      return run<T>(sql, params);
+      return run<T>(connection(), sql, params);
     }
   }
 }
@@ -93,8 +102,8 @@ function unrecoverable(err: unknown): boolean {
   );
 }
 
-async function run<T>(sql: string, params: unknown[]): Promise<T[]> {
-  const { session } = await connection();
+async function run<T>(conn: Promise<Connection>, sql: string, params: unknown[]): Promise<T[]> {
+  const { session } = await conn;
   const op = await session.executeStatement(sql, {
     runAsync: true,
     ordinalParameters: params as DBSQLParameterValue[],

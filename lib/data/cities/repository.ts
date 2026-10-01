@@ -54,7 +54,7 @@ export async function getVinculosEstrutura(dataset: CityDataset): Promise<Vincul
   const { estruturaWatermark, readVinculosEstrutura } = await import("./estrutura");
 
   return cachedByWatermark<VinculoEstrutura[]>(
-    "cities:estrutura:v1",
+    "cities:estrutura:v2",
     await estruturaWatermark(),
     readVinculosEstrutura,
   );

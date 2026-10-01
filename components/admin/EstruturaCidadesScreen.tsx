@@ -1,7 +1,16 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Check, MapPin, Users, UserRound } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  MapPin,
+  Users,
+  UserRound,
+} from "lucide-react";
 import { AdminModal, ModalHeader, ModalShell } from "./AdminModal";
 import { AdminScreen } from "./AdminScreen";
 import { Panel, PrimaryButton, SearchInput, SecondaryButton } from "./primitives";
@@ -10,16 +19,12 @@ import { useAdminAction } from "./useAdminAction";
 import { Segmented } from "@/components/ui/segmented";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { limparVinculoOrfao, salvarVinculos } from "@/app/(app)/admin/actions";
-import type { CidadeOpcao, EstruturaNo, SupervisaoNo, VinculoOrfao } from "@/lib/data/admin/types";
+import { nivelRhLabel } from "@/lib/data/admin/derive";
+import { dependents, descendants, poolOwner } from "@/lib/data/admin/tree-pool";
+import type { CidadeOpcao, EstruturaNo, VinculoOrfao } from "@/lib/data/admin/types";
 
-type Tab = "coordenacao" | "supervisao";
 type Mode = "responsavel" | "cidade";
 type ComCidade = "todos" | "com" | "sem";
-
-const TABS = [
-  { value: "coordenacao" as const, label: "Coordenação" },
-  { value: "supervisao" as const, label: "Supervisão" },
-];
 
 const MODES = [
   { value: "responsavel" as const, label: "Por responsável" },
@@ -32,37 +37,41 @@ const COM_CIDADE = [
   { value: "sem" as const, label: "Sem cidade" },
 ];
 
+const EMPTY = new Set<string>();
+
 const pairKey = (codigoLocal: string, cidadeId: number | string) => `${codigoLocal}|${cidadeId}`;
 
-/** The city whose supervisões are being picked, from inside a coordenação. */
+/** The city whose nodes below are being picked, from inside the node that holds it. */
 interface Distribuicao {
   cidadeId: number;
   cidade: string;
-  coordenacao: EstruturaNo;
+  node: EstruturaNo;
 }
 
 interface Cascade {
   codigoLocal: string;
   cidadeId: number;
   cidade: string;
-  coordenacao: string;
-  supervisoes: SupervisaoNo[];
+  node: string;
+  affected: EstruturaNo[];
 }
 
 export function EstruturaCidadesScreen({
-  coordenacoes,
-  supervisoes,
+  nodes,
   cidades,
   orfaos,
+  failed,
 }: {
-  coordenacoes: EstruturaNo[];
-  supervisoes: SupervisaoNo[];
+  nodes: EstruturaNo[];
   cidades: CidadeOpcao[];
   orfaos: VinculoOrfao[];
+  failed: boolean;
 }) {
-  const [tab, setTab] = useState<Tab>("coordenacao");
   const [mode, setMode] = useState<Mode>("responsavel");
   const [focused, setFocused] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set(nodes.filter((n) => !n.parentCodigoLocal).map((n) => n.codigoLocal)),
+  );
   const [onlyUnbound, setOnlyUnbound] = useState(false);
   const [cascade, setCascade] = useState<Cascade | null>(null);
   const [distribuicao, setDistribuicao] = useState<Distribuicao | null>(null);
@@ -74,11 +83,8 @@ export function EstruturaCidadesScreen({
    * no-ops, and a move back to where it started stops counting as pending.
    */
   const base = useMemo(
-    () =>
-      new Set(
-        [...coordenacoes, ...supervisoes].flatMap((n) => n.cidadeIds.map((id) => pairKey(n.codigoLocal, id))),
-      ),
-    [coordenacoes, supervisoes],
+    () => new Set(nodes.flatMap((n) => n.cidadeIds.map((id) => pairKey(n.codigoLocal, id)))),
+    [nodes],
   );
   const [deltas, setDeltas] = useState<Map<string, boolean>>(new Map());
 
@@ -105,56 +111,67 @@ export function EstruturaCidadesScreen({
   const savedByCity = useMemo(() => groupBy(base, "city"), [base]);
 
   const cityById = useMemo(() => new Map(cidades.map((c) => [String(c.id), c])), [cidades]);
-  const nodeByCodigo = useMemo(
-    () => new Map([...coordenacoes, ...supervisoes].map((n) => [n.codigoLocal, n])),
-    [coordenacoes, supervisoes],
-  );
+  const byCode = useMemo(() => new Map(nodes.map((n) => [n.codigoLocal, n])), [nodes]);
+  const childNodes = useMemo(() => {
+    const map = new Map<string, EstruturaNo[]>();
 
-  const poolOf = (coordenacaoCodigo: string) => citiesByNode.get(coordenacaoCodigo) ?? new Set<string>();
+    for (const n of nodes) {
+      if (n.parentCodigoLocal) map.set(n.parentCodigoLocal, [...(map.get(n.parentCodigoLocal) ?? []), n]);
+    }
+
+    for (const list of map.values()) list.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
+    return map;
+  }, [nodes]);
+
+  const ownerOf = (codigo: string) => poolOwner(codigo, byCode, citiesByNode);
+
+  /** Null when nothing above holds cities — the node may take any operated city. */
+  const poolOf = (codigo: string) => {
+    const owner = ownerOf(codigo);
+
+    return owner ? (citiesByNode.get(owner.codigoLocal) ?? EMPTY) : null;
+  };
+
+  const cityName = (id: number | string) => cityById.get(String(id))?.nome ?? `#${id}`;
 
   function setDelta(codigoLocal: string, cidadeId: number | string, bind: boolean) {
     setError(null);
     setDeltas((prev) => new Map(prev).set(pairKey(codigoLocal, cidadeId), bind));
   }
 
-  function moveSupervisao(codigoLocal: string, cidadeId: number, bind: boolean) {
-    setDelta(codigoLocal, cidadeId, bind);
+  function includeAll(codigoLocal: string, cidadeIds: string[]) {
+    setError(null);
+    setDeltas((prev) => {
+      const next = new Map(prev);
+
+      for (const id of cidadeIds) next.set(pairKey(codigoLocal, id), true);
+
+      return next;
+    });
   }
 
   /**
-   * Dropping a city from a coordenação drops it from the supervisões below, so
-   * it asks first and then stages every removal — the server recomputes the same
+   * Dropping a city from a node drops it from every node below, so it asks
+   * first and then stages every removal — the server recomputes the same
    * cascade on save, this is what makes it visible before it happens.
    */
-  function moveCoordenacao(codigoLocal: string, cidadeId: number, bind: boolean) {
+  function move(codigoLocal: string, cidadeId: number, bind: boolean) {
     if (bind) return setDelta(codigoLocal, cidadeId, true);
 
-    const afetadas = supervisoes.filter(
-      (s) =>
-        s.coordenacaoCodigoLocal === codigoLocal &&
-        (citiesByNode.get(s.codigoLocal)?.has(String(cidadeId)) ?? false),
-    );
+    const node = byCode.get(codigoLocal);
+    const affected = node
+      ? descendants(node, nodes).filter((d) => citiesByNode.get(d.codigoLocal)?.has(String(cidadeId)))
+      : [];
 
-    if (afetadas.length === 0) return setDelta(codigoLocal, cidadeId, false);
+    if (affected.length === 0) return setDelta(codigoLocal, cidadeId, false);
 
     setCascade({
       codigoLocal,
       cidadeId,
-      cidade: cityById.get(String(cidadeId))?.nome ?? `#${cidadeId}`,
-      coordenacao: nodeByCodigo.get(codigoLocal)?.nome ?? codigoLocal,
-      supervisoes: afetadas,
-    });
-  }
-
-  function abrirDistribuicao(coordenacaoCodigo: string, cidadeId: number) {
-    const coordenacao = coordenacoes.find((c) => c.codigoLocal === coordenacaoCodigo);
-
-    if (!coordenacao) return;
-
-    setDistribuicao({
-      cidadeId,
-      cidade: cityById.get(String(cidadeId))?.nome ?? `#${cidadeId}`,
-      coordenacao,
+      cidade: cityName(cidadeId),
+      node: node?.nome ?? codigoLocal,
+      affected,
     });
   }
 
@@ -166,7 +183,7 @@ export function EstruturaCidadesScreen({
       const next = new Map(prev);
 
       next.set(pairKey(cascade.codigoLocal, cascade.cidadeId), false);
-      for (const s of cascade.supervisoes) next.set(pairKey(s.codigoLocal, cascade.cidadeId), false);
+      for (const d of cascade.affected) next.set(pairKey(d.codigoLocal, cascade.cidadeId), false);
 
       return next;
     });
@@ -187,11 +204,27 @@ export function EstruturaCidadesScreen({
     );
   }
 
-  // The focused row belongs to whichever list the tab/mode puts first, so it
-  // cannot survive either switch.
-  function switchTab(next: Tab) {
-    setTab(next);
-    setFocused(null);
+  function select(codigo: string) {
+    setFocused(codigo);
+    setExpanded((prev) => {
+      const next = new Set(prev).add(codigo);
+
+      for (let pai = byCode.get(codigo)?.parentCodigoLocal; pai; pai = byCode.get(pai)?.parentCodigoLocal) {
+        next.add(pai);
+      }
+
+      return next;
+    });
+  }
+
+  function toggle(codigo: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+
+      if (!next.delete(codigo)) next.add(codigo);
+
+      return next;
+    });
   }
 
   function switchMode(next: Mode) {
@@ -199,36 +232,49 @@ export function EstruturaCidadesScreen({
     setFocused(null);
   }
 
-  const byCoordenacao = tab === "coordenacao";
   const byResponsavel = mode === "responsavel";
-  const alert = buildAlert({
-    byCoordenacao,
-    byResponsavel,
-    coordenacoes,
-    supervisoes,
-    cidades,
-    citiesByNode,
-    nodesByCity,
-  });
+  const underPool = nodes.filter((n) => ownerOf(n.codigoLocal));
+  const alert = byResponsavel
+    ? {
+        n: underPool.filter((n) => (citiesByNode.get(n.codigoLocal)?.size ?? 0) === 0).length,
+        total: underPool.length,
+        texto:
+          "nós com cidades acima ainda não têm cidade própria. As equipes deles não enxergam cidade nenhuma.",
+      }
+    : {
+        n: cidades.filter((c) => !nodesByCity.has(String(c.id))).length,
+        total: cidades.length,
+        texto: "cidades ainda sem nenhum nó. Fora os admins, ninguém as enxerga.",
+      };
   const filter = {
-    label: byResponsavel ? "Só sem cidade" : byCoordenacao ? "Só sem coordenação" : "Só sem supervisão",
+    label: byResponsavel ? "Só sem cidade" : "Só sem nó",
     on: onlyUnbound,
     onToggle: () => setOnlyUnbound((v) => !v),
   };
+  const current = byResponsavel && focused ? byCode.get(focused) : undefined;
 
   return (
     <AdminScreen
       title="Cidades por estrutura"
-      subtitle="A coordenação recebe as cidades; as supervisões abaixo dela dividem esse conjunto."
+      subtitle="Qualquer nível do RH pode receber cidades. Quem está abaixo só pode receber o que o nó acima já tem."
       extra={
         <>
-          <Segmented options={TABS} value={tab} onChange={switchTab} ariaLabel="Nível" />
           <Segmented options={MODES} value={mode} onChange={switchMode} ariaLabel="Modo de vínculo" />
           <FilterChip filter={filter} />
         </>
       }
     >
-      {alert.n > 0 && (
+      {failed && (
+        <Panel style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+          <MapPin size={16} style={{ color: "var(--s-bad)", flexShrink: 0 }} />
+          <span style={{ fontSize: 13, color: "var(--s-t2)" }}>
+            Não foi possível carregar a estrutura ou as cidades do Databricks. Use <strong>Atualizar</strong>{" "}
+            para tentar de novo.
+          </span>
+        </Panel>
+      )}
+
+      {!failed && alert.n > 0 && (
         <Panel style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
           <MapPin size={16} style={{ color: "var(--s-warn)", flexShrink: 0 }} />
           <span style={{ fontSize: 13, color: "var(--s-t2)" }}>
@@ -237,36 +283,62 @@ export function EstruturaCidadesScreen({
         </Panel>
       )}
 
-      {byCoordenacao ? (
-        <CoordenacaoTab
-          coordenacoes={coordenacoes}
-          supervisoes={supervisoes}
-          cidades={cidades}
-          citiesByNode={citiesByNode}
-          nodesByCity={nodesByCity}
-          savedByNode={savedByNode}
-          savedByCity={savedByCity}
-          mode={mode}
-          onlyUnbound={onlyUnbound}
-          focused={focused}
-          onFocus={setFocused}
-          onMove={moveCoordenacao}
-          onDistribuir={abrirDistribuicao}
-        />
+      {byResponsavel ? (
+        <div className="grid gap-3.5 lg:grid-cols-3">
+          <Tree
+            nodes={nodes}
+            childNodes={childNodes}
+            citiesByNode={citiesByNode}
+            savedByNode={savedByNode}
+            hasOwner={(codigo) => ownerOf(codigo) !== null}
+            onlyUnbound={onlyUnbound}
+            expanded={expanded}
+            selected={focused}
+            onSelect={select}
+            onToggle={toggle}
+          />
+          {current ? (
+            <NodeDetail
+              key={current.codigoLocal}
+              node={current}
+              nodes={nodes}
+              byCode={byCode}
+              childNodes={childNodes.get(current.codigoLocal) ?? []}
+              cidades={cidades}
+              citiesByNode={citiesByNode}
+              nodesByCity={nodesByCity}
+              owner={ownerOf(current.codigoLocal)}
+              pool={poolOf(current.codigoLocal)}
+              onSelect={select}
+              onMove={move}
+              onIncludeAll={includeAll}
+              onDistribuir={(cidadeId) =>
+                setDistribuicao({ cidadeId, cidade: cityName(cidadeId), node: current })
+              }
+            />
+          ) : (
+            <div className="lg:col-span-2">
+              <Panel style={{ padding: 24, minHeight: 560 }}>
+                <p style={{ margin: 0, fontSize: 13, color: "var(--s-t3)" }}>
+                  Selecione um nó na estrutura para ver e atribuir as cidades dele.
+                </p>
+              </Panel>
+            </div>
+          )}
+        </div>
       ) : (
-        <SupervisaoTab
-          supervisoes={supervisoes}
+        <ByCity
+          nodes={nodes}
+          byCode={byCode}
           cidades={cidades}
           citiesByNode={citiesByNode}
           nodesByCity={nodesByCity}
-          savedByNode={savedByNode}
           savedByCity={savedByCity}
           poolOf={poolOf}
-          mode={mode}
           onlyUnbound={onlyUnbound}
           focused={focused}
           onFocus={setFocused}
-          onMove={moveSupervisao}
+          onMove={move}
         />
       )}
 
@@ -301,12 +373,10 @@ export function EstruturaCidadesScreen({
       {distribuicao && (
         <DistribuirModal
           alvo={distribuicao}
-          supervisoes={supervisoes.filter(
-            (s) => s.coordenacaoCodigoLocal === distribuicao.coordenacao.codigoLocal,
-          )}
+          childNodes={childNodes.get(distribuicao.node.codigoLocal) ?? []}
           citiesByNode={citiesByNode}
           cityById={cityById}
-          onToggle={(codigoLocal, bind) => setDelta(codigoLocal, distribuicao.cidadeId, bind)}
+          onToggle={(codigoLocal, bind) => move(codigoLocal, distribuicao.cidadeId, bind)}
           onClose={() => setDistribuicao(null)}
         />
       )}
@@ -315,20 +385,19 @@ export function EstruturaCidadesScreen({
         <AdminModal
           open
           onClose={() => setCascade(null)}
-          eyebrow={cascade.coordenacao}
-          title={`Remover ${cascade.cidade} da coordenação?`}
+          eyebrow={cascade.node}
+          title={`Remover ${cascade.cidade}?`}
           onSubmit={confirmCascade}
-          submitLabel="Remover das duas pontas"
+          submitLabel="Remover de todos"
           busy={busy}
         >
           <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--s-t2)" }}>
-            {cascade.supervisoes.length} supervisão(ões) abaixo respondem por essa cidade e vão perdê-la
-            junto:
+            {cascade.affected.length} nó(s) abaixo respondem por essa cidade e vão perdê-la junto:
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflow: "auto" }}>
-            {cascade.supervisoes.map((s) => (
+            {cascade.affected.map((d) => (
               <span
-                key={s.codigoLocal}
+                key={d.codigoLocal}
                 style={{
                   padding: "8px 11px",
                   borderRadius: 10,
@@ -337,8 +406,8 @@ export function EstruturaCidadesScreen({
                   color: "var(--s-t2)",
                 }}
               >
-                {s.nome}
-                {s.responsavel && ` · ${s.responsavel}`}
+                {d.nome}
+                {d.responsavel && ` · ${d.responsavel}`}
               </span>
             ))}
           </div>
@@ -346,62 +415,6 @@ export function EstruturaCidadesScreen({
       )}
     </AdminScreen>
   );
-}
-
-function buildAlert({
-  byCoordenacao,
-  byResponsavel,
-  coordenacoes,
-  supervisoes,
-  cidades,
-  citiesByNode,
-  nodesByCity,
-}: {
-  byCoordenacao: boolean;
-  byResponsavel: boolean;
-  coordenacoes: EstruturaNo[];
-  supervisoes: SupervisaoNo[];
-  cidades: CidadeOpcao[];
-  citiesByNode: Map<string, Set<string>>;
-  nodesByCity: Map<string, Set<string>>;
-}) {
-  const heldBy = (nodes: { codigoLocal: string }[], cidadeId: number) => {
-    const holders = nodesByCity.get(String(cidadeId));
-
-    return holders ? nodes.some((n) => holders.has(n.codigoLocal)) : false;
-  };
-
-  if (byCoordenacao) {
-    return byResponsavel
-      ? {
-          n: coordenacoes.filter((c) => (citiesByNode.get(c.codigoLocal)?.size ?? 0) === 0).length,
-          total: coordenacoes.length,
-          texto: "coordenações ainda sem cidade. Ninguém abaixo delas enxerga cidade nenhuma.",
-        }
-      : {
-          n: cidades.filter((c) => !heldBy(coordenacoes, c.id)).length,
-          total: cidades.length,
-          texto: "cidades ainda sem coordenação. Fora os admins, ninguém as enxerga.",
-        };
-  }
-
-  if (byResponsavel) {
-    return {
-      n: supervisoes.filter((s) => (citiesByNode.get(s.codigoLocal)?.size ?? 0) === 0).length,
-      total: supervisoes.length,
-      texto: "supervisões ainda sem cidade. A equipe delas não enxerga cidade nenhuma.",
-    };
-  }
-
-  // Only cities that a coordenação already holds can be distributed, so the
-  // denominator here is the pool, not the whole organograma.
-  const naCoordenacao = cidades.filter((c) => heldBy(coordenacoes, c.id));
-
-  return {
-    n: naCoordenacao.filter((c) => !heldBy(supervisoes, c.id)).length,
-    total: naCoordenacao.length,
-    texto: "cidades da coordenação ainda não foram distribuídas a uma supervisão.",
-  };
 }
 
 function groupBy(pairs: ReadonlySet<string>, by: "node" | "city"): Map<string, Set<string>> {
@@ -418,292 +431,476 @@ function groupBy(pairs: ReadonlySet<string>, by: "node" | "city"): Map<string, S
   return map;
 }
 
-interface TabProps {
+function nodeRow(n: EstruturaNo, citiesByNode: Map<string, Set<string>>, pai?: EstruturaNo): Row {
+  return {
+    key: n.codigoLocal,
+    title: n.nome,
+    subtitle: [
+      nivelRhLabel(n.nivel),
+      n.responsavel ?? "sem responsável",
+      `${citiesByNode.get(n.codigoLocal)?.size ?? 0} cidade(s)`,
+      pai && `em ${pai.nome}`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    search: [n.nome, n.responsavel, pai?.nome],
+    icon: <UserRound size={15} />,
+  };
+}
+
+/**
+ * The RH tree, bindable levels only. While searching (or filtering) it shows
+ * the matches with the path above them, all open, so a hit is never hidden
+ * inside a collapsed branch; a search hit also brings its branch below.
+ */
+function Tree({
+  nodes,
+  childNodes,
+  citiesByNode,
+  savedByNode,
+  hasOwner,
+  onlyUnbound,
+  expanded,
+  selected,
+  onSelect,
+  onToggle,
+}: {
+  nodes: EstruturaNo[];
+  childNodes: Map<string, EstruturaNo[]>;
+  citiesByNode: Map<string, Set<string>>;
+  savedByNode: Map<string, Set<string>>;
+  hasOwner: (codigo: string) => boolean;
+  onlyUnbound: boolean;
+  expanded: Set<string>;
+  selected: string | null;
+  onSelect: (codigo: string) => void;
+  onToggle: (codigo: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const filtering = query.trim() !== "" || onlyUnbound;
+
+  const visible = useMemo(() => {
+    if (!filtering) return null;
+
+    const byCode = new Map(nodes.map((n) => [n.codigoLocal, n]));
+    const set = new Set<string>();
+    const passes = (n: EstruturaNo) => !onlyUnbound || (savedByNode.get(n.codigoLocal)?.size ?? 0) === 0;
+
+    for (const n of nodes) {
+      if (!textMatches(query, n.nome, n.responsavel) || !passes(n)) continue;
+
+      for (
+        let c: string | null = n.codigoLocal;
+        c && !set.has(c);
+        c = byCode.get(c)?.parentCodigoLocal ?? null
+      ) {
+        set.add(c);
+      }
+
+      if (query.trim() !== "") {
+        for (const d of descendants(n, nodes)) if (passes(d)) set.add(d.codigoLocal);
+      }
+    }
+
+    return set;
+  }, [filtering, nodes, query, onlyUnbound, savedByNode]);
+
+  const roots = nodes
+    .filter((n) => !n.parentCodigoLocal)
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  const rows: { node: EstruturaNo; depth: number }[] = [];
+
+  const walk = (list: EstruturaNo[], depth: number) => {
+    for (const node of list) {
+      if (visible && !visible.has(node.codigoLocal)) continue;
+
+      rows.push({ node, depth });
+
+      if (visible || expanded.has(node.codigoLocal)) walk(childNodes.get(node.codigoLocal) ?? [], depth + 1);
+    }
+  };
+
+  walk(roots, 0);
+
+  // Out of flow so the tree takes the height of the columns beside it instead
+  // of stretching them to its own length.
+  return (
+    <div className="relative h-[560px] lg:h-auto">
+      <Panel style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--s-border)" }}>
+          <SearchInput value={query} onChange={setQuery} placeholder="Buscar nó ou responsável" />
+        </div>
+
+        <div
+          role="tree"
+          aria-label="Estrutura do RH"
+          style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 6 }}
+        >
+          {rows.length === 0 ? (
+            <p style={{ margin: 0, padding: 14, fontSize: 12.5, color: "var(--s-t3)" }}>
+              {onlyUnbound ? "Todo nó já tem cidade." : "Nenhum nó encontrado."}
+            </p>
+          ) : (
+            rows.map(({ node, depth }) => (
+              <TreeRow
+                key={node.codigoLocal}
+                node={node}
+                depth={depth}
+                total={citiesByNode.get(node.codigoLocal)?.size ?? 0}
+                hasOwner={hasOwner(node.codigoLocal)}
+                hasChildren={(childNodes.get(node.codigoLocal)?.length ?? 0) > 0}
+                open={visible !== null || expanded.has(node.codigoLocal)}
+                active={selected === node.codigoLocal}
+                onSelect={() => onSelect(node.codigoLocal)}
+                onToggle={() => onToggle(node.codigoLocal)}
+              />
+            ))
+          )}
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function TreeRow({
+  node,
+  depth,
+  total,
+  hasOwner,
+  hasChildren,
+  open,
+  active,
+  onSelect,
+  onToggle,
+}: {
+  node: EstruturaNo;
+  depth: number;
+  total: number;
+  hasOwner: boolean;
+  hasChildren: boolean;
+  open: boolean;
+  active: boolean;
+  onSelect: () => void;
+  onToggle: () => void;
+}) {
+  const Chevron = open ? ChevronDown : ChevronRight;
+
+  return (
+    <div
+      role="treeitem"
+      aria-selected={active}
+      aria-expanded={hasChildren ? open : undefined}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        paddingLeft: depth * 16,
+        borderRadius: 10,
+        background: active ? "var(--s-brand-weak)" : "transparent",
+      }}
+    >
+      {hasChildren ? (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={`${open ? "Recolher" : "Expandir"} ${node.nome}`}
+          className="bd-ghost"
+          style={{
+            display: "grid",
+            placeItems: "center",
+            width: 24,
+            height: 24,
+            flexShrink: 0,
+            border: 0,
+            borderRadius: 6,
+            background: "transparent",
+            color: "var(--s-t3)",
+            cursor: "pointer",
+          }}
+        >
+          <Chevron size={14} />
+        </button>
+      ) : (
+        <span style={{ width: 24, flexShrink: 0 }} />
+      )}
+      <button
+        type="button"
+        onClick={onSelect}
+        className="bd-ghost"
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "7px 8px",
+          border: 0,
+          borderRadius: 8,
+          background: "transparent",
+          font: "inherit",
+          textAlign: "left",
+          cursor: "pointer",
+        }}
+      >
+        <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+          <span
+            style={{
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: active ? "var(--s-brand)" : "var(--s-t1)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {node.nome}
+          </span>
+          <span
+            style={{
+              fontSize: 11,
+              color: "var(--s-t3)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {nivelRhLabel(node.nivel)} · {node.responsavel ?? "sem responsável"}
+          </span>
+        </span>
+        <NodeStatus total={total} hasOwner={hasOwner} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * An empty node under a pool is the state worth spotting: its team sees no city
+ * at all, since nothing is inherited from above (ADR 0008). An empty node with
+ * nothing above is just not configured yet.
+ */
+function NodeStatus({ total, hasOwner }: { total: number; hasOwner: boolean }) {
+  if (total === 0 && !hasOwner) return null;
+
+  const isEmpty = total === 0;
+
+  return (
+    <span
+      title={isEmpty ? "Há cidades acima, mas nenhuma aqui: a equipe não enxerga cidade nenhuma." : undefined}
+      style={{
+        flexShrink: 0,
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 800,
+        background: isEmpty ? "var(--s-warn-bg)" : "var(--s-brand-weak)",
+        color: isEmpty ? "var(--s-warn)" : "var(--s-brand)",
+      }}
+    >
+      {isEmpty ? "sem cidade" : total}
+    </span>
+  );
+}
+
+function NodeDetail({
+  node,
+  nodes,
+  byCode,
+  childNodes,
+  cidades,
+  citiesByNode,
+  nodesByCity,
+  owner,
+  pool,
+  onSelect,
+  onMove,
+  onIncludeAll,
+  onDistribuir,
+}: {
+  node: EstruturaNo;
+  nodes: EstruturaNo[];
+  byCode: Map<string, EstruturaNo>;
+  childNodes: EstruturaNo[];
   cidades: CidadeOpcao[];
   citiesByNode: Map<string, Set<string>>;
   nodesByCity: Map<string, Set<string>>;
-  savedByNode: Map<string, Set<string>>;
+  owner: EstruturaNo | null;
+  pool: Set<string> | null;
+  onSelect: (codigo: string) => void;
+  onMove: (codigoLocal: string, cidadeId: number, bind: boolean) => void;
+  onIncludeAll: (codigoLocal: string, cidadeIds: string[]) => void;
+  onDistribuir: (cidadeId: number) => void;
+}) {
+  const bound = citiesByNode.get(node.codigoLocal) ?? EMPTY;
+  const holdersBelow = (cidadeId: number) =>
+    childNodes.filter((f) => citiesByNode.get(f.codigoLocal)?.has(String(cidadeId))).length;
+
+  // Filling an empty node makes it the pool of whoever below already holds
+  // cities, so the save refuses unless it covers them — offered here up front.
+  const below =
+    bound.size === 0
+      ? dependents(node, nodes, byCode, new Map([...citiesByNode, [node.codigoLocal, new Set(["*"])]]))
+      : [];
+  const citiesBelow = [...new Set(below.flatMap((d) => [...(citiesByNode.get(d.codigoLocal) ?? [])]))];
+
+  return (
+    <>
+      <Column
+        placeholder={`Cidades de ${node.nome} (${bound.size})`}
+        empty="Nenhuma cidade."
+        hint={
+          citiesBelow.length > 0 && (
+            <>
+              Abaixo já há {citiesBelow.length} cidade(s) em {below.length} nó(s); este nó precisa incluí-las.{" "}
+              <InlineLink onClick={() => onIncludeAll(node.codigoLocal, citiesBelow)}>Incluir</InlineLink>
+            </>
+          )
+        }
+        items={cidades
+          .filter((c) => bound.has(String(c.id)))
+          .map((c) => ({
+            key: String(c.id),
+            title: c.nome,
+            // A city missing from the pool above is a leftover from before
+            // that node was filled.
+            subtitle:
+              pool && !pool.has(String(c.id))
+                ? `fora do conjunto de ${owner?.nome}`
+                : childNodes.length > 0
+                  ? `${holdersBelow(c.id)} de ${childNodes.length} abaixo`
+                  : null,
+            search: [c.nome],
+            extra: childNodes.length > 0 && (
+              <RoundButton
+                Icon={Users}
+                tone="neutral"
+                label={`Quem abaixo responde por ${c.nome}`}
+                onClick={() => onDistribuir(c.id)}
+              />
+            ),
+          }))}
+        action={{ direction: "right", onClick: (k) => onMove(node.codigoLocal, Number(k), false) }}
+      />
+      <Column
+        placeholder="Cidades disponíveis"
+        hint={
+          owner ? (
+            <>
+              Do conjunto de <InlineLink onClick={() => onSelect(owner.codigoLocal)}>{owner.nome}</InlineLink>
+            </>
+          ) : (
+            "Nada acima tem cidades: todas as operadas."
+          )
+        }
+        empty={
+          pool?.size === 0
+            ? `${owner?.nome} ainda não tem cidades.`
+            : owner
+              ? `Tudo de ${owner.nome} já está aqui.`
+              : "Nenhuma cidade disponível."
+        }
+        items={cidades
+          .filter((c) => (pool ? pool.has(String(c.id)) : true) && !bound.has(String(c.id)))
+          .map((c) => {
+            const others = nodesByCity.get(String(c.id))?.size ?? 0;
+
+            return {
+              key: String(c.id),
+              title: c.nome,
+              subtitle: others > 0 ? `já em ${others} nó(s)` : null,
+              search: [c.nome],
+            };
+          })}
+        action={{ direction: "left", onClick: (k) => onMove(node.codigoLocal, Number(k), true) }}
+      />
+    </>
+  );
+}
+
+function InlineLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: 0,
+        border: 0,
+        background: "transparent",
+        color: "var(--s-brand)",
+        font: "inherit",
+        fontWeight: 700,
+        textDecoration: "underline",
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ByCity({
+  nodes,
+  byCode,
+  cidades,
+  citiesByNode,
+  nodesByCity,
+  savedByCity,
+  poolOf,
+  onlyUnbound,
+  focused,
+  onFocus,
+  onMove,
+}: {
+  nodes: EstruturaNo[];
+  byCode: Map<string, EstruturaNo>;
+  cidades: CidadeOpcao[];
+  citiesByNode: Map<string, Set<string>>;
+  nodesByCity: Map<string, Set<string>>;
   savedByCity: Map<string, Set<string>>;
-  mode: Mode;
+  poolOf: (codigo: string) => Set<string> | null;
   onlyUnbound: boolean;
   focused: string | null;
   onFocus: (key: string) => void;
   onMove: (codigoLocal: string, cidadeId: number, bind: boolean) => void;
-}
-
-function CoordenacaoTab({
-  coordenacoes,
-  supervisoes,
-  cidades,
-  citiesByNode,
-  nodesByCity,
-  savedByNode,
-  savedByCity,
-  mode,
-  onlyUnbound,
-  focused,
-  onFocus,
-  onMove,
-  onDistribuir,
-}: TabProps & {
-  coordenacoes: EstruturaNo[];
-  supervisoes: SupervisaoNo[];
-  onDistribuir: (coordenacaoCodigo: string, cidadeId: number) => void;
 }) {
-  const nodeRow = (n: EstruturaNo) => ({
-    key: n.codigoLocal,
-    title: n.nome,
-    subtitle: `${n.responsavel ?? "sem responsável"} · ${citiesByNode.get(n.codigoLocal)?.size ?? 0} cidade(s)`,
-    search: [n.nome, n.responsavel],
-    icon: <UserRound size={15} />,
-  });
-
-  if (mode === "responsavel") {
-    const current = focused ? coordenacoes.find((c) => c.codigoLocal === focused) : undefined;
-    const bound = current ? (citiesByNode.get(current.codigoLocal) ?? new Set<string>()) : new Set<string>();
-    const filhas = current ? supervisoes.filter((s) => s.coordenacaoCodigoLocal === current.codigoLocal) : [];
-    const comACidade = (cidadeId: number) =>
-      filhas.filter((s) => citiesByNode.get(s.codigoLocal)?.has(String(cidadeId)));
-
-    return (
-      <Columns>
-        <Column
-          placeholder="Coordenação"
-          items={coordenacoes
-            .filter((c) => !onlyUnbound || (savedByNode.get(c.codigoLocal)?.size ?? 0) === 0)
-            .map(nodeRow)}
-          selected={focused}
-          onSelect={onFocus}
-          empty={onlyUnbound ? "Toda coordenação já tem cidade." : "Nenhuma coordenação na carga do RH."}
-        />
-        <Column
-          placeholder="Cidades da coordenação"
-          empty={current ? "Nenhuma cidade." : "Selecione uma coordenação à esquerda."}
-          items={cidades
-            .filter((c) => bound.has(String(c.id)))
-            .map((c) => ({
-              key: String(c.id),
-              title: c.nome,
-              subtitle: `${comACidade(c.id).length} de ${filhas.length} supervisão(ões)`,
-              search: [c.nome],
-              extra: current && (
-                <RoundButton
-                  Icon={Users}
-                  tone="neutral"
-                  label={`Supervisões com ${c.nome}`}
-                  onClick={() => onDistribuir(current.codigoLocal, c.id)}
-                />
-              ),
-            }))}
-          action={
-            current && { direction: "right", onClick: (k) => onMove(current.codigoLocal, Number(k), false) }
-          }
-        />
-        <Column
-          placeholder="Cidades disponíveis"
-          empty={current ? "Nenhuma cidade disponível." : "Selecione uma coordenação à esquerda."}
-          items={
-            current
-              ? cidades
-                  .filter((c) => !bound.has(String(c.id)))
-                  .map((c) => {
-                    const others = nodesByCity.get(String(c.id))?.size ?? 0;
-
-                    return {
-                      key: String(c.id),
-                      title: c.nome,
-                      subtitle: others > 0 ? `já em ${others} nó(s)` : null,
-                      search: [c.nome],
-                    };
-                  })
-              : []
-          }
-          action={
-            current && { direction: "left", onClick: (k) => onMove(current.codigoLocal, Number(k), true) }
-          }
-        />
-      </Columns>
-    );
-  }
-
   const current = focused ? cidades.find((c) => String(c.id) === focused) : undefined;
-  const holders = current ? (nodesByCity.get(String(current.id)) ?? new Set<string>()) : new Set<string>();
-
-  const heldByCoordenacao = (cidadeId: number) => {
-    const set = savedByCity.get(String(cidadeId));
-
-    return set ? coordenacoes.some((c) => set.has(c.codigoLocal)) : false;
-  };
-
-  return (
-    <Columns>
-      <Column
-        placeholder="Cidade"
-        items={cidades
-          .filter((c) => !onlyUnbound || !heldByCoordenacao(c.id))
-          .map((c) => ({
-            key: String(c.id),
-            title: c.nome,
-            subtitle: `${coordenacoes.filter((n) => nodesByCity.get(String(c.id))?.has(n.codigoLocal)).length} coordenação(ões)`,
-            search: [c.nome],
-            icon: <MapPin size={15} />,
-          }))}
-        selected={focused}
-        onSelect={onFocus}
-        empty={onlyUnbound ? "Toda cidade já tem coordenação." : "Nenhuma cidade no organograma atual."}
-      />
-      <Column
-        placeholder="Coordenações com a cidade"
-        empty={current ? "Nenhuma coordenação." : "Selecione uma cidade à esquerda."}
-        items={coordenacoes.filter((c) => holders.has(c.codigoLocal)).map(nodeRow)}
-        action={current && { direction: "right", onClick: (k) => onMove(k, current.id, false) }}
-      />
-      <Column
-        placeholder="Coordenações disponíveis"
-        empty={current ? "Nenhuma coordenação disponível." : "Selecione uma cidade à esquerda."}
-        items={current ? coordenacoes.filter((c) => !holders.has(c.codigoLocal)).map(nodeRow) : []}
-        action={current && { direction: "left", onClick: (k) => onMove(k, current.id, true) }}
-      />
-    </Columns>
-  );
-}
-
-function SupervisaoTab({
-  supervisoes,
-  cidades,
-  citiesByNode,
-  nodesByCity,
-  savedByNode,
-  savedByCity,
-  poolOf,
-  mode,
-  onlyUnbound,
-  focused,
-  onFocus,
-  onMove,
-}: TabProps & { supervisoes: SupervisaoNo[]; poolOf: (codigo: string) => Set<string> }) {
-  const nodeRow = (s: SupervisaoNo) => ({
-    key: s.codigoLocal,
-    title: s.nome,
-    subtitle: `${s.responsavel ?? "sem responsável"} · ${s.coordenacaoNome} · ${citiesByNode.get(s.codigoLocal)?.size ?? 0} cidade(s)`,
-    search: [s.nome, s.responsavel, s.coordenacaoNome],
-    icon: <UserRound size={15} />,
-  });
-
-  if (mode === "responsavel") {
-    const current = focused ? supervisoes.find((s) => s.codigoLocal === focused) : undefined;
-    const bound = current ? (citiesByNode.get(current.codigoLocal) ?? new Set<string>()) : new Set<string>();
-    const pool = current ? poolOf(current.coordenacaoCodigoLocal) : new Set<string>();
-
-    return (
-      <Columns>
-        <Column
-          placeholder="Supervisão"
-          items={supervisoes
-            .filter((s) => !onlyUnbound || (savedByNode.get(s.codigoLocal)?.size ?? 0) === 0)
-            .map(nodeRow)}
-          selected={focused}
-          onSelect={onFocus}
-          empty={onlyUnbound ? "Toda supervisão já tem cidade." : "Nenhuma supervisão sob coordenação."}
-        />
-        <Column
-          placeholder="Cidades da supervisão"
-          empty={current ? "Nenhuma cidade." : "Selecione uma supervisão à esquerda."}
-          items={cidades
-            .filter((c) => bound.has(String(c.id)))
-            .map((c) => ({
-              key: String(c.id),
-              title: c.nome,
-              // A city held by the supervisão but missing from the pool above is
-              // a leftover from before the coordenação level existed.
-              subtitle: pool.has(String(c.id)) ? null : "fora do conjunto da coordenação",
-              search: [c.nome],
-            }))}
-          action={
-            current && { direction: "right", onClick: (k) => onMove(current.codigoLocal, Number(k), false) }
-          }
-        />
-        <Column
-          placeholder="Disponíveis na coordenação"
-          empty={
-            current
-              ? pool.size === 0
-                ? `${current.coordenacaoNome} ainda não tem cidades.`
-                : "Tudo da coordenação já está nesta supervisão."
-              : "Selecione uma supervisão à esquerda."
-          }
-          items={
-            current
-              ? cidades
-                  .filter((c) => pool.has(String(c.id)) && !bound.has(String(c.id)))
-                  .map((c) => {
-                    const irmas = [...(nodesByCity.get(String(c.id)) ?? [])].filter((codigo) =>
-                      supervisoes.some((s) => s.codigoLocal === codigo),
-                    ).length;
-
-                    return {
-                      key: String(c.id),
-                      title: c.nome,
-                      subtitle: irmas > 0 ? `já em ${irmas} supervisão(ões)` : null,
-                      search: [c.nome],
-                    };
-                  })
-              : []
-          }
-          action={
-            current && { direction: "left", onClick: (k) => onMove(current.codigoLocal, Number(k), true) }
-          }
-        />
-      </Columns>
-    );
-  }
-
-  const current = focused ? cidades.find((c) => String(c.id) === focused) : undefined;
-  const holders = current ? (nodesByCity.get(String(current.id)) ?? new Set<string>()) : new Set<string>();
-  // Only a supervisão whose coordenação holds the city may take it.
+  const holders = current ? (nodesByCity.get(String(current.id)) ?? EMPTY) : EMPTY;
+  const row = (n: EstruturaNo) =>
+    nodeRow(n, citiesByNode, n.parentCodigoLocal ? byCode.get(n.parentCodigoLocal) : undefined);
   const eligible = current
-    ? supervisoes.filter((s) => poolOf(s.coordenacaoCodigoLocal).has(String(current.id)))
+    ? nodes.filter((n) => {
+        const pool = poolOf(n.codigoLocal);
+
+        return !holders.has(n.codigoLocal) && (pool === null || pool.has(String(current.id)));
+      })
     : [];
 
-  const heldBySupervisao = (cidadeId: number) => {
-    const set = savedByCity.get(String(cidadeId));
-
-    return set ? supervisoes.some((s) => set.has(s.codigoLocal)) : false;
-  };
-
   return (
     <Columns>
       <Column
         placeholder="Cidade"
         items={cidades
-          .filter((c) => !onlyUnbound || !heldBySupervisao(c.id))
+          .filter((c) => !onlyUnbound || !savedByCity.has(String(c.id)))
           .map((c) => ({
             key: String(c.id),
             title: c.nome,
-            subtitle: `${supervisoes.filter((s) => nodesByCity.get(String(c.id))?.has(s.codigoLocal)).length} supervisão(ões)`,
+            subtitle: `${nodesByCity.get(String(c.id))?.size ?? 0} nó(s)`,
             search: [c.nome],
             icon: <MapPin size={15} />,
           }))}
         selected={focused}
         onSelect={onFocus}
-        empty={onlyUnbound ? "Toda cidade já tem supervisão." : "Nenhuma cidade no organograma atual."}
+        empty={onlyUnbound ? "Toda cidade já tem nó." : "Nenhuma cidade operada."}
       />
       <Column
-        placeholder="Supervisões com a cidade"
-        empty={current ? "Nenhuma supervisão." : "Selecione uma cidade à esquerda."}
-        items={supervisoes.filter((s) => holders.has(s.codigoLocal)).map(nodeRow)}
+        placeholder="Nós com a cidade"
+        empty={current ? "Nenhum nó." : "Selecione uma cidade à esquerda."}
+        items={nodes.filter((n) => holders.has(n.codigoLocal)).map(row)}
         action={current && { direction: "right", onClick: (k) => onMove(k, current.id, false) }}
       />
       <Column
-        placeholder="Supervisões disponíveis"
-        empty={
-          current
-            ? eligible.length === 0
-              ? "Nenhuma coordenação recebeu essa cidade ainda."
-              : "Todas as supervisões elegíveis já têm a cidade."
-            : "Selecione uma cidade à esquerda."
-        }
-        items={eligible.filter((s) => !holders.has(s.codigoLocal)).map(nodeRow)}
+        placeholder="Nós que podem recebê-la"
+        empty={current ? "Nenhum nó pode receber esta cidade." : "Selecione uma cidade à esquerda."}
+        items={eligible.map(row)}
         action={current && { direction: "left", onClick: (k) => onMove(k, current.id, true) }}
       />
     </Columns>
@@ -711,18 +908,7 @@ function SupervisaoTab({
 }
 
 function Columns({ children }: { children: ReactNode }) {
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-        gap: 14,
-        alignItems: "start",
-      }}
-    >
-      {children}
-    </div>
-  );
+  return <div className="grid items-start gap-3.5 lg:grid-cols-3">{children}</div>;
 }
 
 interface Row {
@@ -748,6 +934,7 @@ interface ListFilter {
 
 function Column({
   placeholder,
+  hint,
   items,
   empty,
   selected,
@@ -755,6 +942,7 @@ function Column({
   action,
 }: {
   placeholder: string;
+  hint?: ReactNode;
   items: Row[];
   empty: string;
   selected?: string | null;
@@ -768,9 +956,14 @@ function Column({
     <Panel style={{ display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--s-border)" }}>
         <SearchInput value={query} onChange={setQuery} placeholder={placeholder} />
+        {hint && (
+          <p style={{ margin: "8px 2px 0", fontSize: 11.5, lineHeight: 1.45, color: "var(--s-t3)" }}>
+            {hint}
+          </p>
+        )}
       </div>
 
-      <div style={{ height: 440, overflowY: "auto", padding: 6 }}>
+      <div style={{ height: 480, overflowY: "auto", padding: 6 }}>
         {visible.length === 0 ? (
           <p style={{ margin: 0, padding: 14, fontSize: 12.5, color: "var(--s-t3)" }}>{empty}</p>
         ) : (
@@ -1060,23 +1253,20 @@ function RoundButton({
 }
 
 /**
- * Distributing one city from the coordenação's side: which of its supervisões
- * answer for it. Reaching the supervisões from here is what makes the pairing
- * obvious — the supervisão tab lists all of them at once, where telling whose
- * they are means reading every subtitle.
- *
- * Toggles stage into the same delta map as the columns; the sticky bar saves.
+ * Distributing one city from the side of the node that holds it: which of the
+ * nodes right below answer for it. Toggles stage into the same delta map as the
+ * columns; the sticky bar saves.
  */
 function DistribuirModal({
   alvo,
-  supervisoes,
+  childNodes,
   citiesByNode,
   cityById,
   onToggle,
   onClose,
 }: {
   alvo: Distribuicao;
-  supervisoes: SupervisaoNo[];
+  childNodes: EstruturaNo[];
   citiesByNode: Map<string, Set<string>>;
   cityById: Map<string, CidadeOpcao>;
   onToggle: (codigoLocal: string, bind: boolean) => void;
@@ -1084,10 +1274,9 @@ function DistribuirModal({
 }) {
   const [query, setQuery] = useState("");
   const [recorte, setRecorte] = useState<ComCidade>("todos");
-  const temACidade = (s: SupervisaoNo) =>
-    citiesByNode.get(s.codigoLocal)?.has(String(alvo.cidadeId)) ?? false;
+  const temACidade = (s: EstruturaNo) => citiesByNode.get(s.codigoLocal)?.has(String(alvo.cidadeId)) ?? false;
 
-  const quantasOutras = (s: SupervisaoNo) => {
+  const quantasOutras = (s: EstruturaNo) => {
     const suas = citiesByNode.get(s.codigoLocal);
 
     if (!suas) return 0;
@@ -1095,46 +1284,42 @@ function DistribuirModal({
     return suas.has(String(alvo.cidadeId)) ? suas.size - 1 : suas.size;
   };
 
-  const outrasCidades = (s: SupervisaoNo) =>
+  const outrasCidades = (s: EstruturaNo) =>
     [...(citiesByNode.get(s.codigoLocal) ?? [])]
       .filter((id) => id !== String(alvo.cidadeId))
       .map((id) => cityById.get(id)?.nome ?? `#${id}`)
       .sort((a, b) => a.localeCompare(b, "pt-BR"));
-  const visiveis = supervisoes.filter((s) => textMatches(query, s.nome, s.responsavel));
-  const com = visiveis.filter(temACidade);
-  const sem = visiveis
+  const visible = childNodes.filter((s) => textMatches(query, s.nome, s.responsavel));
+  const com = visible.filter(temACidade);
+  const sem = visible
     .filter((s) => !temACidade(s))
     .filter((s) => recorte === "todos" || (recorte === "com") === quantasOutras(s) > 0);
 
   return (
     <ModalShell open onClose={onClose} maxWidth={520}>
-      <ModalHeader eyebrow={alvo.coordenacao.nome} title={alvo.cidade} onClose={onClose} />
+      <ModalHeader eyebrow={alvo.node.nome} title={alvo.cidade} onClose={onClose} />
 
       <p style={{ margin: 0, fontSize: 12.5, color: "var(--s-t3)" }}>
-        {supervisoes.length === 0
-          ? "Esta coordenação não tem nenhuma supervisão abaixo dela."
-          : `${supervisoes.filter(temACidade).length} de ${supervisoes.length} supervisão(ões) desta coordenação respondem por esta cidade.`}
+        {`${childNodes.filter(temACidade).length} de ${childNodes.length} nó(s) logo abaixo respondem por esta cidade.`}
       </p>
 
-      {supervisoes.length > 0 && (
-        <SearchInput value={query} onChange={setQuery} placeholder="Buscar supervisão ou responsável…" />
-      )}
+      <SearchInput value={query} onChange={setQuery} placeholder="Buscar nó ou responsável…" />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14, maxHeight: 340, overflowY: "auto" }}>
         <GrupoSupervisoes
-          titulo="Supervisores selecionados"
+          titulo="Responsáveis selecionados"
           itens={com}
-          vazio="Nenhum supervisor responde por esta cidade."
+          vazio="Ninguém abaixo responde por esta cidade."
           atribuidas
           onToggle={onToggle}
         />
         <GrupoSupervisoes
-          titulo="Supervisores disponíveis"
+          titulo="Responsáveis disponíveis"
           itens={sem}
           vazio={
             recorte === "todos"
-              ? "Todos os supervisores desta coordenação já têm a cidade."
-              : `Nenhum supervisor disponível ${recorte === "com" ? "com" : "sem"} outras cidades.`
+              ? "Todos os nós abaixo já têm a cidade."
+              : `Ninguém disponível ${recorte === "com" ? "com" : "sem"} outras cidades.`
           }
           outras={outrasCidades}
           acao={
@@ -1165,10 +1350,10 @@ function GrupoSupervisoes({
   onToggle,
 }: {
   titulo: string;
-  itens: SupervisaoNo[];
+  itens: EstruturaNo[];
   vazio: string;
   atribuidas?: boolean;
-  outras?: (s: SupervisaoNo) => string[];
+  outras?: (s: EstruturaNo) => string[];
   acao?: ReactNode;
   onToggle: (codigoLocal: string, bind: boolean) => void;
 }) {
@@ -1245,8 +1430,8 @@ function GrupoSupervisoes({
 }
 
 /**
- * Bindings on a node that is no longer bindable — it left the RH load, changed
- * level, or is one of the supervisões with no coordenação above. They already
+ * Bindings on a node that is no longer bindable — it left the RH load or is a
+ * liderança. They already
  * grant nothing (the scope resolution only reads bindable nodes), so clearing
  * them is hygiene: it also frees the city visibly.
  */
@@ -1267,8 +1452,8 @@ function Orphans({
         Vínculos órfãos ({orfaos.length})
       </span>
       <span style={{ fontSize: 12.5, color: "var(--s-t3)" }}>
-        O nó saiu da estrutura coordenação → supervisão. O vínculo não dá acesso a ninguém e as cidades já
-        estão livres.
+        O nó saiu da carga do RH ou é uma liderança. O vínculo não dá acesso a ninguém e as cidades já estão
+        livres.
       </span>
       {orfaos.map((o) => (
         <div

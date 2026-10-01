@@ -14,12 +14,8 @@ import {
   type HierarquiaCandidate,
   type HierarquiaPessoa,
 } from "@/lib/data/admin/hierarquia";
-import {
-  filterCidadesValidas,
-  readCidadesDosNos,
-  readSupervisoesDaCoordenacao,
-  resolveNos,
-} from "@/lib/data/admin/estrutura-cidades";
+import { filterCidadesValidas, readNodes, readVinculos } from "@/lib/data/admin/estrutura-cidades";
+import { dependents, descendants, poolOwner } from "@/lib/data/admin/tree-pool";
 import type { ActionResult } from "@/lib/data/admin/types";
 import * as write from "@/lib/data/admin/write";
 
@@ -323,17 +319,17 @@ export async function togglePerm(nivelId: number, capId: number, granted: boolea
   return mutate(() => write.setPerm(nivelId, capId, granted), ["/admin/niveis"]);
 }
 
-// ── Cidades por supervisão ───────────────────────────────────────────────────
+// ── Cidades por estrutura ────────────────────────────────────────────────────
 
 /**
  * Apply a batch of (nó, cidade) moves — the unit every pivot of the screen
- * produces, since binding a city to a supervisão and binding a supervisão to a
- * city are the same row.
+ * produces, since binding a city to a node and a node to a city are the same row.
  *
- * Everything is re-resolved server-side (nodes against the current RH load,
- * cities against the current organograma, the pool against what is stored)
- * because this is a data-scope grant: a forged payload would otherwise widen
- * what a whole branch can read.
+ * The whole binding set and the RH tree are re-read here and the batch is
+ * replayed over them, because this is a data-scope grant: a forged payload
+ * would otherwise widen what a whole branch can read. The rules (ADR 0009) are
+ * checked against the state AFTER the batch, so filling a node and handing its
+ * cities down in one save is legitimate.
  */
 export async function salvarVinculos(
   alteracoes: { codigoLocal: string; cidadeId: number; vincular: boolean }[],
@@ -348,86 +344,82 @@ export async function salvarVinculos(
 
   if (moves.length === 0) return { ok: false, error: "Nenhuma alteração para salvar." };
 
-  const codigos = [...new Set(moves.map((a) => a.codigoLocal))];
-  const cidades = [...new Set(moves.map((a) => a.cidadeId))];
-  const [nos, cidadesValidas] = await Promise.all([resolveNos(codigos), filterCidadesValidas(cidades)]);
+  const added = [...new Set(moves.filter((a) => a.vincular).map((a) => a.cidadeId))];
+  const [nodes, stored, cidadesValidas] = await Promise.all([
+    readNodes(),
+    readVinculos(),
+    filterCidadesValidas(added),
+  ]);
+  const byCode = new Map(nodes.map((n) => [n.codigoLocal, n]));
 
-  if (nos.size !== codigos.length) {
-    return { ok: false, error: "Alguma coordenação ou supervisão não está na carga atual do RH." };
+  if (moves.some((a) => !byCode.has(a.codigoLocal))) {
+    return { ok: false, error: "Algum nó não está na carga atual do RH ou não pode receber cidades." };
   }
 
-  if (cidadesValidas.length !== cidades.length) {
+  if (cidadesValidas.length !== added.length) {
     return { ok: false, error: "Alguma cidade não está na lista de cidades operadas." };
   }
 
-  // The pool a supervisão draws from is the coordenação's state AFTER this same
-  // batch: adding a city to the coordenação and handing it to a supervisão in
-  // one save is legitimate, and checking against the stored pool would reject it.
-  const coordenacoes = [
-    ...new Set(
-      moves.map((a) => {
-        const no = nos.get(a.codigoLocal)!;
-
-        return no.nivel === "coordenacao" ? no.codigoLocal : (no.paiCodigoLocal ?? "");
-      }),
-    ),
-  ].filter(Boolean);
-  const stored = await readCidadesDosNos(coordenacoes);
-
-  const poolOf = (codigo: string) => {
-    const pool = new Set(stored.get(codigo) ?? []);
-
-    for (const a of moves) {
-      if (a.codigoLocal !== codigo) continue;
-
-      if (a.vincular) pool.add(a.cidadeId);
-      else pool.delete(a.cidadeId);
-    }
-
-    return pool;
-  };
+  const final = new Map([...stored].map(([codigo, ids]) => [codigo, new Set(ids)]));
+  const citiesOf = (codigo: string) => final.get(codigo) ?? final.set(codigo, new Set()).get(codigo)!;
 
   for (const a of moves) {
-    const no = nos.get(a.codigoLocal)!;
+    if (a.vincular) citiesOf(a.codigoLocal).add(a.cidadeId);
+    else citiesOf(a.codigoLocal).delete(a.cidadeId);
+  }
 
-    if (!a.vincular || no.nivel !== "supervisao") continue;
+  // Dropping a city from a node drops it from every node below, at any depth:
+  // the screen confirms the list, but the cascade itself is recomputed here.
+  for (const a of moves) {
+    if (a.vincular) continue;
 
-    if (!poolOf(no.paiCodigoLocal ?? "").has(a.cidadeId)) {
-      return { ok: false, error: "Só dá para atribuir à supervisão uma cidade que está na coordenação." };
+    for (const d of descendants(byCode.get(a.codigoLocal)!, nodes))
+      final.get(d.codigoLocal)?.delete(a.cidadeId);
+  }
+
+  for (const a of moves) {
+    if (!a.vincular) continue;
+
+    const owner = poolOwner(a.codigoLocal, byCode, final);
+
+    if (owner && !final.get(owner.codigoLocal)?.has(a.cidadeId)) {
+      return { ok: false, error: `Só dá para atribuir cidades que estão em ${owner.nome}.` };
     }
   }
 
-  // Dropping a city from a coordenação drops it from the supervisões below too:
-  // the screen confirms the count, but the cascade itself is recomputed here.
-  const dropped = moves.filter((a) => !a.vincular && nos.get(a.codigoLocal)?.nivel === "coordenacao");
-  const filhas = await readSupervisoesDaCoordenacao([...new Set(dropped.map((a) => a.codigoLocal))]);
-  const cascade = dropped.flatMap((a) =>
-    (filhas.get(a.codigoLocal) ?? []).map((codigoLocal) => ({ codigoLocal, cidadeId: a.cidadeId })),
-  );
-  const pairs = (vincular: boolean) =>
-    moves
-      .filter((a) => a.vincular === vincular)
-      .map((a) => ({ codigoLocal: a.codigoLocal, cidadeId: a.cidadeId }));
-  const toRemove = dedupePairs([...pairs(false), ...cascade]);
+  // A node going from empty to filled becomes the pool of whoever below already
+  // holds cities, so it has to cover them.
+  for (const codigo of new Set(moves.map((a) => a.codigoLocal))) {
+    const after = final.get(codigo);
+
+    if ((stored.get(codigo)?.length ?? 0) > 0 || !after?.size) continue;
+
+    const node = byCode.get(codigo)!;
+
+    for (const d of dependents(node, nodes, byCode, final)) {
+      const outside = [...final.get(d.codigoLocal)!].filter((id) => !after.has(id)).length;
+
+      if (outside > 0) {
+        return {
+          ok: false,
+          error: `${d.nome} já tem ${outside} cidade(s) fora do conjunto de ${node.nome}. Inclua-as em ${node.nome} ou remova-as de ${d.nome}.`,
+        };
+      }
+    }
+  }
+
+  const missing = (a: Map<string, Iterable<number>>, b: Map<string, Set<number>>) =>
+    [...a].flatMap(([codigoLocal, ids]) =>
+      [...ids].filter((id) => !b.get(codigoLocal)?.has(id)).map((cidadeId) => ({ codigoLocal, cidadeId })),
+    );
+  const saved = new Map([...stored].map(([codigo, ids]) => [codigo, new Set(ids)]));
+  const toRemove = missing(saved, final);
+  const toAdd = missing(final, saved);
   const session = await getSession();
 
   return mutate(async () => {
     await write.unlinkParesCidades(toRemove);
-    await write.linkParesCidades(pairs(true), session?.email ?? null);
-  });
-}
-
-function dedupePairs(pares: { codigoLocal: string; cidadeId: number }[]) {
-  const seen = new Set<string>();
-
-  return pares.filter((p) => {
-    const key = `${p.codigoLocal}|${p.cidadeId}`;
-
-    if (seen.has(key)) return false;
-
-    seen.add(key);
-
-    return true;
+    await write.linkParesCidades(toAdd, session?.email ?? null);
   });
 }
 

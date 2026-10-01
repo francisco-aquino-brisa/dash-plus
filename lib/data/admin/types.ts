@@ -89,21 +89,17 @@ export interface CidadeOpcao {
   nome: string;
 }
 
-/** A node that can hold cities: a coordenação, or a supervisão under one. */
+/** An RH node that can hold cities — any level but liderança (ADR 0009). */
 export interface EstruturaNo {
   /** `vw_hierarquia_rh.codigo_local` — the binding key, stable across re-parents. */
   codigoLocal: string;
   idEstrutura: string;
+  nivel: string;
+  parentCodigoLocal: string | null;
   nome: string;
   responsavel: string | null;
   email: string | null;
   cidadeIds: number[];
-}
-
-export interface SupervisaoNo extends EstruturaNo {
-  /** The coordenação above — the pool this supervisão may draw from. */
-  coordenacaoCodigoLocal: string;
-  coordenacaoNome: string;
 }
 
 /** A binding whose node is no longer bindable: inert, and its cities are free again. */
@@ -113,9 +109,8 @@ export interface VinculoOrfao {
 }
 
 export interface EstruturaCidadesData {
-  coordenacoes: EstruturaNo[];
-  /** Only the 281 supervisões that hang under a coordenação; the other 18 are out. */
-  supervisoes: SupervisaoNo[];
+  nodes: EstruturaNo[];
   cidades: CidadeOpcao[];
   orfaos: VinculoOrfao[];
+  failed: boolean;
 }

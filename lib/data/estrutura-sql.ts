@@ -46,3 +46,21 @@ export const RH_ATUAL = `
   (SELECT codigo_local, id_estrutura, id_estrutura_pai, nivel, nome, responsavel, email
      FROM ${HIERARQUIA_RH}
     WHERE data_carga = (SELECT max(data_carga) FROM ${HIERARQUIA_RH}))`;
+
+/**
+ * The RH levels a city can be bound to (ADR 0009). Liderança is left out on
+ * purpose: under the "nearest bindable node wins, even if empty" rule, an empty
+ * liderança would hide its supervisão's cities from the whole team.
+ */
+export const BINDABLE_LEVELS = [
+  "diretoria",
+  "gerencia_executiva",
+  "gerencia_funcional",
+  "coordenacao",
+  "supervisao",
+] as const;
+
+export type BindableLevel = (typeof BINDABLE_LEVELS)[number];
+
+export const isBindable = (alias: string) =>
+  `${alias}.nivel IN (${BINDABLE_LEVELS.map((n) => `'${n}'`).join(", ")})`;

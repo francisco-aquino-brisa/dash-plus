@@ -41,9 +41,10 @@ gambiarra de join por nome de cidade (`cityKey`). O código já foi repontado.
 `tb_usuarios` + `tb_niveis` (ADR 0005) — não afetado.
 
 **Tabela nova do app (2026-09):** `tb_supervisao_cidades` — vínculo
-nó↔cidade (`codigo_local` de `vw_hierarquia_rh` × `revan_cidade_id`) em dois
-níveis (coordenação recebe o conjunto, supervisões abaixo dividem), escrita só
-pelo /admin, base do escopo de cidade ([ADR 0008](adr/0008-city-scope-by-estrutura.md)).
+nó↔cidade (`codigo_local` de `vw_hierarquia_rh` × `revan_cidade_id`) em
+qualquer nível exceto liderança (cada nó recebe só o que o nó acima com cidades
+tem), escrita só pelo /admin, base do escopo de cidade
+([ADR 0008](adr/0008-city-scope-by-estrutura.md), [ADR 0009](adr/0009-city-binding-at-any-level.md)).
 Colunas: `id` (IDENTITY), `codigo_local`, `revan_cidade_id`, `criado_por`,
 `criado_em`, `atualizado_em`.
 
