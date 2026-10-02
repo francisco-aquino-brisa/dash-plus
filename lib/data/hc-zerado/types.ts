@@ -190,7 +190,13 @@ export interface MatrizRow {
 export interface PduDay {
   label: string;
   pdu: number;
+  /** Null on a day nobody active carried weight (Sunday, holiday). */
+  pduDia: number | null;
   producao: number;
+  hcAtivoDia: number;
+  hcAtivoMes: number;
+  vendasAcumuladas: number;
+  diasTrabalhadosAcumulados: number;
 }
 
 /** Bloco 7 — closed-month PDU. */
@@ -205,6 +211,7 @@ export interface PduMonth {
   total: number;
   hcAtivo: number;
   diasUteis: number;
+  diasTrabalhados: number;
 }
 
 /** One day of the selected range. */

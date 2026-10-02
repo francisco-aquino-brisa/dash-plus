@@ -1246,8 +1246,8 @@ function PduBlock({ view, filters }: { view: HcDesempenhoView; filters: HcFilter
       >
         <Users size={12} style={{ flex: "none" }} />
         {mode === "dia"
-          ? "Cálculo: (produção acumulada ÷ dias úteis decorridos) ÷ total de HC ativo."
-          : "Cálculo: (produção dos HCs ativos no fechamento ÷ dias úteis) ÷ total desses mesmos HCs."}
+          ? "Cálculo: vendas acumuladas do HC ativo ÷ dias trabalhados acumulados no mês (sábado vale 0,5; domingo e feriado, 0). O dia de hoje entra só depois de fechar."
+          : "Cálculo: vendas do HC ativo no mês ÷ dias trabalhados de cada HC enquanto ativo (sábado vale 0,5; domingo e feriado, 0)."}
       </p>
     </Block>
   );
@@ -1263,18 +1263,25 @@ function TooltipPduDay({
   if (!active || !payload?.length) return null;
 
   const d = payload[0].payload;
+  const lines: Array<[string, string]> = [
+    ["PDU acumulada", d.pdu.toLocaleString("pt-BR")],
+    ["PDU do dia", d.pduDia === null ? "—" : d.pduDia.toLocaleString("pt-BR")],
+    ["Produção do dia", nf.format(d.producao)],
+    ["HC ativo do dia", nf.format(d.hcAtivoDia)],
+    ["HC que passou como ativo no mês", nf.format(d.hcAtivoMes)],
+    ["Vendas acumuladas", nf.format(d.vendasAcumuladas)],
+    ["Dias trabalhados acumulados", d.diasTrabalhadosAcumulados.toLocaleString("pt-BR")],
+  ];
 
   return (
-    <div style={{ ...tooltipPanel, minWidth: 180 }}>
+    <div style={{ ...tooltipPanel, minWidth: 240 }}>
       <span style={tooltipTitle}>{d.label}</span>
-      <span style={tooltipLine}>
-        <span style={{ opacity: 0.7 }}>PDU acumulada</span>
-        <span className="font-mono">{d.pdu.toLocaleString("pt-BR")}</span>
-      </span>
-      <span style={tooltipLine}>
-        <span style={{ opacity: 0.7 }}>Produção do dia</span>
-        <span className="font-mono">{nf.format(d.producao)}</span>
-      </span>
+      {lines.map(([label, value]) => (
+        <span key={label} style={tooltipLine}>
+          <span style={{ opacity: 0.7 }}>{label}</span>
+          <span className="font-mono">{value}</span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -1330,6 +1337,10 @@ function TooltipPduMonth({
               count is absent, not zero. */}
           {m.hcAtivo > 0 ? nf.format(m.hcAtivo) : "—"} · {m.diasUteis} dias úteis
         </span>
+      </span>
+      <span style={{ ...tooltipLine, fontSize: 11, opacity: 0.7 }}>
+        <span>Dias trabalhados</span>
+        <span className="font-mono">{m.diasTrabalhados.toLocaleString("pt-BR")}</span>
       </span>
     </div>
   );

@@ -57,9 +57,11 @@ pure, so the screen previews exactly what the server enforces.
 ## Consequences
 
 **The admin screen is a tree**, not a tab per level: the node on the left, its
-cities and the available ones on the right, with where the pool comes from and
-the nodes right below it. "Por cidade" lists every node holding the city and
-every node that may receive it.
+cities and the available ones on the right, with where the pool comes from.
+The tree stops above supervisão — users found the extra level hard to read —
+so a supervisão gets its cities from its parent, through the per-city
+"who below answers for it" dialog, or from "Por cidade", which lists every
+node holding the city and every node that may receive it.
 
 **The Cities dashboard filters keep gerência → coordenação → supervisão.** Each
 binding is read off the ancestors of its node; a level the path does not have is

@@ -7,10 +7,10 @@
 // their `?` appears in the SQL text, which is why the row filter (inside the
 // `base` CTE) is always built before the sale expression (used further down).
 
-import { num } from "../_shared";
-import { CIDADE, FERIADO, MONTHS, SOURCE, ATIVO, q } from "./source";
+import { num, todayIso } from "../_shared";
+import { CIDADE, FERIADO, HC_KEY, MONTHS, SOURCE, ATIVO, q } from "./source";
 import { scopePredicate, type ScopeFilter } from "../scope-sql";
-import { hcWhere, vendasExpr, vendasWhere } from "./filters";
+import { hcWhere, vendasExpr } from "./filters";
 import {
   applyGroupCross,
   baseCte,
@@ -350,32 +350,69 @@ function subjectOrder(rows: PersonDay[], view: MatrizView): Map<string, string> 
   return out;
 }
 
-/** Bloco 7 — cumulative daily PDU: (Σ sales ÷ Σ business days) ÷ active HC. */
-function pduDay(servicoRows: ServicoDay[], days: DayAxis[], totalHc: number): PduDay[] {
-  const byDay = new Map<string, number>();
+/**
+ * Bloco 7 — PDU per worked day of the active HC: Σ sales ÷ Σ `dias_trabalhado`
+ * (1 weekday, 0.5 Saturday, 0 Sunday/holiday), so turnover only weighs the days
+ * each person was actually ATIVO. The cumulative restarts on the 1st, and today
+ * is left out — its weight is already whole while its sales are still partial.
+ *
+ * Only the sales carry the sale filters; the weight is the headcount's, so it
+ * keeps every active person whatever serviço or status is selected.
+ */
+function pduDay(rows: PersonDay[], days: DayAxis[]): PduDay[] {
+  const today = todayIso();
+  const byDay = new Map<string, PersonDay[]>();
 
-  for (const r of servicoRows) byDay.set(r.d, (byDay.get(r.d) ?? 0) + r.v);
+  for (const r of rows) {
+    if (r.ativo === 1 && r.k) byDay.set(r.d, [...(byDay.get(r.d) ?? []), r]);
+  }
 
-  let cumulativeVendas = 0;
-  let cumulativeDays = 0;
+  let month = "";
+  let vendasAcumuladas = 0;
+  let diasTrabalhadosAcumulados = 0;
+  let hcMes = new Set<string>();
 
-  return days.map((day) => {
-    if (!day.fimDeSemana && !day.feriado) cumulativeDays += 1;
+  return days
+    .filter((day) => day.data < today)
+    .map((day) => {
+      if (day.data.slice(0, 7) !== month) {
+        month = day.data.slice(0, 7);
+        vendasAcumuladas = 0;
+        diasTrabalhadosAcumulados = 0;
+        hcMes = new Set();
+      }
 
-    const producao = byDay.get(day.data) ?? 0;
+      const pesoByHc = new Map<string, number>();
+      let producao = 0;
 
-    cumulativeVendas += producao;
+      for (const r of byDay.get(day.data) ?? []) {
+        producao += r.v;
+        pesoByHc.set(r.k, Math.max(pesoByHc.get(r.k) ?? 0, r.peso));
+        hcMes.add(r.k);
+      }
 
-    return {
-      label: day.label.replace(" - ", "-").toLowerCase(),
-      pdu: cumulativeDays > 0 && totalHc > 0 ? +(cumulativeVendas / cumulativeDays / totalHc).toFixed(2) : 0,
-      producao,
-    };
-  });
+      const peso = [...pesoByHc.values()].reduce((a, b) => a + b, 0);
+
+      vendasAcumuladas += producao;
+      diasTrabalhadosAcumulados += peso;
+
+      return {
+        label: day.label.replace(" - ", "-").toLowerCase(),
+        pdu: diasTrabalhadosAcumulados > 0 ? +(vendasAcumuladas / diasTrabalhadosAcumulados).toFixed(2) : 0,
+        pduDia: peso > 0 ? +(producao / peso).toFixed(2) : null,
+        producao,
+        hcAtivoDia: pesoByHc.size,
+        hcAtivoMes: hcMes.size,
+        vendasAcumuladas,
+        diasTrabalhadosAcumulados,
+      };
+    });
 }
 
 /**
- * Bloco 7 (monthly) — one point per month up to the range's end date.
+ * Bloco 7 (monthly) — one point per month up to the range's end date, by the
+ * same rule as `pduDay`, so the current month's point equals the daily chart's
+ * last cumulative value.
  *
  * This block deliberately ignores the start date: the original widened it to
  * "2000-01-01" to draw a 12-month history. The source only holds 2026 onward, so
@@ -383,30 +420,34 @@ function pduDay(servicoRows: ServicoDay[], days: DayAxis[], totalHc: number): Pd
  */
 async function pduMonth(f: HcFilters): Promise<PduMonth[]> {
   const params: unknown[] = [];
-  const where = hcWhere(f, params) + vendasWhere(f, params);
+  const where = hcWhere(f, params);
+  const vendas = vendasExpr(f, params);
   const sql = `
     WITH base AS (
-      SELECT date_format(data, 'yyyy-MM') m, data, hash_user, situacao,
-             UPPER(TRIM(servico)) servico, total_vendas, dias_trabalhado
+      SELECT date_format(data, 'yyyy-MM') m, data, ${HC_KEY} k, ${FERIADO} feriado,
+             UPPER(TRIM(servico)) servico, total_vendas, dias_trabalhado,
+             status_venda, indicador, efetivado_mesmo_dia, instalado_mesmo_dia
       FROM ${SOURCE}
       WHERE data >= add_months(DATE'${f.to}', -11) AND data <= DATE'${f.to}'
-        AND UPPER(TRIM(flag_feriado)) = 'NAO'${where}
+        AND data < DATE'${todayIso()}' AND ${ATIVO} = 1${where}
+    ),
+    venda AS (
+      SELECT *, ${vendas} v FROM base WHERE k IS NOT NULL
     ),
     -- One row per person per day; peso is the day's weight (0, 0.5 or 1).
     dia AS (
-      SELECT m, data, hash_user,
+      SELECT m, data, k, MAX(feriado) feriado,
              MAX(dias_trabalhado) peso,
-             SUM(total_vendas) v,
-             SUM(CASE WHEN servico = 'INTERNET' THEN total_vendas ELSE 0 END) ftth,
-             SUM(CASE WHEN servico = 'FWA' THEN total_vendas ELSE 0 END) fwa,
-             SUM(CASE WHEN servico = '5G' THEN total_vendas ELSE 0 END) g5,
-             SUM(CASE WHEN servico IN ('RENOVACAO', 'RENOVAÇÃO') THEN total_vendas ELSE 0 END) renov,
-             MAX(${ATIVO}) ativo
-      FROM base GROUP BY m, data, hash_user
+             SUM(v) v,
+             SUM(CASE WHEN servico = 'INTERNET' THEN v ELSE 0 END) ftth,
+             SUM(CASE WHEN servico = 'FWA' THEN v ELSE 0 END) fwa,
+             SUM(CASE WHEN servico = '5G' THEN v ELSE 0 END) g5,
+             SUM(CASE WHEN servico IN ('RENOVACAO', 'RENOVAÇÃO') THEN v ELSE 0 END) renov
+      FROM venda GROUP BY m, data, k
     )
     SELECT m,
-           COUNT(DISTINCT data) dias,
-           COUNT(DISTINCT CASE WHEN ativo = 1 THEN hash_user END) hc,
+           COUNT(DISTINCT CASE WHEN feriado = 0 THEN data END) dias,
+           COUNT(DISTINCT k) hc,
            SUM(peso) worked,
            SUM(v) total,
            SUM(ftth) ftth, SUM(fwa) fwa, SUM(g5) g5, SUM(renov) renov
@@ -414,7 +455,7 @@ async function pduMonth(f: HcFilters): Promise<PduMonth[]> {
 
   const rows = await q<{
     m: string;
-    days: number;
+    dias: number;
     hc: number;
     worked: number;
     total: number;
@@ -432,8 +473,6 @@ async function pduMonth(f: HcFilters): Promise<PduMonth[]> {
     return {
       month: r.m,
       label: `${MONTHS[Number(month) - 1]} - ${year}`,
-      // Production per WORKED person-day: `dias_trabalhado` already weighs a
-      // half day as 0.5 and an absence as 0. Matches the app being replaced.
       pdu: worked > 0 ? +(total / worked).toFixed(2) : 0,
       ftth: num(r.ftth),
       fwa: num(r.fwa),
@@ -441,7 +480,8 @@ async function pduMonth(f: HcFilters): Promise<PduMonth[]> {
       renovacoes: num(r.renov),
       total,
       hcAtivo: num(r.hc),
-      diasUteis: num(r.days),
+      diasUteis: num(r.dias),
+      diasTrabalhados: worked,
     };
   });
 }
@@ -480,7 +520,6 @@ export async function databricksHcDesempenho(f: HcFilters, view: MatrizView): Pr
   const withData = new Set(personDay.map((r) => r.d));
   const diasUteis = periodDays.filter((d) => withData.has(d) && !holidayByDay.get(d));
   const refDate = diasUteis[diasUteis.length - 1] ?? f.to;
-  const hcAtivo = new Set(personDay.filter((r) => r.ativo === 1 && r.k).map((r) => r.k));
 
   return {
     days,
@@ -496,7 +535,7 @@ export async function databricksHcDesempenho(f: HcFilters, view: MatrizView): Pr
     matriz: {
       [view]: matriz(servicoRows, days, subjectOrder(personDay, view)),
     } as HcDesempenhoView["matriz"],
-    pduDay: pduDay(servicoRows, days, hcAtivo.size),
+    pduDay: pduDay(personDay, days),
     pduMonth: pdum,
     diasUteisElapsed: diasUteis.length,
     refDate,

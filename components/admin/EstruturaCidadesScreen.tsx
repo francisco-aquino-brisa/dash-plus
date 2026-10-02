@@ -449,7 +449,8 @@ function nodeRow(n: EstruturaNo, citiesByNode: Map<string, Set<string>>, pai?: E
 }
 
 /**
- * The RH tree, bindable levels only. While searching (or filtering) it shows
+ * The RH tree, bindable levels down to coordenação — supervisões are handed
+ * their cities from the node above them. While searching (or filtering) it shows
  * the matches with the path above them, all open, so a hit is never hidden
  * inside a collapsed branch; a search hit also brings its branch below.
  */
@@ -478,6 +479,7 @@ function Tree({
 }) {
   const [query, setQuery] = useState("");
   const filtering = query.trim() !== "" || onlyUnbound;
+  const treeChildren = (code: string) => (childNodes.get(code) ?? []).filter(inTree);
 
   const visible = useMemo(() => {
     if (!filtering) return null;
@@ -487,10 +489,16 @@ function Tree({
     const passes = (n: EstruturaNo) => !onlyUnbound || (savedByNode.get(n.codigoLocal)?.size ?? 0) === 0;
 
     for (const n of nodes) {
-      if (!textMatches(query, n.nome, n.responsavel) || !passes(n)) continue;
+      if (!textMatches(query, n.nome, n.responsavel)) continue;
+
+      // A supervisão is distributed from the node above it, so a hit on one
+      // leads there.
+      if (!inTree(n)) {
+        if (query.trim() === "") continue;
+      } else if (!passes(n)) continue;
 
       for (
-        let c: string | null = n.codigoLocal;
+        let c: string | null = inTree(n) ? n.codigoLocal : n.parentCodigoLocal;
         c && !set.has(c);
         c = byCode.get(c)?.parentCodigoLocal ?? null
       ) {
@@ -498,7 +506,7 @@ function Tree({
       }
 
       if (query.trim() !== "") {
-        for (const d of descendants(n, nodes)) if (passes(d)) set.add(d.codigoLocal);
+        for (const d of descendants(n, nodes)) if (inTree(d) && passes(d)) set.add(d.codigoLocal);
       }
     }
 
@@ -506,7 +514,7 @@ function Tree({
   }, [filtering, nodes, query, onlyUnbound, savedByNode]);
 
   const roots = nodes
-    .filter((n) => !n.parentCodigoLocal)
+    .filter((n) => !n.parentCodigoLocal && inTree(n))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   const rows: { node: EstruturaNo; depth: number }[] = [];
 
@@ -516,7 +524,7 @@ function Tree({
 
       rows.push({ node, depth });
 
-      if (visible || expanded.has(node.codigoLocal)) walk(childNodes.get(node.codigoLocal) ?? [], depth + 1);
+      if (visible || expanded.has(node.codigoLocal)) walk(treeChildren(node.codigoLocal), depth + 1);
     }
   };
 
@@ -548,7 +556,7 @@ function Tree({
                 depth={depth}
                 total={citiesByNode.get(node.codigoLocal)?.size ?? 0}
                 hasOwner={hasOwner(node.codigoLocal)}
-                hasChildren={(childNodes.get(node.codigoLocal)?.length ?? 0) > 0}
+                hasChildren={treeChildren(node.codigoLocal).length > 0}
                 open={visible !== null || expanded.has(node.codigoLocal)}
                 active={selected === node.codigoLocal}
                 onSelect={() => onSelect(node.codigoLocal)}
@@ -561,6 +569,8 @@ function Tree({
     </div>
   );
 }
+
+const inTree = (n: EstruturaNo) => n.nivel !== "supervisao";
 
 function TreeRow({
   node,

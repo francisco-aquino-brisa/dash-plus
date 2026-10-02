@@ -39,6 +39,7 @@ export interface PersonDay {
   ativo: number;
   feriado: number;
   v: number;
+  peso: number;
   gerente: string;
   coordenacao: string;
   cidade: string;
@@ -63,6 +64,7 @@ export async function fetchPersonDay(f: HcFilters): Promise<PersonDay[]> {
            MAX(${ATIVO}) ativo,
            MAX(${FERIADO}) feriado,
            SUM(${vendas}) v,
+           MAX(dias_trabalhado) peso,
            COALESCE(NULLIF(TRIM(gerente), ''), 'Sem Regional') gerente,
            COALESCE(NULLIF(TRIM(coordenacao), ''), 'Sem Regional') coordenacao,
            ${CIDADE} cidade,
@@ -79,7 +81,13 @@ export async function fetchPersonDay(f: HcFilters): Promise<PersonDay[]> {
 
   const rows = await q<PersonDay>(sql, params);
 
-  return rows.map((r) => ({ ...r, ativo: num(r.ativo), feriado: num(r.feriado), v: num(r.v) }));
+  return rows.map((r) => ({
+    ...r,
+    ativo: num(r.ativo),
+    feriado: num(r.feriado),
+    v: num(r.v),
+    peso: num(r.peso),
+  }));
 }
 
 /** Drop the rows the regional scan deliberately kept (see `fetchPessoaDia`). */
