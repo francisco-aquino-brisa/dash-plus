@@ -4,14 +4,15 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { SalesFilterBar } from "@/components/sales/SalesFilterBar";
-import { SalesKpiBlock } from "@/components/sales/SalesKpiBlock";
 import { SalesPduBlock } from "@/components/sales/SalesPduBlock";
 import { AnaliseCanais } from "@/components/sales/AnaliseCanais";
 import { SelecaoLivre } from "@/components/sales/SelecaoLivre";
-import { SalesDrillModal } from "@/components/sales/SalesDrillModal";
+import { KpiBlock } from "@/components/dashboard/KpiBlock";
+import { DrillModal } from "@/components/dashboard/DrillModal";
 import { usePreference } from "@/lib/preferences/use-preference";
 import { useSetNavPending } from "@/lib/ui/nav-pending";
-import { DEFAULT_SELECTION, SELECTION_PREF_KEY, type SalesIndicatorVM } from "@/lib/data/sales/indicators";
+import { SELECTION_PREF_KEY } from "@/lib/data/sales/indicators";
+import type { IndicatorCardVM } from "@/lib/data/indicators/block-cards";
 import { formatMonth } from "@/lib/format";
 import type { SalesUrlFilters, SalesFilterOptions, SalesView } from "@/lib/data/sales/types";
 
@@ -57,9 +58,9 @@ function toQuery(f: SalesUrlFilters): string {
 export function SalesDashboard({ view, options }: { view: SalesView; options: SalesFilterOptions }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const { competencia, blocksBL, blocks5G, canais, freeIndicators, freeSeries } = view;
+  const { competencia, blocks, canais, freeIndicators, freeSeries } = view;
 
-  const [selected, setSelected] = useState<SalesIndicatorVM | null>(null);
+  const [selected, setSelected] = useState<IndicatorCardVM | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   // Optimistic filters: the chips reflect the new value instantly, while the
@@ -81,11 +82,11 @@ export function SalesDashboard({ view, options }: { view: SalesView; options: Sa
 
   const [blSelection, setBlSelection] = usePreference<string[]>(
     SELECTION_PREF_KEY["banda-larga"],
-    DEFAULT_SELECTION["banda-larga"],
+    blocks.defaults["banda-larga"],
   );
   const [g5Selection, setG5Selection] = usePreference<string[]>(
     SELECTION_PREF_KEY["5g"],
-    DEFAULT_SELECTION["5g"],
+    blocks.defaults["5g"],
   );
 
   const navigate = useCallback(
@@ -190,18 +191,18 @@ export function SalesDashboard({ view, options }: { view: SalesView; options: Sa
       <SalesFilterBar filters={uiFilters} options={options} onChange={navigate} onReset={resetFilters} />
 
       {/* KPI blocks */}
-      <SalesKpiBlock
+      <KpiBlock
         title="Banda Larga (INTERNET + FWA)"
         subtitle={`Meta × Realizado · ${comp} · toque num indicador para o histórico`}
-        vms={blocksBL}
+        vms={blocks.bandaLarga}
         selection={blSelection}
         onSelectionChange={setBlSelection}
         onCardClick={setSelected}
       />
-      <SalesKpiBlock
+      <KpiBlock
         title="5G"
         subtitle={`Ativações, portabilidade, ticket e churn · ${comp} · toque para o histórico`}
-        vms={blocks5G}
+        vms={blocks.g5}
         selection={g5Selection}
         onSelectionChange={setG5Selection}
         onCardClick={setSelected}
@@ -214,7 +215,7 @@ export function SalesDashboard({ view, options }: { view: SalesView; options: Sa
       <AnaliseCanais canais={canais} />
       <SelecaoLivre indicators={freeIndicators} series={freeSeries} />
 
-      <SalesDrillModal indicator={selected} competencia={competencia} onClose={() => setSelected(null)} />
+      <DrillModal indicator={selected} competencia={competencia} onClose={() => setSelected(null)} />
     </div>
   );
 }

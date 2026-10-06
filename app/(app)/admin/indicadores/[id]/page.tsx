@@ -1,6 +1,11 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "../../guard";
-import { readIndicador } from "@/lib/data/indicators/read";
+import {
+  readIndicador,
+  readIndicadores,
+  readPaginasCatalogo,
+  readPaginasDoIndicador,
+} from "@/lib/data/indicators/read";
 import { readSourceColumns } from "@/lib/data/indicators/source-columns";
 import { IndicadorDetailScreen } from "@/components/admin/IndicadorDetailScreen";
 
@@ -10,9 +15,27 @@ export default async function IndicadorDetailPage({ params }: { params: Promise<
   await requireAdmin();
 
   const { id } = await params;
-  const [indicador, sourceColumns] = await Promise.all([readIndicador(id), readSourceColumns()]);
+  const [indicador, sourceColumns, paginas, catalogo, todos] = await Promise.all([
+    readIndicador(id),
+    readSourceColumns(),
+    readPaginasDoIndicador(id),
+    readPaginasCatalogo(),
+    readIndicadores(),
+  ]);
 
   if (!indicador) notFound();
 
-  return <IndicadorDetailScreen indicador={indicador} sourceColumns={sourceColumns} />;
+  const relacionaveis = todos.flatMap((g) =>
+    g.servicos.map((s) => ({ value: s.id, label: `${s.id} · ${s.indicadorServico}` })),
+  );
+
+  return (
+    <IndicadorDetailScreen
+      indicador={indicador}
+      sourceColumns={sourceColumns}
+      paginas={paginas}
+      catalogo={catalogo}
+      relacionaveis={relacionaveis}
+    />
+  );
 }

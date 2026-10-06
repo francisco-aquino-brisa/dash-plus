@@ -6,8 +6,8 @@ import { ArrowDown, ArrowUp, Minus, X } from "lucide-react";
 import { TimeSeriesChart } from "@/components/ui/time-series-chart";
 import { statusColor } from "@/lib/ui/status";
 import { formatMonth } from "@/lib/format";
-import type { IndicatorCardVM, RelatedIndicatorVM, SeriesPoint } from "@/lib/data/cities/indicator-blocks";
-import type { IndicatorUnit } from "@/lib/data/cities/indicators";
+import type { IndicatorCardVM, RelatedIndicatorVM, SeriesPoint } from "@/lib/data/indicators/block-cards";
+import type { IndicatorUnit } from "@/lib/data/indicators/block-cards";
 import { formatIndicatorValue, fullIndicatorValue } from "./indicator-format";
 
 /**

@@ -148,6 +148,7 @@ function IndicatorSelect({
   onSelectionChange: (next: string[]) => void;
 }) {
   const selectedSet = new Set(selection);
+  const visible = items.filter((v) => selectedSet.has(v.id)).length;
   // Preserve catalog order so the card layout stays stable across toggles.
   const commit = (ids: Set<string>) => onSelectionChange(items.filter((v) => ids.has(v.id)).map((v) => v.id));
 
@@ -182,7 +183,7 @@ function IndicatorSelect({
           }}
         >
           <SlidersHorizontal size={13} strokeWidth={2.2} />
-          Indicadores ({selection.length})
+          Indicadores ({visible})
         </button>
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
@@ -216,7 +217,7 @@ function IndicatorSelect({
               Indicadores
             </div>
             <div style={{ fontSize: 11.5, color: "var(--s-t3)", marginTop: 2 }}>
-              {selection.length} de {items.length} visíveis · sua seleção fica salva
+              {visible} de {items.length} visíveis · sua seleção fica salva
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, padding: "0 4px 8px" }}>

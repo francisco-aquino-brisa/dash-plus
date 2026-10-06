@@ -16,6 +16,7 @@ import {
 import { AdminModal, ModalHeader, ModalShell } from "./AdminModal";
 import { AddBtn, CalcBuilderForm, ModeTab } from "./IndicadorCalcBuilder";
 import { ConfirmDelete } from "./ConfirmDelete";
+import { IndicadorPaginas } from "./IndicadorPaginas";
 import { IndicadorPreview } from "./IndicadorPreview";
 import { Chip, Field, Panel } from "./primitives";
 import { SelectMenu } from "./SelectMenu";
@@ -30,7 +31,14 @@ import { statusChipTone } from "@/lib/data/admin/derive";
 import { parseSpec } from "@/lib/data/indicators/spec";
 import { specToSql } from "@/lib/data/indicators/to-sql";
 import { CATEGORY_META, categoryTone, servicoTone } from "@/lib/data/indicators/ui";
-import type { IndicadorGeral, IndicadorServico } from "@/lib/data/indicators/types";
+import type {
+  IndicadorGeral,
+  IndicadorServico,
+  PaginaCatalogo,
+  PaginaIndicador,
+} from "@/lib/data/indicators/types";
+
+type Opcao = { value: string; label: string };
 
 const CATEGORIA_OPTS = CATEGORY_META.map((c) => ({ value: c.key, label: c.label }));
 const STATUS_OPTS = [
@@ -45,9 +53,15 @@ function isAtivo(status: string | null): boolean {
 export function IndicadorDetailScreen({
   indicador,
   sourceColumns,
+  paginas,
+  catalogo,
+  relacionaveis,
 }: {
   indicador: IndicadorGeral;
   sourceColumns: Record<string, string[]>;
+  paginas: PaginaIndicador[];
+  catalogo: PaginaCatalogo[];
+  relacionaveis: Opcao[];
 }) {
   const [editingGeral, setEditingGeral] = useState(false);
   const [deletingGeral, setDeletingGeral] = useState(false);
@@ -138,6 +152,9 @@ export function IndicadorDetailScreen({
             categoria={indicador.categoria}
             indicadorNome={indicador.nome}
             sourceColumns={sourceColumns}
+            paginas={paginas.filter((p) => p.servicoId === s.id)}
+            catalogo={catalogo}
+            relacionaveis={relacionaveis.filter((r) => r.value !== s.id)}
           />
         ))}
 
@@ -232,12 +249,18 @@ function ServicoDetail({
   categoria,
   indicadorNome,
   sourceColumns,
+  paginas,
+  catalogo,
+  relacionaveis,
 }: {
   servico: IndicadorServico;
   idIndicadorGeral: string;
   categoria: string;
   indicadorNome: string;
   sourceColumns: Record<string, string[]>;
+  paginas: PaginaIndicador[];
+  catalogo: PaginaCatalogo[];
+  relacionaveis: Opcao[];
 }) {
   const [editing, setEditing] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -381,6 +404,16 @@ function ServicoDetail({
             </p>
           )}
         </div>
+
+        <div style={{ borderTop: "1px solid var(--s-border)", paddingTop: 12 }}>
+          <IndicadorPaginas
+            servicoId={s.id}
+            servicoNome={label}
+            paginas={paginas}
+            catalogo={catalogo}
+            semEspecificacao={!savedSpec}
+          />
+        </div>
       </div>
 
       {editing && (
@@ -394,6 +427,7 @@ function ServicoDetail({
             initialJson={s.especificacaoCalculo}
             sourceColumns={sourceColumns}
             servicoId={s.id}
+            relacionaveis={relacionaveis}
             onSaved={() => {
               setEditing(false);
               router.refresh();

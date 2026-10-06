@@ -5,7 +5,7 @@
 // as "sem acesso aos dados" (see docs/pending-data-checklist.md).
 
 import type { ScopeFilter } from "../scope-sql";
-import type { SalesIndicatorVM } from "./indicators";
+import type { IndicatorBlocksVM } from "../indicators/block-cards";
 
 export type Unit = "n" | "currency" | "percent";
 export type StatusVenda = "criado" | "efetivado" | "instalado";
@@ -88,10 +88,8 @@ export interface SalesView {
   periodLabel: string;
   /** Competência (yyyy-MM) que os cards dos blocos exibem (mês do período). */
   competencia: string;
-  /** Selectable indicator cards — Banda Larga (INTERNET + FWA). */
-  blocksBL: SalesIndicatorVM[];
-  /** Selectable indicator cards — 5G. */
-  blocks5G: SalesIndicatorVM[];
+  /** Selectable indicator cards (Banda Larga + 5G), from the indicator catalog. */
+  blocks: IndicatorBlocksVM;
   /** PDU (produção realizada / HC ativo / dia útil) by technology, per month. */
   pdu: PduPoint[];
   canais: {

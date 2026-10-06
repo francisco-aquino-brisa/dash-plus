@@ -5,9 +5,9 @@
 //
 // Business rule: "Banda Larga" = FTTH + FWA. 5G is an independent base.
 
-import { todayUtc } from "../_shared";
+import { projection } from "../_shared";
 import type { CityIndicatorRecord, CityMetaRecord, DashboardFilters, Filters, Tecnologia } from "./types";
-import { computeIndicatorBlock, type IndicatorCardVM } from "./indicator-blocks";
+import type { IndicatorBlocksVM } from "../indicators/block-cards";
 
 export const DEFAULT_FILTERS: Omit<DashboardFilters, "competencia"> = {
   gerencia: [],
@@ -46,20 +46,6 @@ export function previousMonth(months: string[], competencia: string): string | n
   const idx = months.indexOf(competencia);
 
   return idx > 0 ? months[idx - 1] : null;
-}
-
-/** Day-of-month projection: result * (daysInMonth / daysElapsed). */
-export function projection(result: number, competencia: string): number {
-  const [y, m] = competencia.split("-").map(Number);
-  const today = todayUtc();
-  const isCurrent = today.getUTCFullYear() === y && today.getUTCMonth() + 1 === m;
-
-  if (!isCurrent) return result;
-
-  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const dayOfMonth = Math.max(1, today.getUTCDate());
-
-  return Math.round(result * (daysInMonth / dayOfMonth));
 }
 
 export interface KpiValue {
@@ -574,7 +560,7 @@ export interface DashboardView {
   /** Per-KPI 12-month series + average, for the KPI detail modal. */
   modal: Record<KpiKey, { series: { mes: string; valor: number }[]; media: number }>;
   /** Selectable indicators per block; the client shows the user's chosen subset. */
-  blocks: { bandaLarga: IndicatorCardVM[]; g5: IndicatorCardVM[] };
+  blocks: IndicatorBlocksVM;
 }
 
 const KPI_KEYS: KpiKey[] = [
@@ -595,6 +581,7 @@ export function buildDashboardView(
   metaRecords: CityMetaRecord[],
   months: string[],
   filters: DashboardFilters,
+  blocks: IndicatorBlocksVM,
 ): DashboardView {
   // One KpiSet per month (12 passes), reused for both current KPIs and the
   // modal series — avoids recomputing per KPI.
@@ -655,9 +642,6 @@ export function buildDashboardView(
       involuntarios: sum(nonFiveG, (r) => r.cancelamentos_involuntarios),
     },
     modal,
-    blocks: {
-      bandaLarga: computeIndicatorBlock(rows, metaRecords, months, filters, "banda-larga"),
-      g5: computeIndicatorBlock(rows, metaRecords, months, filters, "5g"),
-    },
+    blocks,
   };
 }

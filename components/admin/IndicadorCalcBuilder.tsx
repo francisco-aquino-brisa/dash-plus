@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Check, Plus, Trash2, X } from "lucide-react";
 import { PrimaryButton } from "./primitives";
 import { SelectMenu } from "./SelectMenu";
 import { salvarCalculo } from "@/app/(app)/admin/indicadores/actions";
@@ -19,6 +19,7 @@ import {
   parseSpec,
   PERIODOS,
   POLARIDADES,
+  PROJECOES,
   serializeSpec,
   validateSpec,
   type CalcSpec,
@@ -63,11 +64,14 @@ export function CalcBuilderForm({
   initialJson,
   sourceColumns,
   servicoId,
+  relacionaveis,
   onSaved,
 }: {
   initialJson: string | null;
   sourceColumns: Record<string, string[]>;
   servicoId: string;
+  /** Serviços this one can point to as related (itself excluded). */
+  relacionaveis: { value: string; label: string }[];
   onSaved?: () => void;
 }) {
   const [spec, setSpec] = useState<CalcSpec>(() => parseSpec(initialJson) ?? emptySpec());
@@ -170,6 +174,20 @@ export function CalcBuilderForm({
         />
       </Grid2>
 
+      <Section title="Na tela">
+        <SelectField
+          label="Projeção do mês"
+          value={spec.projecao ?? "nenhuma"}
+          options={PROJECOES}
+          onChange={(v) => set({ projecao: v === "linear" ? "linear" : undefined })}
+        />
+        <RelacionadosEditor
+          value={spec.relacionados ?? []}
+          options={relacionaveis}
+          onChange={(relacionados) => set({ relacionados })}
+        />
+      </Section>
+
       {/* Validation */}
       {valid ? (
         <div
@@ -261,6 +279,75 @@ export function CalcBuilderForm({
           }}
         >
           {saveError}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Related indicators ────────────────────────────────────────────────────────
+
+function RelacionadosEditor({
+  value,
+  options,
+  onChange,
+}: {
+  value: string[];
+  options: { value: string; label: string }[];
+  onChange: (ids: string[]) => void;
+}) {
+  const labelOf = (id: string) => options.find((o) => o.value === id)?.label ?? id;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <SelectField
+        label="Indicadores relacionados (detalhe do card)"
+        value=""
+        options={options.filter((o) => !value.includes(o.value))}
+        placeholder="Adicionar indicador…"
+        onChange={(id) => id && onChange([...value, id])}
+      />
+      {value.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {value.map((id) => (
+            <span
+              key={id}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                height: 28,
+                padding: "0 6px 0 10px",
+                borderRadius: 8,
+                border: "1px solid var(--s-border)",
+                background: "var(--s-card)",
+                color: "var(--s-t1)",
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              {labelOf(id)}
+              <button
+                type="button"
+                className="bd-ghost"
+                onClick={() => onChange(value.filter((v) => v !== id))}
+                aria-label={`Remover ${labelOf(id)}`}
+                style={{
+                  display: "inline-grid",
+                  placeItems: "center",
+                  width: 20,
+                  height: 20,
+                  borderRadius: 6,
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--s-t3)",
+                  cursor: "pointer",
+                }}
+              >
+                <X size={13} />
+              </button>
+            </span>
+          ))}
         </div>
       )}
     </div>

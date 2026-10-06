@@ -11,14 +11,7 @@ import {
   type SalesFilters,
   type SalesView,
 } from "./types";
-import {
-  SALES_INDICATORS,
-  buildSalesVM,
-  decimalsFor,
-  type SalesBlock,
-  type SalesIndicatorDef,
-  type SalesIndicatorVM,
-} from "./indicators";
+import { NO_BLOCKS } from "../indicators/block-cards";
 
 const GERENTES = [
   "Ana Souza",
@@ -74,8 +67,6 @@ const MESES = [
   "Jun/25",
 ];
 
-const BL_SPLIT = { INTERNET: 0.63, FWA: 0.37 };
-
 /** Deterministic multiplier: more filters → smaller universe. */
 function filterFactor(f: SalesFilters): number {
   const dim = (v: string) => (!v ? 1 : 0.55 + hashStr(v) * 0.4);
@@ -98,96 +89,6 @@ function filterFactor(f: SalesFilters): number {
   }
 
   return dim(f.gerente) * dim(f.canal) * dim(f.nicho) * dim(f.uf) * dim(f.cidade) * dim(f.tipo) * timeMul;
-}
-
-// Base value per indicator (mês típico, escala validada vs warehouse). Faturamento
-// em R$; contagens em unidades; percentuais/razões em %. Escalado por filterFactor.
-const MOCK_BASE: Record<string, number> = {
-  "banda-larga:VE01": 54_000,
-  "banda-larga:VE02": 43_600,
-  "banda-larga:VE03": 34_200,
-  "banda-larga:VE05": 80.1,
-  "banda-larga:VE06": 78.4,
-  "banda-larga:RE01": 87.6,
-  "banda-larga:RE02": 93.0,
-  "banda-larga:RE03": 90.8,
-  "banda-larga:RE04": 11_160_000,
-  "banda-larga:RE05": 11_850_000,
-  "banda-larga:RE03f": 11_040_000,
-  "banda-larga:CA08": 9.4,
-  "5g:VE04": 80_600,
-  "5g:VE27": 22_700,
-  "5g:VE51": 57_900,
-  "5g:VE28": 78_000,
-  "5g:VE29": 2_560,
-  "5g:VE32": 13_600, // portabilidade concluída/mês
-  "5g:VE33": 6_000, // portabilidade pendente/mês
-  "5g:VE34": 16.9, // % concluída × ativações 5G
-  "5g:VE35": 70.0, // % concluída × solicitada
-  "5g:RE01": 25.9,
-  "5g:RE02": 35.0,
-  "5g:RE04": 2_060_000,
-  "5g:RE05": 2_820_000,
-  "5g:CA10": 45.0,
-  "5g:CA09": 4.1,
-};
-
-/** Trailing 12 month keys (yyyy-MM) ending at `endYm` (inclusive). */
-function monthKeys(endYm: string, n = 12): string[] {
-  const [y, m] = endYm.split("-").map(Number);
-  const out: string[] = [];
-
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(y, m - 1 - i, 1);
-
-    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-  }
-
-  return out;
-}
-
-function roundUnit(unit: SalesIndicatorDef["unit"], v: number): number {
-  if (unit === "qtd") return Math.round(v);
-
-  if (unit === "percent") return +v.toFixed(decimalsFor(unit));
-
-  return v >= 1000 ? Math.round(v) : +v.toFixed(2);
-}
-
-/** Deterministic block VMs mirroring the real (value + série 12m + meta). */
-function mockBlock(block: SalesBlock, f: SalesFilters, competencia: string): SalesIndicatorVM[] {
-  const months = monthKeys(competencia);
-  const svc =
-    block === "5g"
-      ? 1
-      : f.servico === "INTERNET"
-        ? BL_SPLIT.INTERNET
-        : f.servico === "FWA"
-          ? BL_SPLIT.FWA
-          : 1;
-  // Percentuais/razões não escalam com o tamanho do universo; contagens/receita sim.
-  const factor = filterFactor(f) * svc;
-
-  return SALES_INDICATORS[block].map((def) => {
-    if (!def.available) return buildSalesVM(def, new Map(), new Map(), competencia);
-
-    const rng = mulberry32(hashStr(`${block}:${def.id}`) * 7 + 3);
-    const scale = def.unit === "percent" ? 1 : factor;
-    const base = (MOCK_BASE[`${block}:${def.id}`] ?? 1000) * scale;
-    const real = new Map<string, number>();
-    const meta = new Map<string, number>();
-
-    months.forEach((ym, i) => {
-      const wobble = 0.85 + rng() * 0.3;
-
-      real.set(ym, roundUnit(def.unit, base * wobble * (1 + i * 0.008)));
-
-      if (def.meta)
-        meta.set(ym, roundUnit(def.unit, base * (def.meta.kind === "ticketOferta" ? 0.95 : 1.08)));
-    });
-
-    return buildSalesVM(def, real, meta, competencia);
-  });
 }
 
 function pduSeries(seed: number): PduPoint[] {
@@ -267,8 +168,7 @@ export function mockSalesView(filters: SalesFilters): SalesView {
     periodLabel: resolvePeriod(filters).label,
     competencia,
     meses: MESES,
-    blocksBL: mockBlock("banda-larga", filters, competencia),
-    blocks5G: mockBlock("5g", filters, competencia),
+    blocks: NO_BLOCKS,
     pdu: pduSeries(seed),
     canais: {
       canal: { bl: canalDeltas(CANAIS, 11 + seed, 220), g5: canalDeltas(CANAIS.slice(0, 9), 23 + seed, 90) },

@@ -4,10 +4,13 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/session";
 import type { ActionResult } from "@/lib/data/admin/types";
 import { runPreview, type PreviewFilters, type PreviewResult } from "@/lib/data/indicators/engine";
+import { CATALOG_PAGES } from "@/lib/data/indicators/pages";
 import {
   countServicosDoIndicador,
   indicadorGeralExists,
   indicadorServicoExists,
+  paginaIndicadorExists,
+  readPaginasCatalogo,
 } from "@/lib/data/indicators/read";
 import { readSourceColumns } from "@/lib/data/indicators/source-columns";
 import { parseSpec, serializeSpec, validateSpec } from "@/lib/data/indicators/spec";
@@ -15,8 +18,11 @@ import type { ServicoDraft } from "@/lib/data/indicators/types";
 import {
   createIndicadorGeral,
   createIndicadorServico,
+  createPaginaIndicador,
   deleteIndicadorGeral,
   deleteIndicadorServico,
+  deletePaginaIndicador,
+  updatePaginaIndicador,
   updateEspecificacaoCalculo,
   updateIndicadorGeral,
   updateIndicadorServico,
@@ -331,5 +337,90 @@ export async function removerServico(servicoId: string, idIndicadorGeral: string
     console.error("[indicators/removerServico] failed:", err);
 
     return { ok: false, error: "Não foi possível remover. Tente novamente." };
+  }
+}
+
+// ── Onde aparece ────────────────────────────────────────────────────────────────
+
+function validOrdem(ordem: number): boolean {
+  return Number.isInteger(ordem) && ordem >= 0 && ordem <= 999;
+}
+
+export async function adicionarPaginaIndicador(input: {
+  paginaId: number;
+  bloco: string;
+  servicoId: string;
+  ordem: number;
+  padrao: boolean;
+}): Promise<ActionResult> {
+  const denied = await guardAdmin();
+
+  if (denied) return denied;
+
+  if (!validOrdem(input.ordem)) return { ok: false, error: "Ordem deve ser um número entre 0 e 999." };
+
+  try {
+    const pagina = (await readPaginasCatalogo()).find((p) => p.id === input.paginaId);
+    const blocos = CATALOG_PAGES.find((p) => p.rota === pagina?.rota)?.blocos ?? [];
+
+    if (!pagina) return { ok: false, error: "Esta página não exibe indicadores do cadastro." };
+
+    if (!blocos.some((b) => b.key === input.bloco))
+      return { ok: false, error: "Bloco inválido para a página." };
+
+    if (!(await indicadorServicoExists(input.servicoId))) return { ok: false, error: "Serviço inválido." };
+
+    if (await paginaIndicadorExists(input.paginaId, input.bloco, input.servicoId)) {
+      return { ok: false, error: "Este serviço já está nesse bloco da página." };
+    }
+
+    await createPaginaIndicador(input);
+    revalidatePath("/admin/indicadores", "layout");
+
+    return { ok: true };
+  } catch (err) {
+    console.error("[indicators/adicionarPagina] failed:", err);
+
+    return { ok: false, error: "Não foi possível adicionar à tela." };
+  }
+}
+
+export async function salvarPaginaIndicador(
+  id: string,
+  ordem: number,
+  padrao: boolean,
+): Promise<ActionResult> {
+  const denied = await guardAdmin();
+
+  if (denied) return denied;
+
+  if (!validOrdem(ordem)) return { ok: false, error: "Ordem deve ser um número entre 0 e 999." };
+
+  try {
+    await updatePaginaIndicador(id, ordem, padrao);
+    revalidatePath("/admin/indicadores", "layout");
+
+    return { ok: true };
+  } catch (err) {
+    console.error("[indicators/salvarPagina] failed:", err);
+
+    return { ok: false, error: "Não foi possível salvar. Tente novamente." };
+  }
+}
+
+export async function removerPaginaIndicador(id: string): Promise<ActionResult> {
+  const denied = await guardAdmin();
+
+  if (denied) return denied;
+
+  try {
+    await deletePaginaIndicador(id);
+    revalidatePath("/admin/indicadores", "layout");
+
+    return { ok: true };
+  } catch (err) {
+    console.error("[indicators/removerPagina] failed:", err);
+
+    return { ok: false, error: "Não foi possível remover da tela." };
   }
 }

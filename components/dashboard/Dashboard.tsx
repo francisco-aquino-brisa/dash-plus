@@ -12,9 +12,9 @@ import { ChurnBlock, CoverageBlock, FunnelBlock } from "@/components/dashboard/E
 import { DrillModal } from "@/components/dashboard/DrillModal";
 import { TimeSeriesChart } from "@/components/ui/time-series-chart";
 import type { DashboardView } from "@/lib/data/cities/compute";
-import type { IndicatorCardVM } from "@/lib/data/cities/indicator-blocks";
+import type { IndicatorCardVM } from "@/lib/data/indicators/block-cards";
 import type { DashboardFilters, FilterOptions } from "@/lib/data/cities/types";
-import { DEFAULT_SELECTION, SELECTION_PREF_KEY } from "@/lib/data/cities/indicators";
+import { SELECTION_PREF_KEY } from "@/lib/data/cities/indicators";
 import { usePreference } from "@/lib/preferences/use-preference";
 import { useReportNavPending } from "@/lib/ui/nav-pending";
 import { formatMonth, formatNumber } from "@/lib/format";
@@ -69,11 +69,11 @@ export function Dashboard({ view, options, cache, watermark, escopo }: Props) {
 
   const [blSelection, setBlSelection] = usePreference<string[]>(
     SELECTION_PREF_KEY["banda-larga"],
-    DEFAULT_SELECTION["banda-larga"],
+    view.blocks.defaults["banda-larga"],
   );
   const [g5Selection, setG5Selection] = usePreference<string[]>(
     SELECTION_PREF_KEY["5g"],
-    DEFAULT_SELECTION["5g"],
+    view.blocks.defaults["5g"],
   );
 
   // The Tecnologia filter drives which blocks show (5G collapses to its block;

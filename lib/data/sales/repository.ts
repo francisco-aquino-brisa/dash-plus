@@ -9,6 +9,7 @@
 import { currentScope } from "@/lib/auth/scope";
 import { ADAPTER_BUILD, cachedByWatermark } from "../cache";
 import { isDatabricks } from "../client";
+import { catalogVersion } from "../indicators/screen-catalog";
 import { scopeToken } from "../scope-sql";
 import { mockSalesView, SALES_FILTER_LISTS } from "./mock";
 import { PERIODS, type SalesFilters, type SalesFilterOptions, type SalesView } from "./types";
@@ -16,7 +17,7 @@ import { PERIODS, type SalesFilters, type SalesFilterOptions, type SalesView } f
 function cacheKey(f: SalesFilters): string {
   // The scope is part of a cached view's identity: without it the first reader
   // would warm the cache for everyone else, whatever their scope.
-  return `sales:v6:${ADAPTER_BUILD}:${scopeToken(f.scope)}:${[f.period, f.from, f.to, f.servico, f.gerente, f.canal, f.nicho, f.uf, f.cidade, f.tipo].join("|")}`;
+  return `sales:v7:${ADAPTER_BUILD}:${catalogVersion()}:${scopeToken(f.scope)}:${[f.period, f.from, f.to, f.servico, f.gerente, f.canal, f.nicho, f.uf, f.cidade, f.tipo].join("|")}`;
 }
 
 /** The one place the session's scope enters this module (see the HC Zerado twin). */

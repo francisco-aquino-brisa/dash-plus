@@ -103,3 +103,17 @@ export const FUNNEL_COLS: Record<string, [string, string, string]> = {
   FWA: ["criado_fwa", "efetivado_fwa", "instalado_fwa"],
   BL: ["criado_bl", "efetivado_bl", "instalado_bl"],
 };
+
+/** Day-of-month projection: result * (daysInMonth / daysElapsed). */
+export function projection(result: number, competencia: string): number {
+  const [y, m] = competencia.split("-").map(Number);
+  const today = todayUtc();
+  const isCurrent = today.getUTCFullYear() === y && today.getUTCMonth() + 1 === m;
+
+  if (!isCurrent) return result;
+
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const dayOfMonth = Math.max(1, today.getUTCDate());
+
+  return Math.round(result * (daysInMonth / dayOfMonth));
+}

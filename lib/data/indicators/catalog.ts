@@ -7,6 +7,8 @@
  *   (`tabela`/`colunas`/`formato_dado`/`polaridade`/`funcao`/`metrica`) and the
  *   new machine-executable `especificacao_calculo` (JSON)
  * - `indicadores_setores`  — indicator assignment per setor/gerente
+ * - `indicadores_paginas`  — which serviço row shows as a card on which
+ *   `tb_paginas` page/bloco (ordem, padrao = pre-selected on first visit)
  *
  * Same catalog/schema env as the admin `tb_*` tables (ADR 0005). These are
  * app-owned and are the only indicator tables the admin area writes to.
@@ -21,4 +23,5 @@ export const IND = {
   gerais: id("indicadores_gerais"),
   servicos: id("indicadores_servicos"),
   setores: id("indicadores_setores"),
+  paginas: id("indicadores_paginas"),
 } as const;
