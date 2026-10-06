@@ -91,7 +91,8 @@ export interface SalesView {
   /** Selectable indicator cards (Banda Larga + 5G), from the indicator catalog. */
   blocks: IndicatorBlocksVM;
   /** PDU (produção realizada / HC ativo / dia útil) by technology, per month. */
-  pdu: PduPoint[];
+  /** Null when the source failed — the block shows "sem acesso". */
+  pdu: PduPoint[] | null;
   canais: {
     canal: { bl: CanalDelta[]; g5: CanalDelta[] };
     nicho: { bl: CanalDelta[]; g5: CanalDelta[] };

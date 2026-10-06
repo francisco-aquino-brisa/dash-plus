@@ -195,6 +195,8 @@ export function hcWhere(
     if (values.length) cl.push(inList(col, values, params));
   }
 
+  if (f.uf?.length) cl.push(inList("TRIM(uf_cidade_vendedor)", f.uf, params));
+
   if (f.perfilCidade) {
     cl.push("tipo_cidade = ?");
     params.push(f.perfilCidade);

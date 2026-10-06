@@ -20,6 +20,9 @@ import type {
   SalesView,
 } from "./types";
 
+import { pduMonth } from "../hc-zerado/databricks";
+import { parseHcFilters } from "../hc-zerado/filters";
+import type { HcFilters } from "../hc-zerado/types";
 import { buildSalesCatalogBlocks } from "./catalog-blocks";
 
 const CAT = process.env.DATABRICKS_SALES_CATALOG ?? "gdb_brisanet_comunidade_dev";
@@ -96,13 +99,43 @@ export async function databricksSalesWatermark(): Promise<string> {
   }
 }
 
-// PDU (Produtividade por Dia Útil): the block is currently LOCKED in the UI — the
-// original source `vw_hc_zerado_vendedor` does not exist, and the verified
-// substitute `vw_producao_hc_zero_venda`'s official denominator/meta are pending
-// confirmation with the data team (see docs/data-map.md + new-ui-plan §2). So the
-// adapter returns an empty series (the screen renders "sem acesso") instead of
-// firing a guaranteed-to-fail query against the absent view every render. When the
-// formula is confirmed, wire the substitute here.
+/**
+ * PDU per technology, by the rule the board confirmed for HC Zerado (`pduMonth`,
+ * docs/data-map.md): Σ sales of the active HC ÷ Σ `dias_trabalhado` of the active HC.
+ * Each technology's line is its share of the numerator over the same days, so
+ * the lines add up to the total PDU (minus renovações).
+ *
+ * The HC table has no channel-manager column, so Gerente does not narrow it.
+ * Its `cidade_vendedor` is "CIDADE/UF" where this screen's is "CIDADE / UF".
+ * Null = the source failed; the block then shows "sem acesso".
+ */
+async function pduSeries(f: SalesFilters): Promise<PduPoint[] | null> {
+  const perfil = ["FTTH", "HIBRIDA", "ONLY"].includes(f.tipo) ? (f.tipo as HcFilters["perfilCidade"]) : "";
+  const hc: HcFilters = {
+    ...parseHcFilters({}),
+    to: resolvePeriod(f).to,
+    canal: f.canal ? [f.canal] : [],
+    nicho: f.nicho ? [f.nicho] : [],
+    cidade: f.cidade ? [f.cidade.replace(/\s*\/\s*/g, "/")] : [],
+    uf: f.uf ? [f.uf] : [],
+    perfilCidade: perfil,
+    scope: f.scope,
+  };
+
+  try {
+    const months = await pduMonth(hc);
+
+    return months.map((m) => {
+      const per = (v: number) => (m.diasTrabalhados > 0 ? +(v / m.diasTrabalhados).toFixed(2) : 0);
+
+      return { mes: m.month, FTTH: per(m.ftth), FWA: per(m.fwa), "5G": per(m.chips5g) };
+    });
+  } catch (e) {
+    console.warn("[sales] PDU indisponível:", (e as Error).message);
+
+    return null;
+  }
+}
 
 // Channel/niche momentum. The channel attribution (canal_waves) lags by ~1 month
 // — the current month is often unattributed — so we anchor all windows to the
@@ -223,8 +256,9 @@ async function freeData(
 
 export async function databricksSalesView(filters: SalesFilters): Promise<SalesView> {
   const competencia = resolvePeriod(filters).to.slice(0, 7); // yyyy-MM do mês do período
-  const [blocks, canalBL, canal5G, nichoBL, nicho5G, free, watermark] = await Promise.all([
+  const [blocks, pdu, canalBL, canal5G, nichoBL, nicho5G, free, watermark] = await Promise.all([
     buildSalesCatalogBlocks(filters, competencia),
+    pduSeries(filters),
     canalAnalysis(filters, "criado_bl", "canal_waves"),
     canalAnalysis(filters, "`5g_ativacao`", "canal_waves"),
     canalAnalysis(filters, "criado_bl", "nicho"),
@@ -232,8 +266,6 @@ export async function databricksSalesView(filters: SalesFilters): Promise<SalesV
     freeData(filters),
     databricksSalesWatermark(),
   ]);
-  // PDU is locked in the UI (see the note above) → empty series, no query.
-  const pdu: PduPoint[] = [];
 
   return {
     filters,

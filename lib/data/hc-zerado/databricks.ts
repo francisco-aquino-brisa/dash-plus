@@ -418,7 +418,7 @@ function pduDay(rows: PersonDay[], days: DayAxis[]): PduDay[] {
  * "2000-01-01" to draw a 12-month history. The source only holds 2026 onward, so
  * the chart shows the months that exist rather than padding empty ones.
  */
-async function pduMonth(f: HcFilters): Promise<PduMonth[]> {
+export async function pduMonth(f: HcFilters): Promise<PduMonth[]> {
   const params: unknown[] = [];
   const where = hcWhere(f, params);
   const vendas = vendasExpr(f, params);

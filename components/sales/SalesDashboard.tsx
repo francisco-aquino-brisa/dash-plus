@@ -58,7 +58,7 @@ function toQuery(f: SalesUrlFilters): string {
 export function SalesDashboard({ view, options }: { view: SalesView; options: SalesFilterOptions }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const { competencia, blocks, canais, freeIndicators, freeSeries } = view;
+  const { competencia, blocks, pdu, canais, freeIndicators, freeSeries } = view;
 
   const [selected, setSelected] = useState<IndicatorCardVM | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -208,8 +208,7 @@ export function SalesDashboard({ view, options }: { view: SalesView; options: Sa
         onCardClick={setSelected}
       />
 
-      {/* PDU (travada — fórmula/meta pendentes) */}
-      <SalesPduBlock />
+      <SalesPduBlock pdu={pdu} />
 
       {/* Blocos do legado mantidos (não estão no new_ui §2) */}
       <AnaliseCanais canais={canais} />
