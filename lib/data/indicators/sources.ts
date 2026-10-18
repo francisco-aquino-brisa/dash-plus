@@ -33,6 +33,7 @@ export interface PreviewFilters {
 
 export interface PreviewResult {
   valor: number | null;
+  partes: { numerador: number | null; denominador: number | null } | null;
   competencia: string | null;
   meses: string[];
 }

@@ -13,7 +13,7 @@ import { textMatches } from "./filter";
 import { removerIndicador } from "@/app/(app)/admin/indicadores/actions";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { statusChipTone } from "@/lib/data/admin/derive";
-import { CATEGORY_META, categoryTone, servicoTone } from "@/lib/data/indicators/ui";
+import { CATEGORY_META, categoryLabel, categoryTone, servicoTone } from "@/lib/data/indicators/ui";
 import type { IndicadorGeral } from "@/lib/data/indicators/types";
 
 function isAtivo(status: string | null): boolean {
@@ -87,7 +87,7 @@ export function IndicadoresScreen({ indicadores }: { indicadores: IndicadorGeral
     const known = CATEGORY_META.filter((c) => map.has(c.key));
     const extra = [...map.keys()]
       .filter((k) => !CATEGORY_META.some((c) => c.key === k))
-      .map((k) => ({ key: k, label: k, tone: categoryTone(k) }));
+      .map((k) => ({ key: k, label: categoryLabel(k), tone: categoryTone(k) }));
 
     return [...known, ...extra].map((c) => ({ ...c, items: map.get(c.key) ?? [] }));
   }, [indicadores, query, onlyMissing]);
@@ -324,6 +324,7 @@ export function IndicadoresScreen({ indicadores }: { indicadores: IndicadorGeral
 
       {creating && (
         <IndicadorCreateModal
+          indicadores={indicadores}
           onClose={() => setCreating(false)}
           onCreated={() => {
             setCreating(false);

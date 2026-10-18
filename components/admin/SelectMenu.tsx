@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Plus } from "lucide-react";
 
 export interface StringOption {
   value: string;
@@ -12,6 +12,7 @@ export interface StringOption {
  * String-keyed select in the system pattern (mirrors AdminSelect, which is
  * number-keyed): a button that opens a list with a check on the current value —
  * never a native `<select>`. Adds a search box past 7 options (accent-insensitive).
+ * `creatable` always shows the search box and lets the typed text become the value.
  */
 export function SelectMenu({
   label,
@@ -20,6 +21,8 @@ export function SelectMenu({
   onChange,
   placeholder = "Selecionar…",
   disabled = false,
+  creatable = false,
+  searchPlaceholder = "Buscar…",
 }: {
   label?: string;
   value: string;
@@ -27,20 +30,25 @@ export function SelectMenu({
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  creatable?: boolean;
+  searchPlaceholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const selected = options.find((o) => o.value === value) ?? null;
-  const searchable = options.length > 7;
+  const selected =
+    options.find((o) => o.value === value) ?? (creatable && value ? { value, label: value } : null);
+  const searchable = creatable || options.length > 7;
 
   const filtered = useMemo(() => {
     if (!query.trim()) return options;
 
-    const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
     const q = norm(query);
 
     return options.filter((o) => norm(o.label).includes(q));
   }, [options, query]);
+
+  const typed = query.trim();
+  const canCreate = creatable && typed !== "" && !options.some((o) => norm(o.label) === norm(typed));
 
   const close = () => {
     setOpen(false);
@@ -126,7 +134,14 @@ export function SelectMenu({
                 autoFocus
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar…"
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || !canCreate) return;
+
+                  e.preventDefault();
+                  onChange(typed);
+                  close();
+                }}
+                placeholder={searchPlaceholder}
                 style={{
                   width: "100%",
                   height: 34,
@@ -191,7 +206,39 @@ export function SelectMenu({
                 </button>
               );
             })}
-            {filtered.length === 0 && (
+            {canCreate && (
+              <button
+                type="button"
+                className="bd-menuitem"
+                onClick={() => {
+                  onChange(typed);
+                  close();
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  textAlign: "left",
+                  minHeight: 36,
+                  padding: "0 10px",
+                  border: 0,
+                  borderRadius: 9,
+                  background: "transparent",
+                  color: "var(--s-brand)",
+                  font: "inherit",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                <Plus size={14} style={{ flex: "none" }} />
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                  Adicionar “{typed}”
+                </span>
+              </button>
+            )}
+            {filtered.length === 0 && !canCreate && (
               <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--s-t3)" }}>Nada encontrado.</div>
             )}
           </div>
@@ -199,4 +246,8 @@ export function SelectMenu({
       )}
     </div>
   );
+}
+
+function norm(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }

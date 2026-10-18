@@ -11,7 +11,7 @@
  */
 
 export type Forma = "simples" | "razao" | "variacao_mensal";
-export type Agregacao = "soma" | "contagem" | "contagem_distinta";
+export type Agregacao = "soma" | "media" | "contagem" | "contagem_distinta";
 export type Formato = "inteiro" | "percentual" | "moeda" | "decimal";
 export type Polaridade = "maior_melhor" | "menor_melhor";
 export type Periodo = "atual" | "mes_anterior";
@@ -44,6 +44,10 @@ export interface Grupo {
 }
 
 export type FiltroNo = ({ tipo: "condicao" } & Condicao) | ({ tipo: "grupo" } & Grupo);
+
+export function aceitaExpressao(agregacao: Agregacao): boolean {
+  return agregacao === "soma" || agregacao === "media";
+}
 
 /** Operators that take no value (IS NULL / IS NOT NULL). */
 export function operadorSemValor(op: Operador | undefined): boolean {
@@ -79,6 +83,7 @@ export const FORMAS: { value: Forma; label: string }[] = [
 
 export const AGREGACOES: { value: Agregacao; label: string }[] = [
   { value: "soma", label: "Soma" },
+  { value: "media", label: "Média" },
   { value: "contagem", label: "Contagem" },
   { value: "contagem_distinta", label: "Contagem distinta" },
 ];
@@ -338,8 +343,8 @@ export function validateSpec(spec: CalcSpec, columnsBySource: Record<string, str
 
     if (hasCol && hasExpr) issues.push({ path, message: `${label}: use coluna OU expressão, não ambas.` });
 
-    if (hasExpr && m.agregacao !== "soma")
-      issues.push({ path, message: `${label}: expressão só é suportada com Soma.` });
+    if (hasExpr && !aceitaExpressao(m.agregacao))
+      issues.push({ path, message: `${label}: expressão só é suportada com Soma ou Média.` });
 
     if (hasCol && cols && !cols.includes(m.coluna!.trim()))
       issues.push({ path, message: `${label}: coluna "${m.coluna}" não existe na fonte.` });

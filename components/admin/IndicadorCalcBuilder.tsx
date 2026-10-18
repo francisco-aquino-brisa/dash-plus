@@ -9,6 +9,7 @@ import { sourceOptions } from "@/lib/data/indicators/sources";
 import { specToSql } from "@/lib/data/indicators/to-sql";
 import {
   AGREGACOES,
+  aceitaExpressao,
   emptyCondicao,
   emptyGrupo,
   emptyMedida,
@@ -283,15 +284,14 @@ function MeasureEditor({
   /** Período (atual/mês anterior) só faz sentido nas medidas de uma razão. */
   showPeriodo?: boolean;
 }) {
-  // Expression mode is available ONLY for Soma. `expressao` present (even "") means
+  // Expression mode is available only for Soma/Média. `expressao` present (even "") means
   // expression mode — truthiness would bounce back to "coluna" on the first click.
-  const isSoma = value.agregacao === "soma";
-  const mode: "coluna" | "expressao" = isSoma && value.expressao !== undefined ? "expressao" : "coluna";
+  const allowsExpr = aceitaExpressao(value.agregacao);
+  const mode: "coluna" | "expressao" = allowsExpr && value.expressao !== undefined ? "expressao" : "coluna";
   const set = (patch: Partial<Medida>) => onChange({ ...value, ...patch });
 
-  // Leaving Soma drops any pending expression and returns to Coluna.
   const onAgg = (v: Medida["agregacao"]) =>
-    v === "soma"
+    aceitaExpressao(v)
       ? set({ agregacao: v })
       : set({ agregacao: v, expressao: undefined, coluna: value.coluna ?? "" });
 
@@ -321,7 +321,7 @@ function MeasureEditor({
         />
       )}
 
-      {isSoma && (
+      {allowsExpr && (
         <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
           <ModeTab
             active={mode === "coluna"}
@@ -344,7 +344,7 @@ function MeasureEditor({
         </p>
       ) : mode === "expressao" ? (
         <label style={{ display: "block" }}>
-          <span style={labelStyle}>Expressão (soma de colunas)</span>
+          <span style={labelStyle}>Expressão (colunas e + − × ÷)</span>
           <input
             value={value.expressao ?? ""}
             onChange={(e) => set({ expressao: e.target.value })}

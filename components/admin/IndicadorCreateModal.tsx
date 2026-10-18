@@ -1,30 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AdminModal } from "./AdminModal";
 import { AddBtn, RemoveBtn } from "./IndicadorCalcBuilder";
 import { Field } from "./primitives";
 import { SelectMenu } from "./SelectMenu";
-import { ServicoFieldsForm } from "./ServicoFieldsForm";
+import { resolvedServicoCode, resolvedServicoNome, ServicoFieldsForm } from "./ServicoFieldsForm";
 import { useAdminAction } from "./useAdminAction";
 import { criarIndicador } from "@/app/(app)/admin/indicadores/actions";
-import { CATEGORY_META } from "@/lib/data/indicators/ui";
-import { emptyServicoDraft, type ServicoDraft } from "@/lib/data/indicators/types";
+import { categoriaKey, nextIndicadorGeralId } from "@/lib/data/indicators/codes";
+import { emptyServicoDraft, type IndicadorGeral, type ServicoDraft } from "@/lib/data/indicators/types";
+import { CATEGORY_META, categoryOptions } from "@/lib/data/indicators/ui";
 
 const STATUS_OPTS = [
   { value: "Ativo", label: "Ativo" },
   { value: "Inativo", label: "Inativo" },
 ];
-const CATEGORIA_OPTS = CATEGORY_META.map((c) => ({ value: c.key, label: c.label }));
 
 /** Creates an indicador geral together with its first serviço(s) — an indicador with zero serviços isn't addressable anywhere else. */
-export function IndicadorCreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [id, setId] = useState("");
+export function IndicadorCreateModal({
+  indicadores,
+  onClose,
+  onCreated,
+}: {
+  indicadores: IndicadorGeral[];
+  onClose: () => void;
+  onCreated: () => void;
+}) {
   const [categoria, setCategoria] = useState(CATEGORY_META[0].key);
+  const [manualId, setManualId] = useState<string | null>(null);
   const [nome, setNome] = useState("");
   const [status, setStatus] = useState("Ativo");
   const [servicos, setServicos] = useState<ServicoDraft[]>([emptyServicoDraft()]);
   const { busy, error, run } = useAdminAction();
+
+  const categoriaOpts = useMemo(() => categoryOptions(indicadores.map((i) => i.categoria)), [indicadores]);
+  const suggestedId = useMemo(
+    () =>
+      nextIndicadorGeralId(
+        categoria,
+        indicadores.map((i) => i.id),
+      ),
+    [categoria, indicadores],
+  );
+  const id = manualId ?? suggestedId;
 
   const addServico = () => setServicos((prev) => [...prev, emptyServicoDraft()]);
   const removeServico = (i: number) => setServicos((prev) => prev.filter((_, idx) => idx !== i));
@@ -32,7 +51,21 @@ export function IndicadorCreateModal({ onClose, onCreated }: { onClose: () => vo
     setServicos((prev) => prev.map((s, idx) => (idx === i ? d : s)));
 
   function submit() {
-    run(() => criarIndicador({ id: id.trim(), categoria, nome: nome.trim(), status, servicos }), onCreated);
+    run(
+      () =>
+        criarIndicador({
+          id: id.trim(),
+          categoria,
+          nome: nome.trim(),
+          status,
+          servicos: servicos.map((s) => ({
+            ...s,
+            id: resolvedServicoCode(s, id),
+            indicadorServico: resolvedServicoNome(s, nome),
+          })),
+        }),
+      onCreated,
+    );
   }
 
   return (
@@ -43,15 +76,31 @@ export function IndicadorCreateModal({ onClose, onCreated }: { onClose: () => vo
       title="Novo indicador"
       onSubmit={submit}
       submitLabel="Criar indicador"
-      submitDisabled={!id.trim() || !nome.trim() || servicos.length === 0}
+      submitDisabled={
+        !id.trim() || !nome.trim() || servicos.length === 0 || servicos.some((s) => !s.servico.trim())
+      }
       busy={busy}
       error={error}
     >
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label="Código" value={id} onChange={setId} placeholder="ex.: BA14" mono autoFocus />
-        <SelectMenu label="Categoria" value={categoria} options={CATEGORIA_OPTS} onChange={setCategoria} />
+        <Field
+          label="Código"
+          value={id}
+          onChange={setManualId}
+          placeholder="ex.: BA14"
+          hint={manualId === null ? "Sugerido pela categoria — edite se quiser." : undefined}
+          mono
+        />
+        <SelectMenu
+          label="Categoria"
+          value={categoria}
+          options={categoriaOpts}
+          onChange={(v) => setCategoria(categoriaKey(v))}
+          searchPlaceholder="Buscar ou digitar nova categoria…"
+          creatable
+        />
       </div>
-      <Field label="Nome" value={nome} onChange={setNome} placeholder="ex.: Nova métrica de base" />
+      <Field label="Nome" value={nome} onChange={setNome} placeholder="ex.: Nova métrica de base" autoFocus />
       <SelectMenu label="Status" value={status} options={STATUS_OPTS} onChange={setStatus} />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4 }}>
@@ -81,7 +130,12 @@ export function IndicadorCreateModal({ onClose, onCreated }: { onClose: () => vo
                 <RemoveBtn onClick={() => removeServico(i)} label="Remover serviço" />
               </div>
             )}
-            <ServicoFieldsForm draft={s} onChange={(next) => updateServico(i, next)} />
+            <ServicoFieldsForm
+              draft={s}
+              onChange={(next) => updateServico(i, next)}
+              idIndicadorGeral={id}
+              indicadorGeral={nome}
+            />
           </div>
         ))}
       </div>

@@ -48,6 +48,9 @@ export interface ServicoDraft {
   colunas: string;
   funcao: string;
   metrica: string;
+  /** Client-only: code and name follow the indicador + serviço until the user edits them. */
+  autoId?: boolean;
+  autoNome?: boolean;
 }
 
 export function emptyServicoDraft(): ServicoDraft {
@@ -63,6 +66,8 @@ export function emptyServicoDraft(): ServicoDraft {
     colunas: "",
     funcao: "",
     metrica: "",
+    autoId: true,
+    autoNome: true,
   };
 }
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AdminModal } from "./AdminModal";
-import { ServicoFieldsForm } from "./ServicoFieldsForm";
+import { resolvedServicoCode, resolvedServicoNome, ServicoFieldsForm } from "./ServicoFieldsForm";
 import { useAdminAction } from "./useAdminAction";
 import { adicionarServico, salvarServico } from "@/app/(app)/admin/indicadores/actions";
 import {
@@ -34,12 +34,20 @@ export function ServicoFormModal({
   );
   const { busy, error, run } = useAdminAction();
 
+  const nome = resolvedServicoNome(draft, indicadorGeral);
+
   function submit() {
+    const resolved = {
+      ...draft,
+      id: existing ? draft.id : resolvedServicoCode(draft, idIndicadorGeral),
+      indicadorServico: nome,
+    };
+
     run(
       () =>
         existing
-          ? salvarServico(idIndicadorGeral, categoria, indicadorGeral, draft)
-          : adicionarServico(idIndicadorGeral, categoria, indicadorGeral, draft),
+          ? salvarServico(idIndicadorGeral, categoria, indicadorGeral, resolved)
+          : adicionarServico(idIndicadorGeral, categoria, indicadorGeral, resolved),
       onSaved,
     );
   }
@@ -52,11 +60,21 @@ export function ServicoFormModal({
       title={existing ? existing.indicadorServico || existing.servico : "Novo serviço"}
       onSubmit={submit}
       submitLabel={existing ? "Salvar" : "Adicionar serviço"}
-      submitDisabled={!draft.id.trim() || !draft.servico.trim() || !draft.indicadorServico.trim()}
+      submitDisabled={
+        !draft.servico.trim() ||
+        !nome.trim() ||
+        (!existing && !resolvedServicoCode(draft, idIndicadorGeral).trim())
+      }
       busy={busy}
       error={error}
     >
-      <ServicoFieldsForm draft={draft} onChange={setDraft} idEditable={!existing} />
+      <ServicoFieldsForm
+        draft={draft}
+        onChange={setDraft}
+        idIndicadorGeral={idIndicadorGeral}
+        indicadorGeral={indicadorGeral}
+        isNew={!existing}
+      />
     </AdminModal>
   );
 }

@@ -111,11 +111,11 @@ function measureAgg(m: Medida, params: unknown[], cols: Set<string>): string {
     return cond ? `COUNT(DISTINCT CASE WHEN ${cond} THEN ${key} END)` : `COUNT(DISTINCT ${key})`;
   }
 
-  // soma
   const operand = m.expressao?.trim() ? assertExpr(m.expressao, cols) : assertCol(m.coluna ?? "", cols);
   const casted = numCast(operand);
+  const fn = m.agregacao === "media" ? "AVG" : "SUM";
 
-  return `SUM(${cond ? `CASE WHEN ${cond} THEN ${casted} END` : casted})`;
+  return `${fn}(${cond ? `CASE WHEN ${cond} THEN ${casted} END` : casted})`;
 }
 
 function prevYm(ym: string): string {
@@ -130,19 +130,20 @@ interface Row {
   den: number | null;
 }
 
-function computeValue(spec: CalcSpec, data: Row[], ym: string): number | null {
+function computeValue(spec: CalcSpec, data: Row[], ym: string): Pick<PreviewResult, "valor" | "partes"> {
   const at = (m: string) => data.find((r) => r.ym === m);
 
-  if (spec.forma === "simples") return at(ym)?.num ?? null;
+  if (spec.forma === "simples") return { valor: at(ym)?.num ?? null, partes: null };
 
-  if (spec.forma === "variacao_mensal") return (at(ym)?.num ?? 0) - (at(prevYm(ym))?.num ?? 0);
+  if (spec.forma === "variacao_mensal") {
+    return { valor: (at(ym)?.num ?? 0) - (at(prevYm(ym))?.num ?? 0), partes: null };
+  }
 
-  // razao
   const denMonth = spec.denominador?.periodo === "mes_anterior" ? prevYm(ym) : ym;
   const numv = at(ym)?.num ?? 0;
   const denv = at(denMonth)?.den ?? null;
 
-  return denv ? numv / denv : null;
+  return { valor: denv ? numv / denv : null, partes: { numerador: numv, denominador: denv } };
 }
 
 export async function runPreview(
@@ -193,7 +194,7 @@ export async function runPreview(
   const meses = data.map((r) => r.ym);
   // Respect an explicit pick (may have no data → value "—"); otherwise latest month.
   const target = pf.competencia ?? meses[meses.length - 1] ?? null;
-  const valor = target ? computeValue(spec, data, target) : null;
+  const computed = target ? computeValue(spec, data, target) : { valor: null, partes: null };
 
-  return { valor, competencia: target, meses };
+  return { ...computed, competencia: target, meses };
 }

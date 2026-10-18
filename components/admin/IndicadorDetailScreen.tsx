@@ -29,10 +29,9 @@ import {
 import { statusChipTone } from "@/lib/data/admin/derive";
 import { parseSpec } from "@/lib/data/indicators/spec";
 import { specToSql } from "@/lib/data/indicators/to-sql";
-import { CATEGORY_META, categoryTone, servicoTone } from "@/lib/data/indicators/ui";
+import { categoryLabel, categoryOptions, categoryTone, servicoTone } from "@/lib/data/indicators/ui";
 import type { IndicadorGeral, IndicadorServico } from "@/lib/data/indicators/types";
 
-const CATEGORIA_OPTS = CATEGORY_META.map((c) => ({ value: c.key, label: c.label }));
 const STATUS_OPTS = [
   { value: "Ativo", label: "Ativo" },
   { value: "Inativo", label: "Inativo" },
@@ -93,7 +92,7 @@ export function IndicadorDetailScreen({
               color: categoryTone(indicador.categoria).fg,
             }}
           >
-            {indicador.id} · {indicador.categoria}
+            {indicador.id} · {categoryLabel(indicador.categoria)}
           </div>
           <h1
             className="font-display"
@@ -217,7 +216,12 @@ function IndicadorEditModal({
       busy={busy}
       error={error}
     >
-      <SelectMenu label="Categoria" value={categoria} options={CATEGORIA_OPTS} onChange={setCategoria} />
+      <SelectMenu
+        label="Categoria"
+        value={categoria}
+        options={categoryOptions([indicador.categoria])}
+        onChange={setCategoria}
+      />
       <Field label="Nome" value={nome} onChange={setNome} placeholder="ex.: Crescimento Base" autoFocus />
       <SelectMenu label="Status" value={status} options={STATUS_OPTS} onChange={setStatus} />
     </AdminModal>

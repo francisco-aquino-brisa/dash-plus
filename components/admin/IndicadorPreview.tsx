@@ -101,7 +101,6 @@ export function IndicadorPreview({
           )}
         </div>
 
-        {/* Result card */}
         <div
           style={{
             border: "1px solid var(--s-border)",
@@ -109,32 +108,41 @@ export function IndicadorPreview({
             background: "var(--s-sunken)",
             padding: "18px 20px",
             display: "flex",
-            flexDirection: "column",
-            gap: 6,
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 16,
             minHeight: 96,
-            justifyContent: "center",
           }}
         >
-          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".04em", color: "var(--s-t3)" }}>
-            {title}
-          </span>
-          {loading ? (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--s-t3)" }}>
-              <RotateCw size={16} style={{ animation: "bdSpin 1s linear infinite" }} /> Calculando…
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 160 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".04em", color: "var(--s-t3)" }}>
+              {title}
             </span>
-          ) : error ? (
-            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--s-bad)" }}>{error}</span>
-          ) : (
-            <span
-              className="font-display"
-              style={{ fontSize: 34, fontWeight: 800, letterSpacing: "-.02em", color: "var(--s-t1)" }}
-            >
-              {formatValor(result?.valor, formato)}
+            {loading ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--s-t3)" }}>
+                <RotateCw size={16} style={{ animation: "bdSpin 1s linear infinite" }} /> Calculando…
+              </span>
+            ) : error ? (
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--s-bad)" }}>{error}</span>
+            ) : (
+              <span
+                className="font-display"
+                style={{ fontSize: 34, fontWeight: 800, letterSpacing: "-.02em", color: "var(--s-t1)" }}
+              >
+                {formatValor(result?.valor, formato)}
+              </span>
+            )}
+            <span style={{ fontSize: 12, color: "var(--s-t3)" }}>
+              {result?.competencia ? `Competência ${result.competencia}` : "—"}
             </span>
+          </div>
+
+          {!loading && !error && result?.partes && (
+            <div style={{ display: "flex", gap: 8, flex: "none" }}>
+              <ParteBox label="Numerador" value={result.partes.numerador} />
+              <ParteBox label="Denominador" value={result.partes.denominador} />
+            </div>
           )}
-          <span style={{ fontSize: 12, color: "var(--s-t3)" }}>
-            {result?.competencia ? `Competência ${result.competencia}` : "—"}
-          </span>
         </div>
 
         <p style={{ margin: 0, fontSize: 11, color: "var(--s-t3)", fontStyle: "italic" }}>
@@ -143,5 +151,39 @@ export function IndicadorPreview({
         </p>
       </div>
     </ModalShell>
+  );
+}
+
+function ParteBox({ label, value }: { label: string; value: number | null }) {
+  return (
+    <div
+      style={{
+        minWidth: 104,
+        padding: "10px 12px",
+        borderRadius: 10,
+        border: "1px solid var(--s-border)",
+        background: "var(--s-card)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 10.5,
+          fontWeight: 700,
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+          color: "var(--s-t3)",
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{ fontSize: 17, fontWeight: 800, color: "var(--s-t1)", fontVariantNumeric: "tabular-nums" }}
+      >
+        {formatValor(value, "decimal")}
+      </span>
+    </div>
   );
 }

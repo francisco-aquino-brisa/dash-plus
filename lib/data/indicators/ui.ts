@@ -22,7 +22,16 @@ export const CATEGORY_META: { key: string; label: string; tone: ChipTone }[] = [
 ];
 
 export function categoryLabel(key: string): string {
-  return CATEGORY_META.find((c) => c.key === key)?.label ?? key;
+  return CATEGORY_META.find((c) => c.key === key)?.label ?? key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+/** The known categories plus any the catalog already uses (created from the admin). */
+export function categoryOptions(inUse: string[]): { value: string; label: string }[] {
+  const keys = [...CATEGORY_META.map((c) => c.key)];
+
+  for (const k of inUse) if (k && !keys.includes(k)) keys.push(k);
+
+  return keys.map((k) => ({ value: k, label: categoryLabel(k) }));
 }
 
 export function categoryTone(key: string): ChipTone {
@@ -35,7 +44,7 @@ export function formatValor(value: number | null | undefined, formato: string): 
 
   switch (formato) {
     case "percentual":
-      return `${(value * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+      return `${(value * 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
     case "moeda":
       return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     case "decimal":

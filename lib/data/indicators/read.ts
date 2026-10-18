@@ -136,6 +136,15 @@ export async function indicadorServicoExists(id: string): Promise<boolean> {
   return (await countWhere(IND.servicos, "id", id)) > 0;
 }
 
+export async function readIndicadorGeralIdsComPrefixo(prefix: string): Promise<string[]> {
+  const rows = await new DatabricksDataClient().query<{ id: unknown }>(
+    `SELECT id FROM ${IND.gerais} WHERE upper(id) LIKE ?`,
+    [`${prefix.toUpperCase()}%`],
+  );
+
+  return rows.map((r) => toStr(r.id));
+}
+
 /** How many serviços an indicador currently has — guards "must keep at least one". */
 export async function countServicosDoIndicador(idIndicadorGeral: string): Promise<number> {
   return countWhere(IND.servicos, "id_indicador_geral", idIndicadorGeral);

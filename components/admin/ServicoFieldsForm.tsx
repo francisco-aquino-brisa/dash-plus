@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from "react";
 import { ChevronDown } from "lucide-react";
 import { Field, TextAreaField } from "./primitives";
 import { SelectMenu } from "./SelectMenu";
+import { SERVICOS_PADRAO, servicoCode, servicoNome } from "@/lib/data/indicators/codes";
 import type { ServicoDraft } from "@/lib/data/indicators/types";
 
 const FORMATOS_DADO = [
@@ -19,6 +20,8 @@ const STATUS_OPTS = [
   { value: "Inativo", label: "Inativo" },
 ];
 
+const SERVICO_OPTS = SERVICOS_PADRAO.map((s) => ({ value: s, label: s }));
+
 const labelStyle: CSSProperties = {
   display: "block",
   fontSize: 10.5,
@@ -31,48 +34,62 @@ const labelStyle: CSSProperties = {
 
 /**
  * Fields for one serviço row (indicadores_servicos) — shared by the "novo
- * indicador" repeatable list and the standalone add/edit-serviço modal. `id` is
- * the row's PK: editable on create, read-only once it exists (never changes).
+ * indicador" repeatable list and the standalone add/edit-serviço modal. On a new
+ * row code and name come pre-filled and stay editable; once it exists the code never changes.
  */
 export function ServicoFieldsForm({
   draft,
   onChange,
-  idEditable = true,
+  idIndicadorGeral,
+  indicadorGeral,
+  isNew = true,
 }: {
   draft: ServicoDraft;
   onChange: (d: ServicoDraft) => void;
-  idEditable?: boolean;
+  idIndicadorGeral: string;
+  indicadorGeral: string;
+  isNew?: boolean;
 }) {
   const [docsOpen, setDocsOpen] = useState(false);
   const set = (patch: Partial<ServicoDraft>) => onChange({ ...draft, ...patch });
+  const code = isNew ? resolvedServicoCode(draft, idIndicadorGeral) : draft.id;
+  const nome = resolvedServicoNome(draft, indicadorGeral);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field
+        <SelectMenu
           label="Serviço"
           value={draft.servico}
+          options={SERVICO_OPTS}
           onChange={(v) => set({ servico: v })}
-          placeholder="ex.: FTTH, FWA, 5G, Banda Larga"
+          placeholder="Selecionar serviço…"
+          searchPlaceholder="Buscar ou digitar serviço…"
+          creatable
         />
-        {idEditable ? (
+        {isNew ? (
           <Field
             label="Código"
-            value={draft.id}
-            onChange={(v) => set({ id: v })}
+            value={code}
+            onChange={(v) => set({ id: v, autoId: false })}
             placeholder="ex.: BA01FTTH"
             mono
           />
         ) : (
-          <ReadOnlyField label="Código" value={draft.id} />
+          <ReadOnlyField label="Código" value={code} />
         )}
       </div>
 
       <Field
         label="Nome do indicador nesse serviço"
-        value={draft.indicadorServico}
-        onChange={(v) => set({ indicadorServico: v })}
+        value={nome}
+        onChange={(v) => set({ indicadorServico: v, autoNome: false })}
         placeholder="ex.: Base Ativa - FTTH"
+        hint={
+          isNew && (draft.autoId || draft.autoNome)
+            ? "Código e nome são sugeridos automaticamente — edite se quiser."
+            : undefined
+        }
       />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
@@ -151,7 +168,23 @@ export function ServicoFieldsForm({
   );
 }
 
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
+export function resolvedServicoCode(draft: ServicoDraft, idIndicadorGeral: string): string {
+  return draft.autoId ? servicoCode(idIndicadorGeral, draft.servico) : draft.id;
+}
+
+export function resolvedServicoNome(draft: ServicoDraft, indicadorGeral: string): string {
+  return draft.autoNome ? servicoNome(indicadorGeral, draft.servico) : draft.indicadorServico;
+}
+
+export function ReadOnlyField({
+  label,
+  value,
+  placeholder = "",
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+}) {
   return (
     <div>
       <span style={labelStyle}>{label}</span>
@@ -162,7 +195,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
           borderRadius: 10,
           border: "1px solid var(--s-border)",
           background: "var(--s-card)",
-          color: "var(--s-t2)",
+          color: value ? "var(--s-t2)" : "var(--s-t3)",
           display: "flex",
           alignItems: "center",
           fontSize: 13.5,
@@ -170,7 +203,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
           fontFamily: "var(--font-mono, ui-monospace, monospace)",
         }}
       >
-        {value}
+        {value || placeholder}
       </div>
     </div>
   );

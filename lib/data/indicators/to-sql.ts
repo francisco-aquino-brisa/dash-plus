@@ -78,10 +78,10 @@ function measureToSql(m: Medida | undefined, label: string): string {
     return cond ? `COUNT(DISTINCT CASE WHEN ${cond} THEN ${key} END)` : `COUNT(DISTINCT ${key})`;
   }
 
-  // soma
   const operand = m.expressao?.trim() || m.coluna || "<coluna>";
+  const fn = m.agregacao === "media" ? "AVG" : "SUM";
 
-  return `SUM(${cond ? `CASE WHEN ${cond} THEN ${operand} END` : operand})`;
+  return `${fn}(${cond ? `CASE WHEN ${cond} THEN ${operand} END` : operand})`;
 }
 
 /** Render the spec as a readable, simplified SQL SELECT — the filter tree is the focus. */

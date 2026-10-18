@@ -3,11 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/session";
 import type { ActionResult } from "@/lib/data/admin/types";
+import {
+  categoriaKey,
+  categoriaPrefix,
+  nextIndicadorGeralId,
+  servicoCode,
+  servicoNome,
+} from "@/lib/data/indicators/codes";
 import { runPreview, type PreviewFilters, type PreviewResult } from "@/lib/data/indicators/engine";
 import {
   countServicosDoIndicador,
   indicadorGeralExists,
   indicadorServicoExists,
+  readIndicadorGeralIdsComPrefixo,
 } from "@/lib/data/indicators/read";
 import { readSourceColumns } from "@/lib/data/indicators/source-columns";
 import { parseSpec, serializeSpec, validateSpec } from "@/lib/data/indicators/spec";
@@ -105,6 +113,21 @@ async function guardAdmin(): Promise<ActionResult | null> {
   return null;
 }
 
+/** The serviço code and default name are derived, never trusted from the client. */
+function withDerivedFields(
+  draft: ServicoDraft,
+  idIndicadorGeral: string,
+  indicadorGeral: string,
+): ServicoDraft {
+  const servico = draft.servico.trim();
+
+  return {
+    ...draft,
+    id: servicoCode(idIndicadorGeral, servico),
+    indicadorServico: draft.indicadorServico.trim() || servicoNome(indicadorGeral, servico),
+  };
+}
+
 function servicoInput(
   draft: ServicoDraft,
   idIndicadorGeral: string,
@@ -130,9 +153,9 @@ function servicoInput(
 }
 
 function validateServicoDraft(s: ServicoDraft): string | null {
-  if (!s.id.trim()) return "Cada serviço precisa de um código.";
-
   if (!s.servico.trim()) return "Informe o serviço (ex.: FTTH, FWA, 5G).";
+
+  if (!s.id.trim()) return "Cada serviço precisa de um código.";
 
   if (!s.indicadorServico.trim()) return "Informe o nome do indicador para esse serviço.";
 
@@ -145,7 +168,7 @@ function validateServicoDraft(s: ServicoDraft): string | null {
  * indicador with zero serviços is not addressable anywhere else in the UI).
  */
 export async function criarIndicador(input: {
-  id: string;
+  id?: string;
   categoria: string;
   nome: string;
   status: string;
@@ -155,28 +178,37 @@ export async function criarIndicador(input: {
 
   if (denied) return denied;
 
-  const id = input.id.trim();
+  const categoria = categoriaKey(input.categoria);
   const nome = input.nome.trim();
 
-  if (!id) return { ok: false, error: "Informe o código do indicador." };
+  if (!categoria) return { ok: false, error: "Informe a categoria." };
+
+  if (!input.id?.trim() && categoriaPrefix(categoria).length < 2) {
+    return { ok: false, error: "Informe o código do indicador." };
+  }
 
   if (!nome) return { ok: false, error: "Informe o nome do indicador." };
 
   if (input.servicos.length === 0) return { ok: false, error: "Adicione ao menos um serviço." };
 
-  for (const s of input.servicos) {
-    const issue = validateServicoDraft(s);
-
-    if (issue) return { ok: false, error: issue };
-  }
-
-  const servicoIds = input.servicos.map((s) => s.id.trim());
-
-  if (new Set(servicoIds).size !== servicoIds.length) {
-    return { ok: false, error: "Códigos de serviço duplicados entre si." };
-  }
-
   try {
+    const id =
+      input.id?.trim() ||
+      nextIndicadorGeralId(categoria, await readIndicadorGeralIdsComPrefixo(categoriaPrefix(categoria)));
+    const servicos = input.servicos.map((s) => withDerivedFields(s, id, nome));
+
+    for (const s of servicos) {
+      const issue = validateServicoDraft(s);
+
+      if (issue) return { ok: false, error: issue };
+    }
+
+    const servicoIds = servicos.map((s) => s.id);
+
+    if (new Set(servicoIds).size !== servicoIds.length) {
+      return { ok: false, error: "O mesmo serviço foi adicionado mais de uma vez." };
+    }
+
     if (await indicadorGeralExists(id)) {
       return { ok: false, error: `Já existe um indicador com o código "${id}".` };
     }
@@ -187,10 +219,10 @@ export async function criarIndicador(input: {
       }
     }
 
-    await createIndicadorGeral(id, input.categoria, nome, input.status);
+    await createIndicadorGeral(id, categoria, nome, input.status);
 
-    for (const s of input.servicos) {
-      await createIndicadorServico(servicoInput(s, id, input.categoria, nome));
+    for (const s of servicos) {
+      await createIndicadorServico(servicoInput(s, id, categoria, nome));
     }
 
     revalidatePath("/admin/indicadores", "layout");
@@ -254,19 +286,20 @@ export async function adicionarServico(
   idIndicadorGeral: string,
   categoria: string,
   indicadorGeral: string,
-  draft: ServicoDraft,
+  input: ServicoDraft,
 ): Promise<ActionResult> {
   const denied = await guardAdmin();
 
   if (denied) return denied;
 
+  const draft = withDerivedFields(input, idIndicadorGeral, indicadorGeral);
   const issue = validateServicoDraft(draft);
 
   if (issue) return { ok: false, error: issue };
 
   try {
-    if (await indicadorServicoExists(draft.id.trim())) {
-      return { ok: false, error: `Já existe um serviço com o código "${draft.id.trim()}".` };
+    if (await indicadorServicoExists(draft.id)) {
+      return { ok: false, error: `Este indicador já tem o serviço "${draft.servico.trim()}" (${draft.id}).` };
     }
 
     await createIndicadorServico(servicoInput(draft, idIndicadorGeral, categoria, indicadorGeral));
