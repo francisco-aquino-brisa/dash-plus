@@ -7,7 +7,9 @@ import { buildDashboardView } from "@/lib/data/cities/compute";
 import { getCacheConfig } from "@/lib/data/config";
 import { isDatabricks } from "@/lib/data/client";
 import { Dashboard } from "@/components/dashboard/Dashboard";
-import type { DashboardFilters } from "@/lib/data/cities/types";
+import { buildCatalogBlocks } from "@/lib/data/cities/catalog-blocks";
+import { NO_BLOCKS, type IndicatorBlocksVM } from "@/lib/data/indicators/block-cards";
+import type { CityIndicatorRecord, DashboardFilters } from "@/lib/data/cities/types";
 
 // Server-rendered per request; the heavy fetch is served from the watermark-aware
 // cache (ADR 0002) and all KPI math runs here, so the client receives a small
@@ -50,8 +52,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const filters = parseFilters(searchParams, dataset.months);
   const tuplas = buildTuplas(dataset, await getVinculosEstrutura(dataset));
   const options = buildFilterOptions(dataset, tuplas, filters);
-  const recortado = applyEstrutura(dataset, cidadesDaEstrutura(tuplas, filters));
-  const view = buildDashboardView(recortado.records, recortado.metaRecords, dataset.months, filters);
+  const estrutura = cidadesDaEstrutura(tuplas, filters);
+  const recortado = applyEstrutura(dataset, estrutura);
+  const blocks = await indicatorBlocks(dataset.watermark, dataset.months, filters, recortado.records, {
+    narrowed: !scope.all || estrutura !== null,
+  });
+  const view = buildDashboardView(recortado.records, recortado.metaRecords, dataset.months, filters, blocks);
   const cfg = getCacheConfig();
 
   return (
@@ -64,6 +70,33 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       escopo={escopo}
     />
   );
+}
+
+/**
+ * The catalog cards, narrowed to the same cities as the rest of the screen. The
+ * catalog only lives in the warehouse, so the mock shows no cards.
+ */
+async function indicatorBlocks(
+  watermark: string,
+  months: string[],
+  filters: DashboardFilters,
+  records: CityIndicatorRecord[],
+  { narrowed }: { narrowed: boolean },
+): Promise<IndicatorBlocksVM> {
+  if (!isDatabricks()) return NO_BLOCKS;
+
+  const byCity = narrowed || filters.tipoCidade !== "" || filters.cidade.length > 0;
+  const cidades = byCity
+    ? new Set(
+        records
+          .filter((r) => !filters.tipoCidade || r.tipo_cidade === filters.tipoCidade)
+          .filter((r) => filters.cidade.length === 0 || filters.cidade.includes(r.cidade))
+          .map((r) => r.revan_cidade_id)
+          .filter(Boolean),
+      )
+    : null;
+
+  return buildCatalogBlocks(watermark, months, filters, cidades);
 }
 
 /** The reader's slice, for the discreet hint next to the subtitle. */

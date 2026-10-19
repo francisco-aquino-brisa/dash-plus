@@ -86,3 +86,22 @@ export function servicoDraftFrom(s: IndicadorServico): ServicoDraft {
     metrica: s.metrica ?? "",
   };
 }
+
+/** One `indicadores_paginas` row: a serviço shown as a card on a page's block. */
+export interface PaginaIndicador {
+  id: string;
+  paginaId: number;
+  paginaNome: string;
+  rota: string;
+  bloco: string;
+  ordem: number;
+  padrao: boolean;
+  servicoId: string;
+}
+
+/** A `tb_paginas` page whose blocks are built from the catalog. */
+export interface PaginaCatalogo {
+  id: number;
+  nome: string;
+  rota: string;
+}

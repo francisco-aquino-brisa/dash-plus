@@ -15,6 +15,7 @@ export type Agregacao = "soma" | "media" | "contagem" | "contagem_distinta";
 export type Formato = "inteiro" | "percentual" | "moeda" | "decimal";
 export type Polaridade = "maior_melhor" | "menor_melhor";
 export type Periodo = "atual" | "mes_anterior";
+export type Projecao = "nenhuma" | "linear";
 export type Operador =
   | "igual"
   | "diferente"
@@ -71,6 +72,9 @@ export interface CalcSpec {
   filtros?: Grupo;
   formato: Formato;
   polaridade: Polaridade;
+  projecao?: Projecao;
+  /** `indicadores_servicos.id`s shown in the card's detail modal. */
+  relacionados?: string[];
 }
 
 // ── UI vocabularies (value + human label) ────────────────────────────────────
@@ -98,6 +102,11 @@ export const FORMATOS: { value: Formato; label: string }[] = [
 export const POLARIDADES: { value: Polaridade; label: string }[] = [
   { value: "maior_melhor", label: "Maior melhor" },
   { value: "menor_melhor", label: "Menor melhor" },
+];
+
+export const PROJECOES: { value: Projecao; label: string }[] = [
+  { value: "nenhuma", label: "Sem projeção — saldos e taxas" },
+  { value: "linear", label: "Linear — acumula no mês (vendas, cancelamentos)" },
 ];
 
 export const PERIODOS: { value: Periodo; label: string }[] = [
@@ -214,6 +223,10 @@ export function parseSpec(json: string | null | undefined): CalcSpec | null {
       filtros: normGrupo(raw.filtros),
       formato: raw.formato,
       polaridade: raw.polaridade,
+      projecao: raw.projecao === "linear" ? "linear" : undefined,
+      relacionados: Array.isArray(raw.relacionados)
+        ? raw.relacionados.map(String).filter(Boolean)
+        : undefined,
     };
   } catch {
     return null;
@@ -241,6 +254,12 @@ export function serializeSpec(spec: CalcSpec): string {
 
   out.formato = spec.formato;
   out.polaridade = spec.polaridade;
+
+  if (spec.projecao === "linear") out.projecao = "linear";
+
+  const relacionados = [...new Set((spec.relacionados ?? []).map((r) => r.trim()).filter(Boolean))];
+
+  if (relacionados.length > 0) out.relacionados = relacionados;
 
   return JSON.stringify(out, null, 2);
 }

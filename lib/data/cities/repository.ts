@@ -28,7 +28,7 @@ import type { CityDataset } from "./types";
 // commercial enrich joins on `revan_cidade_id` (was city-name) — new numbers.
 // v6: gerência/coordenação no longer come from the cubes (organograma taxonomy);
 // they are written from `tb_supervisao_cidades`, and `supervisao` joined them.
-const CACHE_KEY = "cities:dataset:v6";
+const CACHE_KEY = "cities:dataset:v7";
 
 /**
  * Cheap freshness probe used by the auto-refresh flag, and the dataset's cache

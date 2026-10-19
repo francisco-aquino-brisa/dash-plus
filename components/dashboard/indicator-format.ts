@@ -23,7 +23,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { formatBRL, formatNumber, formatPct } from "@/lib/format";
-import type { IndicatorUnit } from "@/lib/data/cities/indicators";
+import type { IndicatorUnit } from "@/lib/data/indicators/block-cards";
 
 /** Icon per id_indicador (shared meaning across blocks); falls back by unit. */
 const ICON_BY_ID: Record<string, LucideIcon> = {

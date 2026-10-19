@@ -1,8 +1,10 @@
 import "server-only";
 
 import { DatabricksDataClient } from "@/lib/data/databricks";
+import { T } from "@/lib/data/admin/tables";
 import { IND } from "./catalog";
-import type { IndicadorGeral, IndicadorServico } from "./types";
+import { CATALOG_PAGES } from "./pages";
+import type { IndicadorGeral, IndicadorServico, PaginaCatalogo, PaginaIndicador } from "./types";
 
 /**
  * Read layer for the indicator catalog (admin area). Reads the two catalog tables
@@ -113,6 +115,67 @@ export async function readIndicador(id: string): Promise<IndicadorGeral | null> 
 
     return null;
   }
+}
+
+/** Where each serviço of an indicador shows up. Degrades to none: the page still edits the indicador. */
+export async function readPaginasDoIndicador(idIndicadorGeral: string): Promise<PaginaIndicador[]> {
+  try {
+    const rows = await new DatabricksDataClient().query<Record<string, unknown>>(
+      `SELECT ip.id, ip.pagina_id, p.nome, p.rota, ip.bloco, ip.ordem, ip.padrao, ip.id_indicador_servico
+         FROM ${IND.paginas} ip
+         JOIN ${IND.servicos} s ON s.id = ip.id_indicador_servico
+         JOIN ${T.paginas} p ON p.id = ip.pagina_id
+        WHERE s.id_indicador_geral = ?
+        ORDER BY p.nome, ip.bloco, ip.ordem`,
+      [idIndicadorGeral],
+    );
+
+    return rows.map((r) => ({
+      id: toStr(r.id),
+      paginaId: Number(r.pagina_id),
+      paginaNome: toStr(r.nome),
+      rota: toStr(r.rota),
+      bloco: toStr(r.bloco),
+      ordem: Number(r.ordem ?? 0),
+      padrao: r.padrao === true,
+      servicoId: toStr(r.id_indicador_servico),
+    }));
+  } catch (err) {
+    console.error("[indicators/read] readPaginasDoIndicador failed:", err);
+
+    return [];
+  }
+}
+
+/** The `tb_paginas` rows whose code builds blocks from the catalog. */
+export async function readPaginasCatalogo(): Promise<PaginaCatalogo[]> {
+  const rotas = CATALOG_PAGES.map((p) => p.rota);
+
+  try {
+    const rows = await new DatabricksDataClient().query<Record<string, unknown>>(
+      `SELECT id, nome, rota FROM ${T.paginas} WHERE rota IN (${rotas.map(() => "?").join(", ")}) ORDER BY nome`,
+      rotas,
+    );
+
+    return rows.map((r) => ({ id: Number(r.id), nome: toStr(r.nome), rota: toStr(r.rota) }));
+  } catch (err) {
+    console.error("[indicators/read] readPaginasCatalogo failed:", err);
+
+    return [];
+  }
+}
+
+export async function paginaIndicadorExists(
+  paginaId: number,
+  bloco: string,
+  servicoId: string,
+): Promise<boolean> {
+  const rows = await new DatabricksDataClient().query<{ n: unknown }>(
+    `SELECT count(*) AS n FROM ${IND.paginas} WHERE pagina_id = ? AND bloco = ? AND id_indicador_servico = ?`,
+    [paginaId, bloco, servicoId],
+  );
+
+  return Number(rows[0]?.n ?? 0) > 0;
 }
 
 // ── Write-path guards ─────────────────────────────────────────────────────────

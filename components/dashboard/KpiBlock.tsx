@@ -1,7 +1,7 @@
 "use client";
 
 import { KpiBlock as GenericKpiBlock, type KpiBlockItem } from "@/components/ui/kpi-block";
-import type { IndicatorCardVM } from "@/lib/data/cities/indicator-blocks";
+import type { IndicatorCardVM } from "@/lib/data/indicators/block-cards";
 import { formatIndicatorValue, fullIndicatorValue, iconForIndicator } from "./indicator-format";
 
 /**

@@ -43,6 +43,8 @@ export interface HcFilters {
   supervisao: string[];
   lider: string[];
   cidade: string[];
+  /** Seller's UF. Not offered by this screen's panel — Vendas · Canais narrows its PDU with it. */
+  uf?: string[];
   consultor: string[];
   canal: string[];
   nicho: string[];
