@@ -30,6 +30,7 @@ gambiarra de join por nome de cidade (`cityKey`). O código já foi repontado.
 | `inteligencia_comercial_e_mercado.waves_churnsafra_consultor`  | `vw_churn_4m_vendedor_bl`            | `revan_cidade_id, cpf`                                |
 | `inteligencia_comercial_e_mercado.churn_vendedor_5g`           | `vw_churn_4m_vendedor_5g`            | `revan_cidade_id, revan_cidade_vendedor_id`           |
 | `inteligencia_comercial_e_mercado.portabilidade`               | `vw_portabilidade_5g`                | `revan_cidade_id, revan_cidade_vendedor_id`           |
+| `inteligencia_comercial_e_mercado.fidelizacao`                 | `vw_fidelizacao`                     | `revan_cidade_id, revan_cidade_vendedor_id`           |
 | `inteligencia_comercial_e_mercado.organograma_cidades`         | `vw_organograma_cidades`             | `revan_cidade_id`                                     |
 
 **Não renomeados (ficam onde estavam):** `desempenho_hc`

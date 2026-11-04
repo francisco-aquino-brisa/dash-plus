@@ -12,6 +12,7 @@ export const SOURCES: string[] = [
   "vw_vendas_5g",
   "vw_churn_4m_vendedor_5g",
   "vw_portabilidade_5g",
+  "vw_fidelizacao",
 ];
 
 export function sourceOptions(): { value: string; label: string }[] {
@@ -45,4 +46,5 @@ export const SOURCE_META: Record<string, SourceMeta> = {
   vw_vendas_5g: { competencia: "data_assinatura" },
   vw_churn_4m_vendedor_5g: { competencia: "data_churn" },
   vw_portabilidade_5g: { competencia: "data" },
+  vw_fidelizacao: { competencia: "data_efetivacao" },
 };
