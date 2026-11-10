@@ -52,12 +52,14 @@ function isAtivo(status: string | null): boolean {
 export function IndicadorDetailScreen({
   indicador,
   sourceColumns,
+  sourceDateColumns,
   paginas,
   catalogo,
   relacionaveis,
 }: {
   indicador: IndicadorGeral;
   sourceColumns: Record<string, string[]>;
+  sourceDateColumns: Record<string, string[]>;
   paginas: PaginaIndicador[];
   catalogo: PaginaCatalogo[];
   relacionaveis: Opcao[];
@@ -151,6 +153,7 @@ export function IndicadorDetailScreen({
             categoria={indicador.categoria}
             indicadorNome={indicador.nome}
             sourceColumns={sourceColumns}
+            sourceDateColumns={sourceDateColumns}
             paginas={paginas.filter((p) => p.servicoId === s.id)}
             catalogo={catalogo}
             relacionaveis={relacionaveis.filter((r) => r.value !== s.id)}
@@ -253,6 +256,7 @@ function ServicoDetail({
   categoria,
   indicadorNome,
   sourceColumns,
+  sourceDateColumns,
   paginas,
   catalogo,
   relacionaveis,
@@ -262,6 +266,7 @@ function ServicoDetail({
   categoria: string;
   indicadorNome: string;
   sourceColumns: Record<string, string[]>;
+  sourceDateColumns: Record<string, string[]>;
   paginas: PaginaIndicador[];
   catalogo: PaginaCatalogo[];
   relacionaveis: Opcao[];
@@ -430,6 +435,7 @@ function ServicoDetail({
           <CalcBuilderForm
             initialJson={s.especificacaoCalculo}
             sourceColumns={sourceColumns}
+            sourceDateColumns={sourceDateColumns}
             servicoId={s.id}
             relacionaveis={relacionaveis}
             onSaved={() => {

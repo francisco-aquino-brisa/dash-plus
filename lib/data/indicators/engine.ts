@@ -1,10 +1,10 @@
 import "server-only";
 
 import { DatabricksDataClient } from "@/lib/data/databricks";
-import { SOURCE_META, type PreviewFilters, type PreviewResult } from "./sources";
+import { competenciaColumn, type PreviewFilters, type PreviewResult } from "./sources";
 import type { CalcSpec } from "./spec";
 import { toPartial } from "./batch";
-import { buildGrupo, measureAgg, measureCount, sourceTable, tsExpr, ymExpr } from "./sql";
+import { assertCol, buildGrupo, measureAgg, measureCount, sourceTable, tsExpr, ymExpr } from "./sql";
 import { specParts, specValue, type MonthPartial } from "./values";
 
 export type { PreviewFilters, PreviewResult };
@@ -19,11 +19,12 @@ export async function runPreview(
   pf: PreviewFilters,
   columns: string[],
 ): Promise<PreviewResult> {
-  const meta = SOURCE_META[spec.fonte];
-
-  if (!meta) throw new Error("fonte não registrada");
-
   const cols = new Set(columns);
+  const defaultCol = competenciaColumn(spec);
+
+  if (!defaultCol) throw new Error("fonte não registrada");
+
+  const competencia = spec.colunaData?.trim() ? assertCol(defaultCol, cols) : defaultCol;
   const params: unknown[] = [];
   const numM = spec.forma === "razao" ? spec.numerador : spec.medida;
   const denM = spec.forma === "razao" ? spec.denominador : undefined;
@@ -34,12 +35,12 @@ export async function runPreview(
   const numCnt = measureCount(numM, params, cols);
   const denSql = denM ? measureAgg(denM, params, cols) : "CAST(NULL AS DOUBLE)";
   const denCnt = denM ? measureCount(denM, params, cols) : null;
-  const where: string[] = [`${tsExpr(meta.competencia)} >= add_months(current_date(), -12)`];
+  const where: string[] = [`${tsExpr(competencia)} >= add_months(current_date(), -12)`];
   const specCond = buildGrupo(spec.filtros, params, cols);
 
   if (specCond) where.push(specCond);
 
-  const sql = `SELECT ${ymExpr(meta.competencia)} AS ym, ${numSql} AS num, ${denSql} AS den${
+  const sql = `SELECT ${ymExpr(competencia)} AS ym, ${numSql} AS num, ${denSql} AS den${
     numCnt ? `, ${numCnt} AS num_cnt` : ""
   }${denCnt ? `, ${denCnt} AS den_cnt` : ""}
        FROM ${sourceTable(spec.fonte)}

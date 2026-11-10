@@ -1,9 +1,9 @@
 import "server-only";
 
 import { DatabricksDataClient } from "@/lib/data/databricks";
-import { SOURCE_META } from "./sources";
+import { competenciaColumn } from "./sources";
 import type { CalcSpec } from "./spec";
-import { measureAgg, measureCount, sourceTable, tsExpr, ymExpr } from "./sql";
+import { assertCol, measureAgg, measureCount, sourceTable, tsExpr, ymExpr } from "./sql";
 import type { MonthPartial } from "./values";
 
 export interface BatchItem {
@@ -32,19 +32,17 @@ export interface BatchRow {
 const MONTHS_BACK = 12;
 
 /**
- * Every indicator of one source in a single SELECT: each spec becomes a
- * numerator (and denominator) column, grouped by month and the scope's columns.
+ * Every indicator of one source and competência column in a single SELECT: each
+ * spec becomes a numerator (and denominator) column, grouped by month and the
+ * scope's columns.
  */
 export function buildSourceBatch(
   fonte: string,
+  competencia: string,
   items: BatchItem[],
   columns: string[],
   scope: SourceScope = {},
 ): { sql: string; params: unknown[] } {
-  const meta = SOURCE_META[fonte];
-
-  if (!meta) throw new Error(`fonte não registrada: ${fonte}`);
-
   const cols = new Set(columns);
   const params: unknown[] = [];
   const select: string[] = [];
@@ -72,10 +70,10 @@ export function buildSourceBatch(
 
   const groupBy = scope.groupBy ?? [];
   const where = [
-    `${tsExpr(meta.competencia)} >= add_months(date_trunc('MM', current_date()), -${MONTHS_BACK})`,
+    `${tsExpr(competencia)} >= add_months(date_trunc('MM', current_date()), -${MONTHS_BACK})`,
     ...(scope.where ?? []),
   ];
-  const sql = `SELECT ${ymExpr(meta.competencia)} AS ym${groupBy.map((g) => `, ${g.expr} AS ${g.alias}`).join("")},
+  const sql = `SELECT ${ymExpr(competencia)} AS ym${groupBy.map((g) => `, ${g.expr} AS ${g.alias}`).join("")},
          ${select.join(",\n         ")}
     FROM ${sourceTable(fonte)}
    WHERE ${where.join(" AND ")}
@@ -84,13 +82,45 @@ export function buildSourceBatch(
   return { sql, params: [...params, ...(scope.params ?? [])] };
 }
 
+/** One query per competência column the source's items use; rows of all of them, concatenated. */
 export async function runSourceBatch(
   fonte: string,
   items: BatchItem[],
   columns: string[],
   scope: SourceScope = {},
 ): Promise<BatchRow[]> {
-  const { sql, params } = buildSourceBatch(fonte, items, columns, scope);
+  const cols = new Set(columns);
+  const byCompetencia = new Map<string, BatchItem[]>();
+
+  for (const it of items) {
+    const col = competenciaColumn(it.spec);
+
+    if (!col) throw new Error(`fonte não registrada: ${fonte}`);
+
+    const key = it.spec.colunaData?.trim() ? assertCol(col, cols) : col;
+    const list = byCompetencia.get(key) ?? [];
+
+    list.push(it);
+    byCompetencia.set(key, list);
+  }
+
+  const results = await Promise.all(
+    [...byCompetencia].map(([competencia, group]) =>
+      runCompetenciaBatch(fonte, competencia, group, columns, scope),
+    ),
+  );
+
+  return results.flat();
+}
+
+async function runCompetenciaBatch(
+  fonte: string,
+  competencia: string,
+  items: BatchItem[],
+  columns: string[],
+  scope: SourceScope,
+): Promise<BatchRow[]> {
+  const { sql, params } = buildSourceBatch(fonte, competencia, items, columns, scope);
   const groupBy = scope.groupBy ?? [];
   const rows = await new DatabricksDataClient().query<Record<string, unknown>>(sql, params);
 

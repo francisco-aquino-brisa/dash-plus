@@ -18,8 +18,10 @@ catalogs (`lib/data/cities/indicators.ts`, `lib/data/sales/indicators.ts`).
   from the old hand-written math. Catalog owners fix their own specs; the code
   has no per-id special cases. What a card lacks becomes a catalog feature
   (`projecao`, `relacionados`), never an exception in code.
-- **One query per source.** Every indicator of a source is a column of one
-  SELECT (`lib/data/indicators/batch.ts`). Cidades groups by `revan_cidade_id`,
+- **One query per source and competência column.** Every indicator of a source
+  is a column of one SELECT (`lib/data/indicators/batch.ts`); a spec that picks
+  another date column (`coluna_data`, any DATE/TIMESTAMP column of the source,
+  listed live from `information_schema`) gets its own SELECT. Cidades groups by `revan_cidade_id`,
   caches with the cube watermark and narrows in memory; Vendas pushes its filters
   and the reader's CPF scope into the WHERE, per source, through a code-owned
   map (`lib/data/sales/catalog-blocks.ts`). A source a page can't scope or
@@ -34,7 +36,8 @@ catalogs (`lib/data/cities/indicators.ts`, `lib/data/sales/indicators.ts`).
 
 ## Consequences
 
-- A new source needs code: its competência column (`SOURCE_META`), and for
+- A new source needs code: its default competência column (`SOURCE_META`),
+  used when a spec has no `coluna_data`, and for
   Vendas its person column and filter columns. Until then its cards show
   "sem acesso".
 - Every catalog write bumps an in-process version that keys the screens'

@@ -9,7 +9,7 @@
  * defines the indicator — is what stands out.
  */
 
-import { SOURCE_META } from "./sources";
+import { competenciaColumn } from "./sources";
 import type { CalcSpec, Condicao, Grupo, Medida } from "./spec";
 
 const OPS: Record<string, string> = {
@@ -88,8 +88,7 @@ function measureToSql(m: Medida | undefined, label: string): string {
 export function specToSql(spec: CalcSpec): string {
   if (!spec.fonte) return "-- selecione a fonte para gerar o SQL";
 
-  const meta = SOURCE_META[spec.fonte];
-  const competenciaCol = meta?.competencia ?? "<competencia>";
+  const competenciaCol = competenciaColumn(spec) ?? "<competencia>";
   const isRazao = spec.forma === "razao";
 
   const select = isRazao

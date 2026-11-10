@@ -66,6 +66,8 @@ export interface Medida {
 export interface CalcSpec {
   forma: Forma;
   fonte: string;
+  /** Serialized as `coluna_data`; empty means the source's default competência column. */
+  colunaData?: string;
   medida?: Medida;
   numerador?: Medida;
   denominador?: Medida;
@@ -217,6 +219,7 @@ export function parseSpec(json: string | null | undefined): CalcSpec | null {
     return {
       forma: raw.forma,
       fonte: raw.fonte,
+      colunaData: typeof raw.coluna_data === "string" && raw.coluna_data.trim() ? raw.coluna_data : undefined,
       medida: inMedida(raw.medida),
       numerador: inMedida(raw.numerador),
       denominador: inMedida(raw.denominador),
@@ -240,6 +243,8 @@ export function parseSpec(json: string | null | undefined): CalcSpec | null {
 /** Serialize the editable spec to canonical JSON — prunes empties, arrays list values. */
 export function serializeSpec(spec: CalcSpec): string {
   const out: Record<string, unknown> = { forma: spec.forma, fonte: spec.fonte };
+
+  if (spec.colunaData?.trim()) out.coluna_data = spec.colunaData.trim();
 
   if (spec.forma === "razao") {
     out.numerador = outMedida(spec.numerador);
@@ -339,7 +344,11 @@ function hasInvalidExprChars(expr: string): boolean {
  * Unknown source / column / empty required field surface as issues so the UI can
  * block "definição incompleta" — never a silently-wrong indicator.
  */
-export function validateSpec(spec: CalcSpec, columnsBySource: Record<string, string[]>): SpecIssue[] {
+export function validateSpec(
+  spec: CalcSpec,
+  columnsBySource: Record<string, string[]>,
+  dateColumnsBySource?: Record<string, string[]>,
+): SpecIssue[] {
   const issues: SpecIssue[] = [];
 
   if (!spec.fonte) issues.push({ path: "fonte", message: "Selecione a fonte." });
@@ -388,6 +397,14 @@ export function validateSpec(spec: CalcSpec, columnsBySource: Record<string, str
   }
 
   checkGrupo(spec.filtros, "Filtros", cols, issues);
+
+  const colunaData = spec.colunaData?.trim();
+  const dateCols = spec.fonte ? dateColumnsBySource?.[spec.fonte] : undefined;
+
+  if (colunaData && cols && !cols.includes(colunaData))
+    issues.push({ path: "colunaData", message: `Coluna de data "${colunaData}" não existe na fonte.` });
+  else if (colunaData && dateCols && !dateCols.includes(colunaData))
+    issues.push({ path: "colunaData", message: `Coluna "${colunaData}" não é uma data.` });
 
   return issues;
 }

@@ -4,7 +4,7 @@ import { T } from "@/lib/data/admin/tables";
 import { ADAPTER_BUILD, cachedByWatermark } from "@/lib/data/cache";
 import { DatabricksDataClient } from "@/lib/data/databricks";
 import { IND } from "./catalog";
-import { readSourceColumns } from "./source-columns";
+import { readSourceSchema } from "./source-columns";
 import { parseSpec, validateSpec, type CalcSpec } from "./spec";
 
 /** An active serviço row with a valid spec — anything else never reaches a screen. */
@@ -50,7 +50,7 @@ const ativo = (v: unknown) =>
 
 async function loadScreenCatalog(): Promise<ScreenCatalog> {
   const client = new DatabricksDataClient();
-  const [servicos, placements, columns] = await Promise.all([
+  const [servicos, placements, schema] = await Promise.all([
     client.query<Record<string, unknown>>(
       `SELECT s.id, s.id_indicador_geral, s.servico, s.indicador_servico, s.descricao_indicador,
               s.status, s.especificacao_calculo, g.indicadores AS nome_geral, g.status AS status_geral
@@ -62,8 +62,9 @@ async function loadScreenCatalog(): Promise<ScreenCatalog> {
          FROM ${IND.paginas} ip
          JOIN ${T.paginas} p ON p.id = ip.pagina_id`,
     ),
-    readSourceColumns(),
+    readSourceSchema(),
   ]);
+  const { columns, dateColumns } = schema;
 
   const entries = new Map<string, CatalogEntry>();
 
@@ -72,7 +73,7 @@ async function loadScreenCatalog(): Promise<ScreenCatalog> {
 
     const spec = parseSpec(r.especificacao_calculo == null ? null : String(r.especificacao_calculo));
 
-    if (!spec || validateSpec(spec, columns).length > 0) continue;
+    if (!spec || validateSpec(spec, columns, dateColumns).length > 0) continue;
 
     const id = String(r.id);
 

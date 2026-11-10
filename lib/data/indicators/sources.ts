@@ -46,5 +46,10 @@ export const SOURCE_META: Record<string, SourceMeta> = {
   vw_vendas_5g: { competencia: "data_assinatura" },
   vw_churn_4m_vendedor_5g: { competencia: "data_churn" },
   vw_portabilidade_5g: { competencia: "data" },
-  vw_fidelizacao: { competencia: "data_efetivacao" },
+  vw_fidelizacao: { competencia: "data_assinatura_fidelizacao" },
 };
+
+/** The column that places a row in a month: the spec's pick, else the source default. */
+export function competenciaColumn(spec: { fonte: string; colunaData?: string }): string | undefined {
+  return spec.colunaData?.trim() || SOURCE_META[spec.fonte]?.competencia;
+}

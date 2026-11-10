@@ -20,7 +20,7 @@ import {
   readIndicadorGeralIdsComPrefixo,
   readPaginasCatalogo,
 } from "@/lib/data/indicators/read";
-import { readSourceColumns } from "@/lib/data/indicators/source-columns";
+import { readSourceSchema } from "@/lib/data/indicators/source-columns";
 import { parseSpec, serializeSpec, validateSpec } from "@/lib/data/indicators/spec";
 import type { ServicoDraft } from "@/lib/data/indicators/types";
 import {
@@ -54,8 +54,8 @@ export async function previewIndicador(specJson: string, filters: PreviewFilters
 
   if (!spec) return { ok: false, error: "Definição de cálculo inválida." };
 
-  const columnsBySource = await readSourceColumns();
-  const issues = validateSpec(spec, columnsBySource);
+  const { columns: columnsBySource, dateColumns } = await readSourceSchema();
+  const issues = validateSpec(spec, columnsBySource, dateColumns);
 
   if (issues.length > 0) return { ok: false, error: issues[0].message };
 
@@ -86,8 +86,8 @@ export async function salvarCalculo(servicoId: string, specJson: string): Promis
 
   if (!spec) return { ok: false, error: "Definição de cálculo inválida." };
 
-  const columnsBySource = await readSourceColumns();
-  const issues = validateSpec(spec, columnsBySource);
+  const { columns: columnsBySource, dateColumns } = await readSourceSchema();
+  const issues = validateSpec(spec, columnsBySource, dateColumns);
 
   if (issues.length > 0) return { ok: false, error: issues[0].message };
 

@@ -5,7 +5,7 @@ import { Check, Plus, Trash2, X } from "lucide-react";
 import { PrimaryButton } from "./primitives";
 import { SelectMenu } from "./SelectMenu";
 import { salvarCalculo } from "@/app/(app)/admin/indicadores/actions";
-import { sourceOptions } from "@/lib/data/indicators/sources";
+import { SOURCE_META, sourceOptions } from "@/lib/data/indicators/sources";
 import { specToSql } from "@/lib/data/indicators/to-sql";
 import {
   AGREGACOES,
@@ -64,12 +64,14 @@ const controlStyle: CSSProperties = {
 export function CalcBuilderForm({
   initialJson,
   sourceColumns,
+  sourceDateColumns,
   servicoId,
   relacionaveis,
   onSaved,
 }: {
   initialJson: string | null;
   sourceColumns: Record<string, string[]>;
+  sourceDateColumns: Record<string, string[]>;
   servicoId: string;
   /** Serviços this one can point to as related (itself excluded). */
   relacionaveis: { value: string; label: string }[];
@@ -83,7 +85,20 @@ export function CalcBuilderForm({
   const columns = sourceColumns[spec.fonte] ?? [];
   const json = useMemo(() => serializeSpec(spec), [spec]);
   const sql = useMemo(() => specToSql(spec), [spec]);
-  const issues = useMemo(() => validateSpec(spec, sourceColumns), [spec, sourceColumns]);
+  const defaultDate = SOURCE_META[spec.fonte]?.competencia;
+  const dateOptions = useMemo(
+    () => [
+      { value: "", label: defaultDate ? `Padrão da fonte (${defaultDate})` : "Padrão da fonte" },
+      ...(sourceDateColumns[spec.fonte] ?? [])
+        .filter((c) => c !== defaultDate)
+        .map((c) => ({ value: c, label: c })),
+    ],
+    [sourceDateColumns, spec.fonte, defaultDate],
+  );
+  const issues = useMemo(
+    () => validateSpec(spec, sourceColumns, sourceDateColumns),
+    [spec, sourceColumns, sourceDateColumns],
+  );
   const valid = issues.length === 0;
 
   const set = (patch: Partial<CalcSpec>) => setSpec((s) => ({ ...s, ...patch }));
@@ -120,9 +135,18 @@ export function CalcBuilderForm({
           value={spec.fonte}
           options={sourceOptions()}
           placeholder="Selecionar fonte…"
-          onChange={(v) => set({ fonte: v })}
+          onChange={(v) => set({ fonte: v, colunaData: undefined })}
         />
       </Grid2>
+
+      {spec.fonte && (
+        <SelectField
+          label="Data de referência (competência)"
+          value={spec.colunaData ?? ""}
+          options={dateOptions}
+          onChange={(v) => set({ colunaData: v || undefined })}
+        />
+      )}
 
       {/* Measures */}
       {spec.forma === "razao" ? (

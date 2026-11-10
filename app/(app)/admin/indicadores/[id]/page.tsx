@@ -6,7 +6,7 @@ import {
   readPaginasCatalogo,
   readPaginasDoIndicador,
 } from "@/lib/data/indicators/read";
-import { readSourceColumns } from "@/lib/data/indicators/source-columns";
+import { readSourceSchema } from "@/lib/data/indicators/source-columns";
 import { IndicadorDetailScreen } from "@/components/admin/IndicadorDetailScreen";
 
 export const dynamic = "force-dynamic";
@@ -15,9 +15,9 @@ export default async function IndicadorDetailPage({ params }: { params: Promise<
   await requireAdmin();
 
   const { id } = await params;
-  const [indicador, sourceColumns, paginas, catalogo, todos] = await Promise.all([
+  const [indicador, sourceSchema, paginas, catalogo, todos] = await Promise.all([
     readIndicador(id),
-    readSourceColumns(),
+    readSourceSchema(),
     readPaginasDoIndicador(id),
     readPaginasCatalogo(),
     readIndicadores(),
@@ -32,7 +32,8 @@ export default async function IndicadorDetailPage({ params }: { params: Promise<
   return (
     <IndicadorDetailScreen
       indicador={indicador}
-      sourceColumns={sourceColumns}
+      sourceColumns={sourceSchema.columns}
+      sourceDateColumns={sourceSchema.dateColumns}
       paginas={paginas}
       catalogo={catalogo}
       relacionaveis={relacionaveis}
